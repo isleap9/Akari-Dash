@@ -45,12 +45,6 @@
   <data name="Gaming.Title" xml:space="preserve">
     <value>Gaming</value>
   </data>
-  <data name="Gaming.EmptyTitle" xml:space="preserve">
-    <value>No Tweaks yet</value>
-  </data>
-  <data name="Gaming.EmptyMessage" xml:space="preserve">
-    <value>Gaming Tweaks will appear here.</value>
-  </data>
   <data name="DryRunBanner.Title" xml:space="preserve">
     <value>Dry Run only</value>
   </data>

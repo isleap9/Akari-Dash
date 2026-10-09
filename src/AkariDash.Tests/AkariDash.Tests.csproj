@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\AkariDash.Core\AkariDash.Core.csproj" />
     <ProjectReference Include="..\AkariDash.Framework\AkariDash.Framework.csproj" />
   </ItemGroup>
 

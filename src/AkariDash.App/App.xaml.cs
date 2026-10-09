@@ -9,6 +9,8 @@ using Microsoft.Windows.AppLifecycle;
 using AkariDash.App.Services;
 using AkariDash.Framework.Logging;
 using AkariDash.App.ViewModels;
+using AkariDash.Core.Machine;
+using AkariDash.Core.Tweaks;
 using AkariDash.Framework;
 using AkariDash.Framework.Messaging;
 using AkariDash.Framework.Navigation;
@@ -106,6 +108,10 @@ public partial class App : Application
         // App services.
         builder.Services.AddSingleton<LocalizedStrings>();
 
+        // Tweak engine over the real machine (reads only for now).
+        builder.Services.AddSingleton<IMachine, WindowsMachine>();
+        builder.Services.AddSingleton<TweakEngine>();
+
         // Persist settings under the app's own folder.
         builder.Services.AddSingleton<ISettingsStorage>(new FileSettingsStorage("Akari-Dash"));
 
@@ -115,6 +121,7 @@ public partial class App : Application
         // View models.
         builder.Services.AddTransient<HomeViewModel>();
         builder.Services.AddTransient<SettingsViewModel>();
+        builder.Services.AddTransient<CategoryViewModel>();
 
         // Navigation: pages are created through the DI container.
         builder.Services.AddSingleton<INavigationService>(sp =>

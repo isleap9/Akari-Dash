@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>AkariDash.Core</RootNamespace>
+    <AssemblyName>AkariDash.Core</AssemblyName>
+    <Description>Tweak engine, Tweak catalog and the Machine seam through which all system access passes.</Description>
+    <UseWinUI>false</UseWinUI>
+  </PropertyGroup>
+
+</Project>
