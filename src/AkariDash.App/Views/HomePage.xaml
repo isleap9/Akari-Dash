@@ -1,0 +1,28 @@
+<Page
+    x:Class="AkariDash.App.Views.HomePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer>
+        <StackPanel Padding="32" Spacing="16">
+
+            <TextBlock
+                Text="Akari-Dash"
+                Style="{StaticResource TitleTextBlockStyle}" />
+
+            <TextBlock
+                TextWrapping="Wrap"
+                Opacity="0.8"
+                Text="{x:Bind Strings.Get('Home.Greeting'), Mode=OneWay}" />
+
+            <StackPanel
+                Margin="0,12,0,0"
+                Orientation="Horizontal"
+                Spacing="12">
+                <Button Content="{x:Bind Strings.Get('Home.OpenSettings'), Mode=OneWay}" Command="{Binding OpenSettingsCommand}" />
+                <Button Content="{x:Bind Strings.Get('Home.About'), Mode=OneWay}" Command="{Binding ShowAboutCommand}" />
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</Page>

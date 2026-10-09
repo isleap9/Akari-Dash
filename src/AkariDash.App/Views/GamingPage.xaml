@@ -1,0 +1,36 @@
+<Page
+    x:Class="AkariDash.App.Views.GamingPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer>
+        <StackPanel Padding="32" Spacing="16">
+
+            <TextBlock
+                Text="{x:Bind Strings.Get('Gaming.Title'), Mode=OneWay}"
+                Style="{StaticResource TitleTextBlockStyle}" />
+
+            <!-- Empty state: no Tweaks exist in this Category yet. -->
+            <StackPanel
+                Margin="0,48,0,0"
+                HorizontalAlignment="Center"
+                Spacing="8">
+                <FontIcon
+                    Glyph="&#xE7FC;"
+                    FontSize="48"
+                    Opacity="0.6" />
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="{x:Bind Strings.Get('Gaming.EmptyTitle'), Mode=OneWay}" />
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    TextAlignment="Center"
+                    TextWrapping="Wrap"
+                    Opacity="0.8"
+                    Text="{x:Bind Strings.Get('Gaming.EmptyMessage'), Mode=OneWay}" />
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</Page>

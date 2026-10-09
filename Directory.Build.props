@@ -1,0 +1,25 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>false</EnableMsixTooling>
+    <WindowsSdkPackageVersion>10.0.26100.57</WindowsSdkPackageVersion>
+    <Platforms>x64</Platforms>
+    <Platform Condition="'$(Platform)' == '' or '$(Platform)' == 'AnyCPU'">x64</Platform>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- Phase1: every apply is a Dry Run, so the build is safe to launch on a real machine.
+         The SDK defines the PHASE1 constant from the configuration name. -->
+    <Configurations>Debug;Release;Phase1</Configurations>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <!-- Phase1 is the build launched on a real machine, so it is optimized like Release. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Phase1'">
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+</Project>

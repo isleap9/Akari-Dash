@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="AppName" xml:space="preserve">
+    <value>Akari-Dash</value>
+  </data>
+  <data name="Home.Greeting" xml:space="preserve">
+    <value>Tune Windows for gaming, see exactly what each Tweak changes, and undo it whenever you like.</value>
+  </data>
+  <data name="Home.OpenSettings" xml:space="preserve">
+    <value>Open Settings</value>
+  </data>
+  <data name="Home.About" xml:space="preserve">
+    <value>About</value>
+  </data>
+  <data name="Settings.Title" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="Settings.Appearance" xml:space="preserve">
+    <value>Appearance</value>
+  </data>
+  <data name="Settings.Theme" xml:space="preserve">
+    <value>Theme</value>
+  </data>
+  <data name="Settings.Language" xml:space="preserve">
+    <value>Language</value>
+  </data>
+  <data name="Settings.About" xml:space="preserve">
+    <value>About</value>
+  </data>
+  <data name="Settings.SettingsLocation" xml:space="preserve">
+    <value>Settings file:</value>
+  </data>
+  <data name="Gaming.Title" xml:space="preserve">
+    <value>Gaming</value>
+  </data>
+  <data name="Gaming.EmptyTitle" xml:space="preserve">
+    <value>No Tweaks yet</value>
+  </data>
+  <data name="Gaming.EmptyMessage" xml:space="preserve">
+    <value>Gaming Tweaks will appear here.</value>
+  </data>
+  <data name="DryRunBanner.Title" xml:space="preserve">
+    <value>Dry Run only</value>
+  </data>
+  <data name="DryRunBanner.Message" xml:space="preserve">
+    <value>This Phase 1 build never changes your system: every apply is a Dry Run.</value>
+  </data>
+</root>

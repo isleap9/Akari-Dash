@@ -1,0 +1,41 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# NuGet
+*.nupkg
+*.snupkg
+project.lock.json
+artifacts/
+*.nuget.g.props
+*.nuget.g.targets
+
+# VS / IDE
+.vs/
+.vscode/
+.idea/
+*.VisualState.xml
+TestResult.xml
+[Tt]est[Rr]esult*/
+
+# WinUI / Windows App SDK
+*.pri
+*.appx
+*.appxbundle
+*.msix
+*.msixbundle
+AppPackages/
+BundleArtifacts/
+*.makepri
+Generated Files/
+
+# Runtime outputs (self-contained WinAppSDK copies runtime into output)
+*.exe.dbg
+
+# OS
+Thumbs.db
+Desktop.ini

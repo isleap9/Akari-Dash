@@ -1,0 +1,13 @@
+<Solution>
+  <Configurations>
+    <BuildType Name="Debug" />
+    <BuildType Name="Release" />
+    <BuildType Name="Phase1" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Folder Name="/src/">
+    <Project Path="src/AkariDash.App/AkariDash.App.csproj" />
+    <Project Path="src/AkariDash.Framework/AkariDash.Framework.csproj" />
+    <Project Path="src/AkariDash.Tests/AkariDash.Tests.csproj" />
+  </Folder>
+</Solution>
