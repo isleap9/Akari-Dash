@@ -10,7 +10,7 @@ public sealed class CategoryViewModel(TweakEngine engine, IDialogService dialogs
     : ViewModelBase, INavigationAware
 {
     private IReadOnlyList<TweakGroupViewModel> _groups = [];
-    private bool _choosing;
+    private bool _busy;
 
     /// <summary>The Category this page shows; set by the page when it is created.</summary>
     public Category Category { get; set; }
@@ -34,46 +34,79 @@ public sealed class CategoryViewModel(TweakEngine engine, IDialogService dialogs
             .GroupBy(tweak => tweak.Group)
             .Select(group => new TweakGroupViewModel(
                 group.Key,
-                group.Select(tweak => new TweakViewModel(tweak, engine.ReadLiveState(tweak), ChooseOption)).ToList()))
+                group.Select(tweak => new TweakViewModel(
+                    tweak,
+                    engine.ReadLiveState(tweak),
+                    isApplied: engine.IsApplied(tweak),
+                    ChooseOption,
+                    Undo)).ToList()))
             .ToList();
     }
 
     // async void: called from the toggle's binding setter, and never throws (errors go to the info bar).
-    private async void ChooseOption(DeclaredTweak tweak, TweakOption option)
+    private async void ChooseOption(DeclaredTweak tweak, TweakOption option) => await RunAsync(tweak, async () =>
     {
-        // Ignore flips while a preview is open; the Refresh after it resets every toggle.
-        if (_choosing)
+        var changes = engine.Preview(tweak, option);
+        if (changes.Count == 0)
         {
             return;
         }
 
-        _choosing = true;
+        var confirmed = await dialogs.ConfirmAsync(
+            $"{tweak.Title}: {option.Label}",
+            "What will change:" + Environment.NewLine + Environment.NewLine +
+                string.Join(Environment.NewLine, changes) +
+                (BuildInfo.IsDryRunOnly
+                    ? Environment.NewLine + Environment.NewLine + "Dry Run only: nothing will be written to this PC."
+                    : string.Empty),
+            "Apply",
+            "Cancel");
+
+        if (confirmed)
+        {
+            engine.Apply(tweak, option);
+            infoBar.ShowSuccess(
+                $"{tweak.Title}: {option.Label}",
+                BuildInfo.IsDryRunOnly
+                    ? $"Dry Run recorded {changes.Count} change(s); nothing was written to this PC, so its Live State is unchanged."
+                    : $"Applied {changes.Count} change(s).");
+        }
+    });
+
+    private async void Undo(DeclaredTweak tweak) => await RunAsync(tweak, async () =>
+    {
+        var confirmed = await dialogs.ConfirmAsync(
+            $"Undo {tweak.Title}",
+            "Put back the values this PC had before Akari-Dash first changed this Tweak?",
+            "Undo",
+            "Cancel");
+
+        if (confirmed)
+        {
+            engine.Undo(tweak);
+            infoBar.ShowSuccess(
+                $"Undo {tweak.Title}",
+                BuildInfo.IsDryRunOnly
+                    ? "Dry Run recorded the Undo; nothing was written to this PC."
+                    : "Undone: this Tweak's values are back to what this PC had before Akari-Dash changed it.");
+        }
+    });
+
+    /// <summary>Runs one user action at a time, reports any failure, then re-reads every row.</summary>
+    private async Task RunAsync(DeclaredTweak tweak, Func<Task> action)
+    {
+        // Ignore clicks while a dialog is open; the Refresh after it resets every toggle.
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
         try
         {
             // Leave the binding setter before rebuilding the rows that hold the toggle.
             await Task.Yield();
-
-            var changes = engine.Preview(tweak, option);
-            if (changes.Count == 0)
-            {
-                return;
-            }
-
-            var confirmed = await dialogs.ConfirmAsync(
-                $"{tweak.Title}: {option.Label}",
-                "What will change:" + Environment.NewLine + Environment.NewLine +
-                    string.Join(Environment.NewLine, changes) + Environment.NewLine + Environment.NewLine +
-                    "Dry Run only: nothing will be written to this PC.",
-                "Apply",
-                "Cancel");
-
-            if (confirmed)
-            {
-                engine.Apply(tweak, option);
-                infoBar.ShowSuccess(
-                    $"{tweak.Title}: {option.Label}",
-                    $"Dry Run recorded {changes.Count} change(s); nothing was written to this PC, so its Live State is unchanged.");
-            }
+            await action();
         }
         catch (Exception ex)
         {
@@ -82,7 +115,7 @@ public sealed class CategoryViewModel(TweakEngine engine, IDialogService dialogs
         finally
         {
             // Re-read so the toggle shows the Live State, not the click.
-            _choosing = false;
+            _busy = false;
             Refresh();
         }
     }

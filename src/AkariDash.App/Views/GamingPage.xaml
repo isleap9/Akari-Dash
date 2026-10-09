@@ -42,13 +42,21 @@
                                                 </TextBlock>
                                             </StackPanel>
 
-                                            <ToggleSwitch
+                                            <StackPanel
                                                 Grid.Column="1"
-                                                VerticalAlignment="Center"
-                                                Visibility="{x:Bind IsToggleVisible}"
-                                                IsOn="{x:Bind IsOn, Mode=TwoWay}"
-                                                OffContent="{x:Bind OffLabel}"
-                                                OnContent="{x:Bind OnLabel}" />
+                                                Orientation="Horizontal"
+                                                Spacing="12"
+                                                VerticalAlignment="Center">
+                                                <Button
+                                                    Content="Undo"
+                                                    Visibility="{x:Bind IsApplied}"
+                                                    Command="{x:Bind UndoCommand}" />
+                                                <ToggleSwitch
+                                                    Visibility="{x:Bind IsToggleVisible}"
+                                                    IsOn="{x:Bind IsOn, Mode=TwoWay}"
+                                                    OffContent="{x:Bind OffLabel}"
+                                                    OnContent="{x:Bind OnLabel}" />
+                                            </StackPanel>
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>

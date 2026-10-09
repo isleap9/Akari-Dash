@@ -1,3 +1,4 @@
+using CommunityToolkit.Mvvm.Input;
 using AkariDash.Core.Machine;
 using AkariDash.Core.Tweaks;
 using AkariDash.Framework.ViewModels;
@@ -8,17 +9,27 @@ namespace AkariDash.App.ViewModels;
 /// One Tweak row. A two-Option Tweak is shown as a toggle whose off side is its first Option
 /// and whose on side is its second.
 /// </summary>
-public sealed class TweakViewModel : ViewModelBase
+public sealed partial class TweakViewModel : ViewModelBase
 {
     private readonly DeclaredTweak _tweak;
     private readonly Action<DeclaredTweak, TweakOption> _chooseOption;
+    private readonly Action<DeclaredTweak> _undo;
     private bool _isOn;
 
+    /// <param name="isApplied">Whether Akari-Dash has applied this Tweak (and so can Undo it).</param>
     /// <param name="chooseOption">Called when the user picks an Option; the row is rebuilt afterwards.</param>
-    public TweakViewModel(DeclaredTweak tweak, LiveState state, Action<DeclaredTweak, TweakOption> chooseOption)
+    /// <param name="undo">Called when the user asks to Undo; the row is rebuilt afterwards.</param>
+    public TweakViewModel(
+        DeclaredTweak tweak,
+        LiveState state,
+        bool isApplied,
+        Action<DeclaredTweak, TweakOption> chooseOption,
+        Action<DeclaredTweak> undo)
     {
         _tweak = tweak;
         _chooseOption = chooseOption;
+        _undo = undo;
+        IsApplied = isApplied;
 
         Title = tweak.Title;
         Description = tweak.Description;
@@ -56,9 +67,15 @@ public sealed class TweakViewModel : ViewModelBase
 
     public bool IsCustom { get; }
 
+    /// <summary>Undo is offered only on Tweaks Akari-Dash has applied.</summary>
+    public bool IsApplied { get; }
+
     /// <summary>The toggle is hidden while Custom: neither of its sides is true.</summary>
     public bool IsToggleVisible => !IsCustom;
 
     /// <summary>The actual live value(s) when the Tweak is Custom.</summary>
     public string? CustomValue { get; }
+
+    [RelayCommand]
+    private void Undo() => _undo(_tweak);
 }
