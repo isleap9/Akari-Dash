@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using AkariDash.Core.Tweaks;
 using AkariDash.Framework.Navigation;
 using AkariDash.Framework.Services;
@@ -6,7 +7,11 @@ using AkariDash.Framework.ViewModels;
 namespace AkariDash.App.ViewModels;
 
 /// <summary>Lists a Category's Groups and Tweaks, re-reading every Live State each time the page is opened.</summary>
-public sealed class CategoryViewModel(TweakEngine engine, IDialogService dialogs, IInfoBarService infoBar)
+public sealed class CategoryViewModel(
+    TweakEngine engine,
+    IDialogService dialogs,
+    IInfoBarService infoBar,
+    ILogger<CategoryViewModel> logger)
     : ViewModelBase, INavigationAware
 {
     private IReadOnlyList<TweakGroupViewModel> _groups = [];
@@ -64,7 +69,9 @@ public sealed class CategoryViewModel(TweakEngine engine, IDialogService dialogs
 
         if (confirmed)
         {
+            logger.LogInformation("Applying {Tweak} -> {Option}: {Changes}", tweak.Id, option.Id, string.Join("; ", changes));
             engine.Apply(tweak, option);
+            logger.LogInformation("Applied {Tweak} -> {Option}", tweak.Id, option.Id);
             infoBar.ShowSuccess(
                 $"{tweak.Title}: {option.Label}",
                 BuildInfo.IsDryRunOnly
@@ -83,7 +90,9 @@ public sealed class CategoryViewModel(TweakEngine engine, IDialogService dialogs
 
         if (confirmed)
         {
+            logger.LogInformation("Undoing {Tweak}", tweak.Id);
             engine.Undo(tweak);
+            logger.LogInformation("Undid {Tweak}", tweak.Id);
             infoBar.ShowSuccess(
                 $"Undo {tweak.Title}",
                 BuildInfo.IsDryRunOnly
@@ -110,6 +119,7 @@ public sealed class CategoryViewModel(TweakEngine engine, IDialogService dialogs
         }
         catch (Exception ex)
         {
+            logger.LogError(ex, "{Tweak} failed", tweak.Id);
             infoBar.ShowError(tweak.Title, ex.Message);
         }
         finally

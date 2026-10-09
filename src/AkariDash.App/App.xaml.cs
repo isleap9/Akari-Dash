@@ -66,6 +66,12 @@ public partial class App : Application
         _host = BuildHost();
         Services = _host.Services;
 
+        Services.GetRequiredService<ILogger<App>>().LogInformation(
+            BuildInfo.IsDryRunOnly
+                ? "{App} {Version} started (Phase 1: Dry Run only, Original Values kept in memory)"
+                : "{App} {Version} started (real writes, Original Values in {Folder})",
+            AppName, AppVersion, FileOriginalValuesStore.DefaultFolder);
+
         // Log crashes that happen off the UI thread (WinUI's UnhandledException only
         // covers the UI thread).
         AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;

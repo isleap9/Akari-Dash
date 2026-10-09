@@ -91,6 +91,29 @@ public class FileOriginalValuesStoreTests : IDisposable
     }
 
     [Fact]
+    public void Applying_a_tweak_creates_the_folder_and_file_and_undo_empties_it()
+    {
+        var location = new RegistryLocation(RegistryHive.CurrentUser, @"Software\Akari\Test", "Value");
+        var target = new RegistryTarget(location);
+        var off = new TweakOption("off", "Off", new Dictionary<RegistryTarget, RegistryValue?> { [target] = RegistryValue.DWord(0) });
+        var on = new TweakOption("on", "On", new Dictionary<RegistryTarget, RegistryValue?> { [target] = RegistryValue.DWord(1) });
+        var tweak = new DeclaredTweak("test", "Test", "A test Tweak.", Category.Gaming, "Test Group", [target], [off, on]);
+        var engine = new TweakEngine(
+            new InMemoryMachine().WithRegistryValue(location, RegistryValue.DWord(1)),
+            new FileOriginalValuesStore(_folder));
+
+        engine.Apply(tweak, off);
+
+        var file = Path.Combine(_folder, "original-values.json");
+        Assert.True(File.Exists(file));
+        Assert.Contains("\"test\"", File.ReadAllText(file));
+
+        engine.Undo(tweak);
+
+        Assert.DoesNotContain("\"test\"", File.ReadAllText(file));
+    }
+
+    [Fact]
     public void Leaves_no_temp_file_after_save()
     {
         new FileOriginalValuesStore(_folder).Save("test", Applied);
