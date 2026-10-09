@@ -108,9 +108,13 @@ public partial class App : Application
         // App services.
         builder.Services.AddSingleton<LocalizedStrings>();
 
-        // Tweak engine over the real machine (reads only for now).
+        // Tweak engine: Live State is read from the real machine, but every apply is a Dry Run
+        // recorded for this session (real apply arrives with Original Values and Undo).
         builder.Services.AddSingleton<IMachine, WindowsMachine>();
-        builder.Services.AddSingleton<TweakEngine>();
+        builder.Services.AddSingleton(sp => new DryRunMachine(sp.GetRequiredService<IMachine>()));
+        builder.Services.AddSingleton(sp => new TweakEngine(
+            sp.GetRequiredService<IMachine>(),
+            applyTo: sp.GetRequiredService<DryRunMachine>()));
 
         // Persist settings under the app's own folder.
         builder.Services.AddSingleton<ISettingsStorage>(new FileSettingsStorage("Akari-Dash"));

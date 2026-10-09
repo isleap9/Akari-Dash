@@ -15,4 +15,10 @@ public sealed class InMemoryMachine : IMachine
 
     public RegistryValue? ReadRegistryValue(RegistryLocation location) =>
         _registry.GetValueOrDefault(location);
+
+    public void WriteRegistryValue(RegistryLocation location, RegistryValue value) =>
+        _registry[location] = value;
+
+    public void DeleteRegistryValue(RegistryLocation location) =>
+        _registry.Remove(location);
 }

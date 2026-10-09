@@ -13,4 +13,12 @@ public sealed class WindowsMachine : IMachine
         var data = key?.GetValue(location.Name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
         return data is null ? null : new RegistryValue(key!.GetValueKind(location.Name), data);
     }
+
+    // Real writes arrive with real apply, Original Values and Undo (#5); until then every
+    // build applies through a DryRunMachine.
+    public void WriteRegistryValue(RegistryLocation location, RegistryValue value) =>
+        throw new NotSupportedException("Real writes are not implemented yet.");
+
+    public void DeleteRegistryValue(RegistryLocation location) =>
+        throw new NotSupportedException("Real writes are not implemented yet.");
 }

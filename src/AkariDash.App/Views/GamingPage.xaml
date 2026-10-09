@@ -42,14 +42,11 @@
                                                 </TextBlock>
                                             </StackPanel>
 
-                                            <!-- Read-only until applying exists. -->
                                             <ToggleSwitch
                                                 Grid.Column="1"
                                                 VerticalAlignment="Center"
                                                 Visibility="{x:Bind IsToggleVisible}"
-                                                IsHitTestVisible="False"
-                                                IsTabStop="False"
-                                                IsOn="{x:Bind IsOn}"
+                                                IsOn="{x:Bind IsOn, Mode=TwoWay}"
                                                 OffContent="{x:Bind OffLabel}"
                                                 OnContent="{x:Bind OnLabel}" />
                                         </Grid>

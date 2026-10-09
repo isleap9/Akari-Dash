@@ -13,4 +13,7 @@ public sealed record RegistryValue(RegistryValueKind Kind, object Data)
     public static RegistryValue String(string data) => new(RegistryValueKind.String, data);
 
     public override string ToString() => Data.ToString() ?? string.Empty;
+
+    /// <summary>Text for a value that may not exist.</summary>
+    public static string Describe(RegistryValue? value) => value?.ToString() ?? "(not set)";
 }
