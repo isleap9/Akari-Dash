@@ -25,4 +25,8 @@ public static partial class TweakCatalog
 
     private static TweakOption DWordOption(IEnumerable<TweakTarget> targets, string id, string label, int value) =>
         Option(targets, id, label, RegistryValue.DWord(value));
+
+    /// <summary>The Option where every target holds what Windows behaves as when it is missing.</summary>
+    private static TweakOption AbsentMeansOption(IEnumerable<TweakTarget> targets, string id, string label) =>
+        new(id, label, targets.ToDictionary(target => target, target => target.AbsentMeans));
 }

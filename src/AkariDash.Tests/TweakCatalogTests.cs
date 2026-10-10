@@ -65,6 +65,20 @@ public class TweakCatalogTests
     [InlineData("gaming.sticky-keys-shortcut")]
     [InlineData("gaming.game-bar-controller-button")]
     [InlineData("gaming.background-apps")]
+    [InlineData("gaming.menu-show-delay")]
+    [InlineData("gaming.window-animations")]
+    [InlineData("gaming.taskbar-animations")]
+    [InlineData("gaming.peek")]
+    [InlineData("gaming.transparency")]
+    [InlineData("gaming.drag-full-windows")]
+    [InlineData("gaming.windowed-game-optimizations")]
+    [InlineData("gaming.fullscreen-optimizations")]
+    [InlineData("gaming.system-responsiveness")]
+    [InlineData("gaming.network-throttling")]
+    [InlineData("gaming.games-priority")]
+    [InlineData("gaming.startup-delay")]
+    [InlineData("gaming.storage-sense")]
+    [InlineData("gaming.automatic-maintenance")]
     public void Taste_based_tweaks_have_no_recommended_option(string id)
     {
         Assert.Null(Find(id).Recommended);
@@ -84,6 +98,16 @@ public class TweakCatalogTests
     [InlineData("gaming.power-throttling", Activation.AfterRestart)]
     [InlineData("gaming.mouse-acceleration", Activation.AfterSignOut)]
     [InlineData("gaming.sticky-keys-shortcut", Activation.AfterSignOut)]
+    [InlineData("gaming.menu-show-delay", Activation.AfterSignOut)]
+    [InlineData("gaming.window-animations", Activation.AfterSignOut)]
+    [InlineData("gaming.taskbar-animations", Activation.AfterSignOut)]
+    [InlineData("gaming.peek", Activation.AfterSignOut)]
+    [InlineData("gaming.drag-full-windows", Activation.AfterSignOut)]
+    [InlineData("gaming.system-responsiveness", Activation.AfterRestart)]
+    [InlineData("gaming.network-throttling", Activation.AfterRestart)]
+    [InlineData("gaming.games-priority", Activation.AfterRestart)]
+    [InlineData("gaming.startup-delay", Activation.AfterSignOut)]
+    [InlineData("gaming.automatic-maintenance", Activation.AfterRestart)]
     public void Tweaks_that_windows_reads_only_at_sign_in_or_startup_declare_their_activation(string id, Activation activation)
     {
         Assert.Equal(activation, Find(id).Activation);
@@ -204,5 +228,55 @@ public class TweakCatalogTests
         var target = Assert.Single(tweak.Targets);
 
         Assert.Contains(tweak.Options, option => option.Values[target] is null);
+    }
+
+    [Theory]
+    [InlineData("gaming.windowed-game-optimizations", "windows-decides")]
+    [InlineData("gaming.startup-delay", "windows-default")]
+    [InlineData("gaming.storage-sense", "per-user")]
+    [InlineData("gaming.automatic-maintenance", "on")]
+    public void Options_that_hand_the_choice_back_to_windows_delete_the_value(string id, string option)
+    {
+        var tweak = Find(id);
+
+        Assert.All(tweak.Targets, target => Assert.Null(tweak.Options.Single(candidate => candidate.Id == option).Values[target]));
+    }
+
+    [Fact]
+    public void Network_throttling_off_writes_ffffffff()
+    {
+        var tweak = Find("gaming.network-throttling");
+        var target = Assert.Single(tweak.Targets);
+
+        Assert.Equal(RegistryValue.DWord(unchecked((int)0xFFFFFFFF)), tweak.Options.Single(option => option.Id == "off").Values[target]);
+        Assert.Equal(RegistryValue.DWord(10), target.AbsentMeans);
+    }
+
+    [Fact]
+    public void System_responsiveness_counts_a_missing_value_as_the_windows_default_of_20()
+    {
+        var target = Assert.Single(Find("gaming.system-responsiveness").Targets);
+
+        Assert.Equal(RegistryValue.DWord(20), target.AbsentMeans);
+    }
+
+    [Fact]
+    public void Fullscreen_optimizations_off_asks_for_exclusive_fullscreen()
+    {
+        var tweak = Find("gaming.fullscreen-optimizations");
+        var off = tweak.Options.Single(option => option.Id == "off");
+        var mode = tweak.Targets.Single(target => ((RegistryLocation)target.Location).Name == "GameDVR_FSEBehaviorMode");
+
+        Assert.Equal(4, tweak.Targets.Count);
+        Assert.Equal(RegistryValue.DWord(2), off.Values[mode]);
+    }
+
+    [Fact]
+    public void Games_priority_default_writes_the_windows_values_back()
+    {
+        var tweak = Find("gaming.games-priority");
+        var windowsDefault = tweak.Options.Single(option => option.Id == "windows-default");
+
+        Assert.All(tweak.Targets, target => Assert.Equal(target.AbsentMeans, windowsDefault.Values[target]));
     }
 }
