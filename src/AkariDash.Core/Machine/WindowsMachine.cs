@@ -10,6 +10,8 @@ namespace AkariDash.Core.Machine;
 /// </summary>
 public sealed class WindowsMachine : IMachine
 {
+    private const string DisplayClassKey = @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
+
     public MachineValue? Read(MachineLocation location) => location switch
     {
         RegistryLocation registry => ReadRegistryValue(registry),
@@ -46,6 +48,41 @@ public sealed class WindowsMachine : IMachine
         {
             throw new NotSupportedException($"{location} cannot be deleted.");
         }
+    }
+
+    // Every display adapter Windows has a driver for gets a numbered subkey of the Display class
+    // key, whose MatchingDeviceId names its PCI vendor (e.g. pci\ven_10de&dev_2484). Adapters that
+    // are not PCI cards, such as the Basic Display Adapter, are skipped.
+    public IReadOnlySet<GpuVendor> GpuVendors()
+    {
+        var vendors = new HashSet<GpuVendor>();
+
+        using var baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+        using var displayClass = baseKey.OpenSubKey(DisplayClassKey, writable: false);
+        foreach (var name in displayClass?.GetSubKeyNames() ?? [])
+        {
+            if (!int.TryParse(name, out _))
+            {
+                continue;
+            }
+
+            using var adapter = displayClass!.OpenSubKey(name, writable: false);
+            var deviceId = (adapter?.GetValue("MatchingDeviceId") as string)?.ToUpperInvariant() ?? string.Empty;
+            GpuVendor? vendor = deviceId switch
+            {
+                _ when deviceId.Contains("VEN_10DE") => GpuVendor.Nvidia,
+                _ when deviceId.Contains("VEN_1002") => GpuVendor.Amd,
+                _ when deviceId.Contains("VEN_8086") => GpuVendor.Intel,
+                _ => null,
+            };
+
+            if (vendor is { } found)
+            {
+                vendors.Add(found);
+            }
+        }
+
+        return vendors;
     }
 
     private static RegistryValue? ReadRegistryValue(RegistryLocation location)

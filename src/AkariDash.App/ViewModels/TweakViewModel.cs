@@ -42,6 +42,11 @@ public sealed partial class TweakViewModel : ViewModelBase
         IsSelector = tweak.Options.Count > 2;
         RecommendedLabel = tweak.Recommended?.Label;
 
+        if (state is LiveState.Unavailable unavailable)
+        {
+            UnavailableReason = unavailable.Reason;
+        }
+
         // A drifted row shows what the machine is actually in now.
         var actual = state;
         if (state is LiveState.Drifted drifted)
@@ -116,8 +121,20 @@ public sealed partial class TweakViewModel : ViewModelBase
     /// <summary>Undo is offered only on Tweaks Akari-Dash has applied.</summary>
     public bool IsApplied { get; }
 
+    /// <summary>Why the Tweak cannot be used on this PC, when it is Unavailable.</summary>
+    public string? UnavailableReason { get; }
+
+    /// <summary>An Unavailable Tweak is greyed out and offers no Option to pick.</summary>
+    public bool IsUnavailable => UnavailableReason is not null;
+
+    /// <summary>Greys out an Unavailable row.</summary>
+    public double RowOpacity => IsUnavailable ? 0.5 : 1.0;
+
     /// <summary>The toggle is hidden while the live values match no Option (neither of its sides is true), and for selectors.</summary>
-    public bool IsToggleVisible => !IsSelector && !MatchesNoOption;
+    public bool IsToggleVisible => !IsSelector && !MatchesNoOption && !IsUnavailable;
+
+    /// <summary>The selector is shown for three or more Options, unless the Tweak is Unavailable.</summary>
+    public bool IsSelectorVisible => IsSelector && !IsUnavailable;
 
     /// <summary>The actual live value(s) when the Tweak is Custom.</summary>
     public string? CustomValue { get; }

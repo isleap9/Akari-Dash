@@ -21,6 +21,12 @@ public abstract record LiveState
     /// state it is in instead. Shown in place of Custom whenever Akari-Dash has applied the Tweak.
     /// </summary>
     public sealed record Drifted(TweakOption Expected, LiveState Actual) : LiveState;
+
+    /// <summary>
+    /// The Tweak cannot be used on this machine (a target is missing or the hardware does not
+    /// match); <paramref name="Reason"/> says why. Shown in place of every other state.
+    /// </summary>
+    public sealed record Unavailable(string Reason) : LiveState;
 }
 
 /// <summary>The live value of one target (<see langword="null"/> when it does not exist).</summary>

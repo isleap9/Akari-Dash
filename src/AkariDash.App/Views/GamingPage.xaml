@@ -25,6 +25,7 @@
                                             Padding="16"
                                             ColumnSpacing="16"
                                             CornerRadius="8"
+                                            Opacity="{x:Bind RowOpacity}"
                                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
@@ -53,6 +54,10 @@
                                                     <Run Text="Drift:" FontWeight="SemiBold" />
                                                     <Run Text="{x:Bind DriftText}" />
                                                 </TextBlock>
+                                                <TextBlock Visibility="{x:Bind IsUnavailable}" TextWrapping="Wrap">
+                                                    <Run Text="Unavailable:" FontWeight="SemiBold" />
+                                                    <Run Text="{x:Bind UnavailableReason}" />
+                                                </TextBlock>
                                             </StackPanel>
 
                                             <StackPanel
@@ -70,7 +75,7 @@
                                                     Visibility="{x:Bind IsApplied}"
                                                     Command="{x:Bind UndoCommand}" />
                                                 <ComboBox
-                                                    Visibility="{x:Bind IsSelector}"
+                                                    Visibility="{x:Bind IsSelectorVisible}"
                                                     MinWidth="280"
                                                     PlaceholderText="Custom"
                                                     ItemsSource="{x:Bind Options}"

@@ -16,10 +16,16 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
 
     /// <summary>
     /// Reads which Option <paramref name="tweak"/> is in right now, or <see cref="LiveState.Drifted"/>
-    /// when it is no longer in the Option Akari-Dash last applied.
+    /// when it is no longer in the Option Akari-Dash last applied, or <see cref="LiveState.Unavailable"/>
+    /// when it cannot be used on this machine.
     /// </summary>
     public LiveState ReadLiveState(DeclaredTweak tweak)
     {
+        if (UnavailableReason(tweak) is { } reason)
+        {
+            return new LiveState.Unavailable(reason);
+        }
+
         var live = ReadFrom(machine, tweak);
 
         // Applies that went to a Dry Run never reached the machine, so there is nothing to drift.
@@ -33,8 +39,11 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
     }
 
     /// <summary>Lists what applying <paramref name="option"/> would change, writing nothing.</summary>
+    /// <exception cref="TweakUnavailableException">The Tweak is Unavailable on this machine.</exception>
     public IReadOnlyList<PlannedChange> Preview(DeclaredTweak tweak, TweakOption option)
     {
+        ThrowIfUnavailable(tweak);
+
         var dryRun = new DryRunMachine(machine);
         WriteAll(dryRun, tweak, ValuesOf(tweak, option));
         return dryRun.PlannedChanges;
@@ -53,9 +62,12 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
     /// Puts every target of <paramref name="tweak"/> into <paramref name="option"/> as one unit,
     /// saving its Original Values first if none are stored yet.
     /// </summary>
+    /// <exception cref="TweakUnavailableException">The Tweak is Unavailable on this machine; nothing was written or saved.</exception>
     /// <exception cref="TweakApplyException">A write failed; every target already written was rolled back.</exception>
     public void Apply(DeclaredTweak tweak, TweakOption option)
     {
+        ThrowIfUnavailable(tweak);
+
         var applied = _store.Get(tweak.Id);
         var isFirstApply = applied is null;
 
@@ -94,6 +106,46 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
 
         WriteAll(_writes, tweak, applied.OriginalValues.Select(original => (original.Location, original.Value)).ToList());
         _store.Clear(tweak.Id);
+    }
+
+    /// <summary>
+    /// Why <paramref name="tweak"/> cannot be used on this machine, or <see langword="null"/> when it can.
+    /// A missing registry value is normal (it counts as <see cref="TweakTarget.AbsentMeans"/>), but a
+    /// service or scheduled task cannot be created, so one that does not exist leaves nothing to change.
+    /// </summary>
+    private string? UnavailableReason(DeclaredTweak tweak)
+    {
+        if (tweak.RequiresGpu is { } required)
+        {
+            var vendors = machine.GpuVendors();
+            if (!vendors.Contains(required))
+            {
+                var found = vendors.Count == 0
+                    ? "none was found on this PC"
+                    : $"this PC has {string.Join(" and ", vendors.Order().Select(vendor => vendor.DisplayName()))}";
+                return $"Needs an {required.DisplayName()} graphics card; {found}.";
+            }
+        }
+
+        var missing = tweak.Targets
+            .Select(target => target.Location)
+            .FirstOrDefault(location => location is not RegistryLocation && machine.Read(location) is null);
+
+        return missing switch
+        {
+            ServiceLocation service => $"The {service.ServiceName} service is not installed on this PC.",
+            ScheduledTaskLocation task => $"The scheduled task {task.Path} does not exist on this PC.",
+            null => null,
+            _ => $"{missing} does not exist on this PC.",
+        };
+    }
+
+    private void ThrowIfUnavailable(DeclaredTweak tweak)
+    {
+        if (UnavailableReason(tweak) is { } reason)
+        {
+            throw new TweakUnavailableException(tweak, reason);
+        }
     }
 
     private static LiveState ReadFrom(IMachine source, DeclaredTweak tweak)

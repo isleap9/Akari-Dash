@@ -21,6 +21,8 @@ public sealed class DryRunMachine(IMachine inner) : IMachine
 
     public void Delete(MachineLocation location) => Record(location, null);
 
+    public IReadOnlySet<GpuVendor> GpuVendors() => inner.GpuVendors();
+
     private void Record(MachineLocation location, MachineValue? value)
     {
         var index = _changes.FindIndex(change => change.Location == location);

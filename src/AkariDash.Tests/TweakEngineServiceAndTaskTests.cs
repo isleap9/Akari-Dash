@@ -145,15 +145,13 @@ public class TweakEngineServiceAndTaskTests
     }
 
     [Fact]
-    public void Applying_to_a_service_that_does_not_exist_fails_and_rolls_back_the_registry_target()
+    public void Applying_to_a_service_that_does_not_exist_is_refused_before_the_registry_target_is_written()
     {
         var machine = new InMemoryMachine().With(Registry, RegistryValue.DWord(1));
         var engine = new TweakEngine(machine, _store);
 
-        var error = Assert.Throws<TweakApplyException>(() => engine.Apply(MixedTweak, MixedOff));
+        Assert.Throws<TweakUnavailableException>(() => engine.Apply(MixedTweak, MixedOff));
 
-        Assert.Equal(Service, error.FailedTarget);
-        Assert.True(error.RolledBack);
         Assert.Equal(RegistryValue.DWord(1), machine.Read(Registry));
         Assert.Null(machine.Read(Service));
         Assert.False(engine.IsApplied(MixedTweak));

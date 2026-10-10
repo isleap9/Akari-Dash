@@ -1,9 +1,12 @@
+using AkariDash.Core.Machine;
+
 namespace AkariDash.Core.Tweaks;
 
 /// <summary>
 /// A Tweak described entirely as data and executed by the shared <see cref="TweakEngine"/>.
 /// <paramref name="Recommended"/> is one of <paramref name="Options"/>, or <see langword="null"/>
-/// for a Tweak that is a matter of taste.
+/// for a Tweak that is a matter of taste. A Tweak with <paramref name="RequiresGpu"/> is Unavailable
+/// on machines without a graphics card from that vendor.
 /// </summary>
 public sealed record DeclaredTweak(
     string Id,
@@ -13,4 +16,5 @@ public sealed record DeclaredTweak(
     string Group,
     IReadOnlyList<TweakTarget> Targets,
     IReadOnlyList<TweakOption> Options,
-    TweakOption? Recommended = null);
+    TweakOption? Recommended = null,
+    GpuVendor? RequiresGpu = null);

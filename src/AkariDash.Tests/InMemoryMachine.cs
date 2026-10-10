@@ -7,6 +7,7 @@ public sealed class InMemoryMachine : IMachine
 {
     private readonly Dictionary<MachineLocation, MachineValue> _values = [];
     private readonly HashSet<MachineLocation> _failing = [];
+    private readonly HashSet<GpuVendor> _gpuVendors = [];
 
     public InMemoryMachine With(MachineLocation location, MachineValue value)
     {
@@ -20,6 +21,15 @@ public sealed class InMemoryMachine : IMachine
         _failing.Add(location);
         return this;
     }
+
+    /// <summary>Adds a graphics card made by <paramref name="vendor"/>; a new machine has none.</summary>
+    public InMemoryMachine WithGpu(GpuVendor vendor)
+    {
+        _gpuVendors.Add(vendor);
+        return this;
+    }
+
+    public IReadOnlySet<GpuVendor> GpuVendors() => _gpuVendors;
 
     public MachineValue? Read(MachineLocation location) =>
         _values.GetValueOrDefault(location);

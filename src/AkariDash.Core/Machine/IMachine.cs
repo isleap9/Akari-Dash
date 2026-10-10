@@ -21,4 +21,7 @@ public interface IMachine
     /// scheduled tasks cannot be deleted, so for those it does nothing only when they do not exist.
     /// </summary>
     void Delete(MachineLocation location);
+
+    /// <summary>The makers of the graphics cards installed in this machine (empty when none is found).</summary>
+    IReadOnlySet<GpuVendor> GpuVendors();
 }
