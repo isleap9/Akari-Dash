@@ -4,7 +4,7 @@ namespace AkariDash.Core.Machine;
 /// One change a Dry Run would have made: <paramref name="Before"/> → <paramref name="After"/>,
 /// where <see langword="null"/> means the value does not exist.
 /// </summary>
-public sealed record PlannedChange(RegistryLocation Location, RegistryValue? Before, RegistryValue? After)
+public sealed record PlannedChange(MachineLocation Location, MachineValue? Before, MachineValue? After)
 {
     public bool IsCreate => Before is null;
 
@@ -14,6 +14,6 @@ public sealed record PlannedChange(RegistryLocation Location, RegistryValue? Bef
     public override string ToString()
     {
         var suffix = IsCreate ? " (created)" : IsDelete ? " (deleted)" : string.Empty;
-        return $"{Location}: {RegistryValue.Describe(Before)} → {RegistryValue.Describe(After)}{suffix}";
+        return $"{Location}: {MachineValue.Describe(Before)} → {MachineValue.Describe(After)}{suffix}";
     }
 }

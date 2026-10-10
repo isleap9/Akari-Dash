@@ -11,19 +11,19 @@ public class TweakEnginePreviewTests
     private static readonly RegistryLocation Created = new(RegistryHive.LocalMachine, @"Software\Akari\Test", "Created");
     private static readonly RegistryLocation Deleted = new(RegistryHive.LocalMachine, @"Software\Akari\Test", "Deleted");
 
-    private static readonly RegistryTarget ChangedTarget = new(Changed);
-    private static readonly RegistryTarget CreatedTarget = new(Created);
-    private static readonly RegistryTarget DeletedTarget = new(Deleted);
+    private static readonly TweakTarget ChangedTarget = new(Changed);
+    private static readonly TweakTarget CreatedTarget = new(Created);
+    private static readonly TweakTarget DeletedTarget = new(Deleted);
 
     // "before" matches the seeded machine; "after" changes one value, creates one and deletes one.
-    private static readonly TweakOption Before = new("before", "Before", new Dictionary<RegistryTarget, RegistryValue?>
+    private static readonly TweakOption Before = new("before", "Before", new Dictionary<TweakTarget, MachineValue?>
     {
         [ChangedTarget] = RegistryValue.DWord(10),
         [CreatedTarget] = null,
         [DeletedTarget] = RegistryValue.String("old"),
     });
 
-    private static readonly TweakOption After = new("after", "After", new Dictionary<RegistryTarget, RegistryValue?>
+    private static readonly TweakOption After = new("after", "After", new Dictionary<TweakTarget, MachineValue?>
     {
         [ChangedTarget] = RegistryValue.DWord(0),
         [CreatedTarget] = RegistryValue.DWord(1),
@@ -35,8 +35,8 @@ public class TweakEnginePreviewTests
         [ChangedTarget, CreatedTarget, DeletedTarget], [Before, After]);
 
     private readonly InMemoryMachine _machine = new InMemoryMachine()
-        .WithRegistryValue(Changed, RegistryValue.DWord(10))
-        .WithRegistryValue(Deleted, RegistryValue.String("old"));
+        .With(Changed, RegistryValue.DWord(10))
+        .With(Deleted, RegistryValue.String("old"));
 
     [Fact]
     public void Preview_lists_each_change_create_and_delete()
@@ -57,9 +57,9 @@ public class TweakEnginePreviewTests
     {
         new TweakEngine(_machine).Preview(Tweak, After);
 
-        Assert.Equal(RegistryValue.DWord(10), _machine.ReadRegistryValue(Changed));
-        Assert.Null(_machine.ReadRegistryValue(Created));
-        Assert.Equal(RegistryValue.String("old"), _machine.ReadRegistryValue(Deleted));
+        Assert.Equal(RegistryValue.DWord(10), _machine.Read(Changed));
+        Assert.Null(_machine.Read(Created));
+        Assert.Equal(RegistryValue.String("old"), _machine.Read(Deleted));
     }
 
     [Fact]
@@ -75,9 +75,9 @@ public class TweakEnginePreviewTests
 
         engine.Apply(Tweak, After);
 
-        Assert.Equal(RegistryValue.DWord(0), _machine.ReadRegistryValue(Changed));
-        Assert.Equal(RegistryValue.DWord(1), _machine.ReadRegistryValue(Created));
-        Assert.Null(_machine.ReadRegistryValue(Deleted));
+        Assert.Equal(RegistryValue.DWord(0), _machine.Read(Changed));
+        Assert.Equal(RegistryValue.DWord(1), _machine.Read(Created));
+        Assert.Null(_machine.Read(Deleted));
         Assert.Same(After, Assert.IsType<LiveState.InOption>(engine.ReadLiveState(Tweak)).Option);
     }
 
@@ -91,8 +91,8 @@ public class TweakEnginePreviewTests
 
         Assert.Equal(3, dryRun.PlannedChanges.Count);
         Assert.Same(Before, Assert.IsType<LiveState.InOption>(engine.ReadLiveState(Tweak)).Option);
-        Assert.Equal(RegistryValue.DWord(10), _machine.ReadRegistryValue(Changed));
-        Assert.Null(_machine.ReadRegistryValue(Created));
-        Assert.Equal(RegistryValue.String("old"), _machine.ReadRegistryValue(Deleted));
+        Assert.Equal(RegistryValue.DWord(10), _machine.Read(Changed));
+        Assert.Null(_machine.Read(Created));
+        Assert.Equal(RegistryValue.String("old"), _machine.Read(Deleted));
     }
 }

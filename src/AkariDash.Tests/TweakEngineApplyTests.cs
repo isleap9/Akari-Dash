@@ -11,9 +11,9 @@ public class TweakEngineApplyTests
     private static readonly RegistryLocation Second = new(RegistryHive.CurrentUser, @"Software\Akari\Test", "Second");
     private static readonly RegistryLocation Third = new(RegistryHive.LocalMachine, @"Software\Akari\Test", "Third");
 
-    private static readonly RegistryTarget FirstTarget = new(First);
-    private static readonly RegistryTarget SecondTarget = new(Second);
-    private static readonly RegistryTarget ThirdTarget = new(Third);
+    private static readonly TweakTarget FirstTarget = new(First);
+    private static readonly TweakTarget SecondTarget = new(Second);
+    private static readonly TweakTarget ThirdTarget = new(Third);
 
     private static readonly TweakOption Zero = Option("zero", 0);
     private static readonly TweakOption One = Option("one", 1);
@@ -24,12 +24,12 @@ public class TweakEngineApplyTests
 
     // First existed (10), Second did not exist, Third existed (20).
     private readonly InMemoryMachine _machine = new InMemoryMachine()
-        .WithRegistryValue(First, RegistryValue.DWord(10))
-        .WithRegistryValue(Third, RegistryValue.DWord(20));
+        .With(First, RegistryValue.DWord(10))
+        .With(Third, RegistryValue.DWord(20));
 
     private readonly InMemoryOriginalValuesStore _store = new();
 
-    private static TweakOption Option(string id, int value) => new(id, id, new Dictionary<RegistryTarget, RegistryValue?>
+    private static TweakOption Option(string id, int value) => new(id, id, new Dictionary<TweakTarget, MachineValue?>
     {
         [FirstTarget] = RegistryValue.DWord(value),
         [SecondTarget] = RegistryValue.DWord(value),
@@ -45,9 +45,9 @@ public class TweakEngineApplyTests
 
         engine.Apply(Tweak, Zero);
 
-        Assert.Equal(RegistryValue.DWord(0), _machine.ReadRegistryValue(First));
-        Assert.Equal(RegistryValue.DWord(0), _machine.ReadRegistryValue(Second));
-        Assert.Equal(RegistryValue.DWord(0), _machine.ReadRegistryValue(Third));
+        Assert.Equal(RegistryValue.DWord(0), _machine.Read(First));
+        Assert.Equal(RegistryValue.DWord(0), _machine.Read(Second));
+        Assert.Equal(RegistryValue.DWord(0), _machine.Read(Third));
         Assert.Same(Zero, engine.AppliedOption(Tweak));
     }
 
@@ -63,11 +63,11 @@ public class TweakEngineApplyTests
         var engine = Engine();
 
         engine.Apply(Tweak, Zero);
-        _machine.WriteRegistryValue(First, RegistryValue.DWord(5));
+        _machine.Write(First, RegistryValue.DWord(5));
         engine.Apply(Tweak, Zero);
         engine.Undo(Tweak);
 
-        Assert.Equal(RegistryValue.DWord(10), _machine.ReadRegistryValue(First));
+        Assert.Equal(RegistryValue.DWord(10), _machine.Read(First));
     }
 
     [Fact]
@@ -81,8 +81,8 @@ public class TweakEngineApplyTests
 
         engine.Undo(Tweak);
 
-        Assert.Equal(RegistryValue.DWord(10), _machine.ReadRegistryValue(First));
-        Assert.Equal(RegistryValue.DWord(20), _machine.ReadRegistryValue(Third));
+        Assert.Equal(RegistryValue.DWord(10), _machine.Read(First));
+        Assert.Equal(RegistryValue.DWord(20), _machine.Read(Third));
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public class TweakEngineApplyTests
         engine.Apply(Tweak, Zero);
         engine.Undo(Tweak);
 
-        Assert.Null(_machine.ReadRegistryValue(Second));
+        Assert.Null(_machine.Read(Second));
     }
 
     [Fact]
@@ -113,8 +113,8 @@ public class TweakEngineApplyTests
     {
         Engine().Undo(Tweak);
 
-        Assert.Equal(RegistryValue.DWord(10), _machine.ReadRegistryValue(First));
-        Assert.Null(_machine.ReadRegistryValue(Second));
+        Assert.Equal(RegistryValue.DWord(10), _machine.Read(First));
+        Assert.Null(_machine.Read(Second));
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public class TweakEngineApplyTests
         Assert.Same(Zero, reopened.AppliedOption(Tweak));
 
         reopened.Undo(Tweak);
-        Assert.Equal(RegistryValue.DWord(10), _machine.ReadRegistryValue(First));
+        Assert.Equal(RegistryValue.DWord(10), _machine.Read(First));
     }
 
     [Fact]
@@ -139,9 +139,9 @@ public class TweakEngineApplyTests
 
         Assert.Equal(Third, error.FailedTarget);
         Assert.Contains(Third.ToString(), error.Message);
-        Assert.Equal(RegistryValue.DWord(10), _machine.ReadRegistryValue(First));
-        Assert.Null(_machine.ReadRegistryValue(Second));
-        Assert.Equal(RegistryValue.DWord(20), _machine.ReadRegistryValue(Third));
+        Assert.Equal(RegistryValue.DWord(10), _machine.Read(First));
+        Assert.Null(_machine.Read(Second));
+        Assert.Equal(RegistryValue.DWord(20), _machine.Read(Third));
     }
 
     [Fact]
@@ -188,7 +188,7 @@ public class TweakEngineApplyTests
         Assert.Equal(Third, error.FailedTarget);
         Assert.False(error.RolledBack);
         Assert.Contains(Second.ToString(), error.Message);
-        Assert.Equal(RegistryValue.DWord(10), _machine.ReadRegistryValue(First));
+        Assert.Equal(RegistryValue.DWord(10), _machine.Read(First));
         Assert.NotNull(engine.AppliedOption(Tweak));
     }
 
@@ -201,8 +201,8 @@ public class TweakEngineApplyTests
         engine.Apply(Tweak, Zero);
         engine.Undo(Tweak);
 
-        Assert.Equal(RegistryValue.DWord(10), _machine.ReadRegistryValue(First));
-        Assert.Null(_machine.ReadRegistryValue(Second));
+        Assert.Equal(RegistryValue.DWord(10), _machine.Read(First));
+        Assert.Null(_machine.Read(Second));
         Assert.Empty(dryRun.PlannedChanges);
     }
 }

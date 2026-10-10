@@ -10,21 +10,21 @@ namespace AkariDash.Core.Tweaks;
 /// </summary>
 public sealed class TweakApplyException(
     DeclaredTweak tweak,
-    RegistryLocation failedTarget,
-    IReadOnlyList<RegistryLocation> notRolledBack,
+    MachineLocation failedTarget,
+    IReadOnlyList<MachineLocation> notRolledBack,
     Exception inner)
     : Exception(Describe(tweak, failedTarget, notRolledBack, inner), inner)
 {
     public DeclaredTweak Tweak { get; } = tweak;
 
-    public RegistryLocation FailedTarget { get; } = failedTarget;
+    public MachineLocation FailedTarget { get; } = failedTarget;
 
-    public IReadOnlyList<RegistryLocation> NotRolledBack { get; } = notRolledBack;
+    public IReadOnlyList<MachineLocation> NotRolledBack { get; } = notRolledBack;
 
     public bool RolledBack => NotRolledBack.Count == 0;
 
     private static string Describe(
-        DeclaredTweak tweak, RegistryLocation failedTarget, IReadOnlyList<RegistryLocation> notRolledBack, Exception inner) =>
+        DeclaredTweak tweak, MachineLocation failedTarget, IReadOnlyList<MachineLocation> notRolledBack, Exception inner) =>
         $"{tweak.Title}: could not change {failedTarget} ({inner.Message}). " +
         (notRolledBack.Count == 0
             ? "Nothing was changed."

@@ -10,7 +10,7 @@ public class TweakEngineMultiOptionTests
     private static readonly RegistryLocation Location =
         new(RegistryHive.LocalMachine, @"Software\Akari\Test", "Value");
 
-    private static readonly RegistryTarget Target = new(Location);
+    private static readonly TweakTarget Target = new(Location);
 
     private static readonly TweakOption Low = Option("low", 0);
     private static readonly TweakOption Medium = Option("medium", 1);
@@ -20,10 +20,10 @@ public class TweakEngineMultiOptionTests
         new("test", "Test", "A three-Option Tweak.", Category.Gaming, "Test Group", [Target], [Low, Medium, High]);
 
     private static TweakOption Option(string id, int value) =>
-        new(id, id, new Dictionary<RegistryTarget, RegistryValue?> { [Target] = RegistryValue.DWord(value) });
+        new(id, id, new Dictionary<TweakTarget, MachineValue?> { [Target] = RegistryValue.DWord(value) });
 
     private static TweakEngine Engine(int value) =>
-        new(new InMemoryMachine().WithRegistryValue(Location, RegistryValue.DWord(value)));
+        new(new InMemoryMachine().With(Location, RegistryValue.DWord(value)));
 
     [Fact]
     public void Resolves_to_whichever_of_three_options_matches()
@@ -52,7 +52,7 @@ public class TweakEngineMultiOptionTests
     [Fact]
     public void Apply_moves_between_any_two_options()
     {
-        var machine = new InMemoryMachine().WithRegistryValue(Location, RegistryValue.DWord(0));
+        var machine = new InMemoryMachine().With(Location, RegistryValue.DWord(0));
         var engine = new TweakEngine(machine);
 
         engine.Apply(Tweak, High);

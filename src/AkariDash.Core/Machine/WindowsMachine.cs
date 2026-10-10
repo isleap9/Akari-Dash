@@ -1,11 +1,54 @@
+using System.ComponentModel;
+using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
 namespace AkariDash.Core.Machine;
 
-/// <summary>The real machine: the Windows registry. Verified manually in a VM only.</summary>
+/// <summary>
+/// The real machine: the Windows registry, the Service Control Manager and the Task Scheduler.
+/// Verified manually in a VM only.
+/// </summary>
 public sealed class WindowsMachine : IMachine
 {
-    public RegistryValue? ReadRegistryValue(RegistryLocation location)
+    public MachineValue? Read(MachineLocation location) => location switch
+    {
+        RegistryLocation registry => ReadRegistryValue(registry),
+        ServiceLocation service => ReadServiceStartType(service),
+        ScheduledTaskLocation task => ReadTaskEnabled(task),
+        _ => throw Unsupported(location),
+    };
+
+    public void Write(MachineLocation location, MachineValue value)
+    {
+        switch (location, value)
+        {
+            case (RegistryLocation registry, RegistryValue data):
+                WriteRegistryValue(registry, data);
+                break;
+            case (ServiceLocation service, ServiceStartValue start):
+                WriteServiceStartType(service, start.StartType);
+                break;
+            case (ScheduledTaskLocation task, TaskEnabledValue enabled):
+                WriteTaskEnabled(task, enabled.Enabled);
+                break;
+            default:
+                throw new ArgumentException($"{location} cannot hold {value.GetType().Name}.", nameof(value));
+        }
+    }
+
+    public void Delete(MachineLocation location)
+    {
+        if (location is RegistryLocation registry)
+        {
+            DeleteRegistryValue(registry);
+        }
+        else if (Read(location) is not null)
+        {
+            throw new NotSupportedException($"{location} cannot be deleted.");
+        }
+    }
+
+    private static RegistryValue? ReadRegistryValue(RegistryLocation location)
     {
         using var baseKey = RegistryKey.OpenBaseKey(location.Hive, RegistryView.Registry64);
         using var key = baseKey.OpenSubKey(location.Key, writable: false);
@@ -14,17 +57,197 @@ public sealed class WindowsMachine : IMachine
         return data is null ? null : new RegistryValue(key!.GetValueKind(location.Name), data);
     }
 
-    public void WriteRegistryValue(RegistryLocation location, RegistryValue value)
+    private static void WriteRegistryValue(RegistryLocation location, RegistryValue value)
     {
         using var baseKey = RegistryKey.OpenBaseKey(location.Hive, RegistryView.Registry64);
         using var key = baseKey.CreateSubKey(location.Key, writable: true);
         key.SetValue(location.Name, value.Data, value.Kind);
     }
 
-    public void DeleteRegistryValue(RegistryLocation location)
+    private static void DeleteRegistryValue(RegistryLocation location)
     {
         using var baseKey = RegistryKey.OpenBaseKey(location.Hive, RegistryView.Registry64);
         using var key = baseKey.OpenSubKey(location.Key, writable: true);
         key?.DeleteValue(location.Name, throwOnMissingValue: false);
+    }
+
+    // The Service Control Manager keeps each service's configuration under its Services key, so
+    // reading it there sees exactly what ChangeServiceConfig wrote.
+    private static ServiceStartValue? ReadServiceStartType(ServiceLocation location)
+    {
+        using var baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+        using var key = baseKey.OpenSubKey($@"SYSTEM\CurrentControlSet\Services\{location.ServiceName}", writable: false);
+        if (key?.GetValue("Start") is not int start)
+        {
+            return null;
+        }
+
+        var delayed = key.GetValue("DelayedAutostart") is 1;
+        return new ServiceStartValue(start switch
+        {
+            0 => ServiceStartType.Boot,
+            1 => ServiceStartType.System,
+            2 when delayed => ServiceStartType.AutomaticDelayed,
+            2 => ServiceStartType.Automatic,
+            3 => ServiceStartType.Manual,
+            4 => ServiceStartType.Disabled,
+            _ => throw new InvalidDataException($"{location} has an unknown start type: {start}."),
+        });
+    }
+
+    // Goes through the Service Control Manager rather than the registry, so the change takes
+    // effect without a restart and protected services refuse it instead of being corrupted.
+    private static void WriteServiceStartType(ServiceLocation location, ServiceStartType startType)
+    {
+        var manager = Native.OpenSCManagerW(null, null, Native.ScManagerConnect);
+        if (manager == IntPtr.Zero)
+        {
+            throw new Win32Exception();
+        }
+
+        try
+        {
+            var service = Native.OpenServiceW(manager, location.ServiceName, Native.ServiceChangeConfig);
+            if (service == IntPtr.Zero)
+            {
+                throw new Win32Exception();
+            }
+
+            try
+            {
+                var start = startType switch
+                {
+                    ServiceStartType.Boot => 0u,
+                    ServiceStartType.System => 1u,
+                    ServiceStartType.Automatic or ServiceStartType.AutomaticDelayed => 2u,
+                    ServiceStartType.Manual => 3u,
+                    _ => 4u,
+                };
+
+                if (!Native.ChangeServiceConfigW(
+                        service, Native.ServiceNoChange, start, Native.ServiceNoChange,
+                        null, null, IntPtr.Zero, null, null, null, null))
+                {
+                    throw new Win32Exception();
+                }
+
+                // Delayed start only means anything for automatic services.
+                if (start == 2)
+                {
+                    var info = new Native.ServiceDelayedAutoStartInfo
+                    {
+                        DelayedAutostart = startType == ServiceStartType.AutomaticDelayed,
+                    };
+                    if (!Native.ChangeServiceConfig2W(service, Native.ServiceConfigDelayedAutoStartInfo, ref info))
+                    {
+                        throw new Win32Exception();
+                    }
+                }
+            }
+            finally
+            {
+                Native.CloseServiceHandle(service);
+            }
+        }
+        finally
+        {
+            Native.CloseServiceHandle(manager);
+        }
+    }
+
+    private static TaskEnabledValue? ReadTaskEnabled(ScheduledTaskLocation location) =>
+        WithTask(location, task => new TaskEnabledValue((bool)task.Enabled), missing: null);
+
+    private static void WriteTaskEnabled(ScheduledTaskLocation location, bool enabled)
+    {
+        var found = WithTask(location, task =>
+        {
+            task.Enabled = enabled;
+            return true;
+        }, missing: false);
+
+        if (!found)
+        {
+            throw new InvalidOperationException($"{location} does not exist.");
+        }
+    }
+
+    // The Task Scheduler's COM API (ITaskService), late bound so no interop assembly is needed.
+    private static T WithTask<T>(ScheduledTaskLocation location, Func<dynamic, T> use, T missing)
+    {
+        var separator = location.Path.LastIndexOf('\\');
+        var folderPath = separator <= 0 ? @"\" : location.Path[..separator];
+        var name = location.Path[(separator + 1)..];
+
+        dynamic service = Activator.CreateInstance(Type.GetTypeFromProgID("Schedule.Service", throwOnError: true)!)!;
+        dynamic? folder = null;
+        dynamic? task = null;
+        try
+        {
+            service.Connect();
+
+            try
+            {
+                folder = service.GetFolder(folderPath);
+                task = folder.GetTask(name);
+            }
+            catch (COMException ex) when (ex.HResult is Native.ErrorFileNotFound or Native.ErrorPathNotFound)
+            {
+                return missing;
+            }
+
+            return use(task);
+        }
+        finally
+        {
+            foreach (var comObject in new object?[] { task, folder, service })
+            {
+                if (comObject is not null)
+                {
+                    Marshal.FinalReleaseComObject(comObject);
+                }
+            }
+        }
+    }
+
+    private static NotSupportedException Unsupported(MachineLocation location) =>
+        new($"Unknown kind of location: {location}");
+
+    private static class Native
+    {
+        public const uint ScManagerConnect = 0x0001;
+        public const uint ServiceChangeConfig = 0x0002;
+        public const uint ServiceNoChange = 0xFFFFFFFF;
+        public const uint ServiceConfigDelayedAutoStartInfo = 3;
+        public const int ErrorFileNotFound = unchecked((int)0x80070002);
+        public const int ErrorPathNotFound = unchecked((int)0x80070003);
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct ServiceDelayedAutoStartInfo
+        {
+            [MarshalAs(UnmanagedType.Bool)]
+            public bool DelayedAutostart;
+        }
+
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        public static extern IntPtr OpenSCManagerW(string? machineName, string? databaseName, uint desiredAccess);
+
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        public static extern IntPtr OpenServiceW(IntPtr manager, string serviceName, uint desiredAccess);
+
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool ChangeServiceConfigW(
+            IntPtr service, uint serviceType, uint startType, uint errorControl,
+            string? binaryPathName, string? loadOrderGroup, IntPtr tagId, string? dependencies,
+            string? serviceStartName, string? password, string? displayName);
+
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool ChangeServiceConfig2W(IntPtr service, uint infoLevel, ref ServiceDelayedAutoStartInfo info);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool CloseServiceHandle(IntPtr handle);
     }
 }

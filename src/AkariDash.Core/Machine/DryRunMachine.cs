@@ -10,23 +10,23 @@ public sealed class DryRunMachine(IMachine inner) : IMachine
     // write, After is the latest recorded value (null is a recorded delete).
     private readonly List<PlannedChange> _changes = [];
 
-    /// <summary>Every change recorded so far, one per registry value, in the order first changed.</summary>
+    /// <summary>Every change recorded so far, one per location, in the order first changed.</summary>
     public IReadOnlyList<PlannedChange> PlannedChanges =>
         _changes.Where(change => change.Before != change.After).ToList();
 
-    public RegistryValue? ReadRegistryValue(RegistryLocation location) =>
-        Find(location) is { } change ? change.After : inner.ReadRegistryValue(location);
+    public MachineValue? Read(MachineLocation location) =>
+        Find(location) is { } change ? change.After : inner.Read(location);
 
-    public void WriteRegistryValue(RegistryLocation location, RegistryValue value) => Record(location, value);
+    public void Write(MachineLocation location, MachineValue value) => Record(location, value);
 
-    public void DeleteRegistryValue(RegistryLocation location) => Record(location, null);
+    public void Delete(MachineLocation location) => Record(location, null);
 
-    private void Record(RegistryLocation location, RegistryValue? value)
+    private void Record(MachineLocation location, MachineValue? value)
     {
         var index = _changes.FindIndex(change => change.Location == location);
         if (index < 0)
         {
-            _changes.Add(new PlannedChange(location, inner.ReadRegistryValue(location), value));
+            _changes.Add(new PlannedChange(location, inner.Read(location), value));
         }
         else
         {
@@ -34,6 +34,6 @@ public sealed class DryRunMachine(IMachine inner) : IMachine
         }
     }
 
-    private PlannedChange? Find(RegistryLocation location) =>
+    private PlannedChange? Find(MachineLocation location) =>
         _changes.FirstOrDefault(change => change.Location == location);
 }

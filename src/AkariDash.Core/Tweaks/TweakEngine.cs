@@ -64,7 +64,7 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
             // Saved before anything is written, so a crash mid-apply still leaves a way back.
             applied = new AppliedTweak(
                 option.Id,
-                tweak.Targets.Select(target => new OriginalValue(target.Location, _writes.ReadRegistryValue(target.Location))).ToList());
+                tweak.Targets.Select(target => new OriginalValue(target.Location, _writes.Read(target.Location))).ToList());
             _store.Save(tweak.Id, applied);
         }
 
@@ -99,7 +99,7 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
     private static LiveState ReadFrom(IMachine source, DeclaredTweak tweak)
     {
         var live = tweak.Targets
-            .Select(target => new TargetValue(target, source.ReadRegistryValue(target.Location)))
+            .Select(target => new TargetValue(target, source.Read(target.Location)))
             .ToList();
 
         var option = tweak.Options.FirstOrDefault(option =>
@@ -108,7 +108,7 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
         return option is null ? new LiveState.Custom(live) : new LiveState.InOption(option);
     }
 
-    private static List<(RegistryLocation Location, RegistryValue? Value)> ValuesOf(DeclaredTweak tweak, TweakOption option) =>
+    private static List<(MachineLocation Location, MachineValue? Value)> ValuesOf(DeclaredTweak tweak, TweakOption option) =>
         tweak.Targets.Select(target => (target.Location, option.Values[target])).ToList();
 
     /// <summary>
@@ -116,9 +116,9 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
     /// are put back to what they held before this call (for a first apply, the Original Values),
     /// so a failed Option switch leaves the Tweak in the Option it was in.
     /// </summary>
-    private static void WriteAll(IMachine target, DeclaredTweak tweak, IReadOnlyList<(RegistryLocation Location, RegistryValue? Value)> values)
+    private static void WriteAll(IMachine target, DeclaredTweak tweak, IReadOnlyList<(MachineLocation Location, MachineValue? Value)> values)
     {
-        var before = values.Select(value => target.ReadRegistryValue(value.Location)).ToList();
+        var before = values.Select(value => target.Read(value.Location)).ToList();
 
         for (var i = 0; i < values.Count; i++)
         {
@@ -128,7 +128,7 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
             }
             catch (Exception ex)
             {
-                var notRolledBack = new List<RegistryLocation>();
+                var notRolledBack = new List<MachineLocation>();
                 for (var written = i - 1; written >= 0; written--)
                 {
                     try
@@ -146,19 +146,19 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
         }
     }
 
-    private static void Write(IMachine target, RegistryLocation location, RegistryValue? value)
+    private static void Write(IMachine target, MachineLocation location, MachineValue? value)
     {
         if (value is null)
         {
-            target.DeleteRegistryValue(location);
+            target.Delete(location);
         }
         else
         {
-            target.WriteRegistryValue(location, value);
+            target.Write(location, value);
         }
     }
 
-    /// <summary>What Windows behaves as for <paramref name="value"/>, treating a missing value as the target's <see cref="RegistryTarget.AbsentMeans"/>.</summary>
-    private static RegistryValue? Effective(RegistryTarget target, RegistryValue? value) =>
+    /// <summary>What Windows behaves as for <paramref name="value"/>, treating a missing value as the target's <see cref="TweakTarget.AbsentMeans"/>.</summary>
+    private static MachineValue? Effective(TweakTarget target, MachineValue? value) =>
         value ?? target.AbsentMeans;
 }

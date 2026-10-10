@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using AkariDash.Core.Machine;
 using Microsoft.Win32;
 
@@ -11,6 +12,9 @@ namespace AkariDash.Core.Tweaks;
 public sealed class FileOriginalValuesStore(string folder) : IOriginalValuesStore
 {
     private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
+
+    private const string ServiceType = "service";
+    private const string TaskType = "task";
 
     private readonly string _filePath = Path.Combine(folder, "original-values.json");
     private readonly object _lock = new();
@@ -77,22 +81,46 @@ public sealed class FileOriginalValuesStore(string folder) : IOriginalValuesStor
 
     private static AppliedRecord ToRecord(AppliedTweak applied) => new(
         applied.LastAppliedOptionId,
-        applied.OriginalValues
-            .Select(original => new ValueRecord(
-                original.Location.Hive,
-                original.Location.Key,
-                original.Location.Name,
-                original.Value?.Kind,
-                original.Value is null ? null : JsonSerializer.SerializeToElement(original.Value.Data, original.Value.Data.GetType())))
-            .ToList());
+        applied.OriginalValues.Select(original => ToRecord(original.Location, original.Value)).ToList());
+
+    // A value of the wrong kind throws rather than being saved as "did not exist", which Undo
+    // would act on by deleting.
+    private static ValueRecord ToRecord(MachineLocation location, MachineValue? value) => (location, value) switch
+    {
+        (RegistryLocation registry, null) => new ValueRecord(null, registry.Hive, registry.Key, registry.Name, null, null),
+        (RegistryLocation registry, RegistryValue data) => new ValueRecord(
+            null,
+            registry.Hive,
+            registry.Key,
+            registry.Name,
+            data.Kind,
+            JsonSerializer.SerializeToElement(data.Data, data.Data.GetType())),
+        (ServiceLocation service, null) => new ValueRecord(ServiceType, null, null, service.ServiceName, null, null),
+        (ServiceLocation service, ServiceStartValue start) => new ValueRecord(
+            ServiceType, null, null, service.ServiceName, null, JsonSerializer.SerializeToElement(start.StartType.ToString())),
+        (ScheduledTaskLocation task, null) => new ValueRecord(TaskType, null, null, task.Path, null, null),
+        (ScheduledTaskLocation task, TaskEnabledValue enabled) => new ValueRecord(
+            TaskType, null, null, task.Path, null, JsonSerializer.SerializeToElement(enabled.Enabled)),
+        _ => throw new ArgumentException($"{location} cannot hold {value}.", nameof(value)),
+    };
 
     private static AppliedTweak FromRecord(AppliedRecord record) => new(
         record.LastAppliedOptionId,
-        record.OriginalValues
-            .Select(value => new OriginalValue(
-                new RegistryLocation(value.Hive, value.Key, value.Name),
-                value.Kind is { } kind && value.Data is { } data ? new RegistryValue(kind, ReadData(kind, data)) : null))
-            .ToList());
+        record.OriginalValues.Select(FromRecord).ToList());
+
+    private static OriginalValue FromRecord(ValueRecord value) => value.Type switch
+    {
+        null => new OriginalValue(
+            new RegistryLocation(value.Hive!.Value, value.Key!, value.Name),
+            value.Kind is { } kind && value.Data is { } data ? new RegistryValue(kind, ReadData(kind, data)) : null),
+        ServiceType => new OriginalValue(
+            new ServiceLocation(value.Name),
+            value.Data is { } data ? new ServiceStartValue(Enum.Parse<ServiceStartType>(data.GetString()!)) : null),
+        TaskType => new OriginalValue(
+            new ScheduledTaskLocation(value.Name),
+            value.Data is { } data ? new TaskEnabledValue(data.GetBoolean()) : null),
+        _ => throw new JsonException($"Unknown kind of Original Value: {value.Type}"),
+    };
 
     private static object ReadData(RegistryValueKind kind, JsonElement data) => kind switch
     {
@@ -104,8 +132,16 @@ public sealed class FileOriginalValuesStore(string folder) : IOriginalValuesStor
         _ => data.GetBytesFromBase64(),
     };
 
-    // Kind and Data are null when the value did not exist.
-    private sealed record ValueRecord(RegistryHive Hive, string Key, string Name, RegistryValueKind? Kind, JsonElement? Data);
+    // Type is null for a registry value (files written before service and task targets have no
+    // Type), "service" for a service's start type (Name is the service) and "task" for a
+    // scheduled task's enabled state (Name is the task path). Data is null when it did not exist.
+    private sealed record ValueRecord(
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Type,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RegistryHive? Hive,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Key,
+        string Name,
+        RegistryValueKind? Kind,
+        JsonElement? Data);
 
     private sealed record AppliedRecord(string LastAppliedOptionId, List<ValueRecord> OriginalValues);
 }

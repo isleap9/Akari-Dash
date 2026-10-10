@@ -24,4 +24,4 @@ public abstract record LiveState
 }
 
 /// <summary>The live value of one target (<see langword="null"/> when it does not exist).</summary>
-public sealed record TargetValue(RegistryTarget Target, RegistryValue? Value);
+public sealed record TargetValue(TweakTarget Target, MachineValue? Value);

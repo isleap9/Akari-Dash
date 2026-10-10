@@ -4,11 +4,10 @@ using Microsoft.Win32;
 namespace AkariDash.Core.Machine;
 
 /// <summary>
-/// The data held by a registry value. A value that does not exist is represented by
-/// <see langword="null"/> wherever a <see cref="RegistryValue"/> is expected.
+/// The data held by a registry value.
 /// Binary and multi-string data compare by content.
 /// </summary>
-public sealed record RegistryValue(RegistryValueKind Kind, object Data)
+public sealed record RegistryValue(RegistryValueKind Kind, object Data) : MachineValue
 {
     public static RegistryValue DWord(int data) => new(RegistryValueKind.DWord, data);
 
@@ -28,7 +27,4 @@ public sealed record RegistryValue(RegistryValueKind Kind, object Data)
         string[] strings => string.Join("; ", strings),
         _ => Data.ToString() ?? string.Empty,
     };
-
-    /// <summary>Text for a value that may not exist.</summary>
-    public static string Describe(RegistryValue? value) => value?.ToString() ?? "(not set)";
 }

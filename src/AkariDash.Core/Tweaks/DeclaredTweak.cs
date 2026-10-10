@@ -11,6 +11,6 @@ public sealed record DeclaredTweak(
     string Description,
     Category Category,
     string Group,
-    IReadOnlyList<RegistryTarget> Targets,
+    IReadOnlyList<TweakTarget> Targets,
     IReadOnlyList<TweakOption> Options,
     TweakOption? Recommended = null);

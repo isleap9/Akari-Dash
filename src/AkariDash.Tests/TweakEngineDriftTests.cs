@@ -10,7 +10,7 @@ public class TweakEngineDriftTests
     private static readonly RegistryLocation Location =
         new(RegistryHive.CurrentUser, @"Software\Akari\Test", "Value");
 
-    private static readonly RegistryTarget Target = new(Location);
+    private static readonly TweakTarget Target = new(Location);
 
     private static readonly TweakOption Off = Option("off", 0);
     private static readonly TweakOption On = Option("on", 1);
@@ -19,12 +19,12 @@ public class TweakEngineDriftTests
         new("test", "Test", "A test Tweak.", Category.Gaming, "Test Group", [Target], [Off, On]);
 
     // The machine's own value before Akari-Dash touches it.
-    private readonly InMemoryMachine _machine = new InMemoryMachine().WithRegistryValue(Location, RegistryValue.DWord(1));
+    private readonly InMemoryMachine _machine = new InMemoryMachine().With(Location, RegistryValue.DWord(1));
 
     private readonly InMemoryOriginalValuesStore _store = new();
 
     private static TweakOption Option(string id, int value) =>
-        new(id, id, new Dictionary<RegistryTarget, RegistryValue?> { [Target] = RegistryValue.DWord(value) });
+        new(id, id, new Dictionary<TweakTarget, MachineValue?> { [Target] = RegistryValue.DWord(value) });
 
     private TweakEngine Engine() => new(_machine, _store);
 
@@ -34,7 +34,7 @@ public class TweakEngineDriftTests
         var engine = Engine();
         engine.Apply(Tweak, Off);
 
-        _machine.WriteRegistryValue(Location, RegistryValue.DWord(1));
+        _machine.Write(Location, RegistryValue.DWord(1));
 
         var drifted = Assert.IsType<LiveState.Drifted>(engine.ReadLiveState(Tweak));
         Assert.Same(Off, drifted.Expected);
@@ -47,7 +47,7 @@ public class TweakEngineDriftTests
         var engine = Engine();
         engine.Apply(Tweak, Off);
 
-        _machine.WriteRegistryValue(Location, RegistryValue.DWord(5));
+        _machine.Write(Location, RegistryValue.DWord(5));
 
         var drifted = Assert.IsType<LiveState.Drifted>(engine.ReadLiveState(Tweak));
         Assert.Same(Off, drifted.Expected);
@@ -58,7 +58,7 @@ public class TweakEngineDriftTests
     [Fact]
     public void Tweak_never_applied_does_not_drift()
     {
-        _machine.WriteRegistryValue(Location, RegistryValue.DWord(5));
+        _machine.Write(Location, RegistryValue.DWord(5));
 
         Assert.IsType<LiveState.Custom>(Engine().ReadLiveState(Tweak));
     }
@@ -77,7 +77,7 @@ public class TweakEngineDriftTests
     {
         var engine = Engine();
         engine.Apply(Tweak, Off);
-        _machine.WriteRegistryValue(Location, RegistryValue.DWord(5));
+        _machine.Write(Location, RegistryValue.DWord(5));
 
         engine.Undo(Tweak);
 
@@ -89,7 +89,7 @@ public class TweakEngineDriftTests
     {
         var engine = Engine();
         engine.Apply(Tweak, Off);
-        _machine.WriteRegistryValue(Location, RegistryValue.DWord(5));
+        _machine.Write(Location, RegistryValue.DWord(5));
 
         engine.Apply(Tweak, Assert.IsType<LiveState.Drifted>(engine.ReadLiveState(Tweak)).Expected);
 

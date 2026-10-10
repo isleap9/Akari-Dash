@@ -147,6 +147,6 @@ public sealed partial class TweakViewModel : ViewModelBase
 
     private static string Describe(LiveState.Custom custom) =>
         custom.Values.Count == 1
-            ? RegistryValue.Describe(custom.Values[0].Value)
-            : string.Join("; ", custom.Values.Select(v => $"{v.Target.Location} = {RegistryValue.Describe(v.Value)}"));
+            ? MachineValue.Describe(custom.Values[0].Value)
+            : string.Join("; ", custom.Values.Select(v => $"{v.Target.Location} = {MachineValue.Describe(v.Value)}"));
 }

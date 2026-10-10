@@ -9,4 +9,4 @@ namespace AkariDash.Core.Tweaks;
 public sealed record AppliedTweak(string LastAppliedOptionId, IReadOnlyList<OriginalValue> OriginalValues);
 
 /// <summary>One target's Original Value; <see langword="null"/> means it did not exist.</summary>
-public sealed record OriginalValue(RegistryLocation Location, RegistryValue? Value);
+public sealed record OriginalValue(MachineLocation Location, MachineValue? Value);

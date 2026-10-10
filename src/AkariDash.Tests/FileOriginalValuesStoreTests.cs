@@ -70,10 +70,62 @@ public class FileOriginalValuesStoreTests : IDisposable
         {
             new FileOriginalValuesStore(_folder).Save("test", new AppliedTweak("on", [new OriginalValue(location, value)]));
 
-            var read = Assert.Single(new FileOriginalValuesStore(_folder).Get("test")!.OriginalValues).Value!;
+            var read = Assert.IsType<RegistryValue>(Assert.Single(new FileOriginalValuesStore(_folder).Get("test")!.OriginalValues).Value);
             Assert.Equal(value.Kind, read.Kind);
             Assert.Equal(value.Data, read.Data);
         }
+    }
+
+    [Fact]
+    public void Round_trips_service_start_types_and_task_enabled_states_including_ones_that_did_not_exist()
+    {
+        var applied = new AppliedTweak(
+            "off",
+            [
+                new OriginalValue(new ServiceLocation("SysMain"), new ServiceStartValue(ServiceStartType.AutomaticDelayed)),
+                new OriginalValue(new ServiceLocation("Missing"), null),
+                new OriginalValue(new ScheduledTaskLocation(@"\Microsoft\Windows\Defrag\ScheduledDefrag"), TaskEnabledValue.On),
+                new OriginalValue(new ScheduledTaskLocation(@"\Missing"), null),
+                new OriginalValue(new RegistryLocation(RegistryHive.CurrentUser, @"Software\Akari\Test", "DWord"), RegistryValue.DWord(10)),
+            ]);
+
+        new FileOriginalValuesStore(_folder).Save("test", applied);
+
+        AssertSame(applied, new FileOriginalValuesStore(_folder).Get("test"));
+    }
+
+    [Fact]
+    public void A_value_of_the_wrong_kind_is_refused_rather_than_saved_as_did_not_exist()
+    {
+        var applied = new AppliedTweak("off", [new OriginalValue(new ServiceLocation("SysMain"), RegistryValue.DWord(4))]);
+
+        Assert.Throws<ArgumentException>(() => new FileOriginalValuesStore(_folder).Save("test", applied));
+    }
+
+    [Fact]
+    public void Reads_files_written_before_service_and_task_targets()
+    {
+        Directory.CreateDirectory(_folder);
+        File.WriteAllText(Path.Combine(_folder, "original-values.json"), """
+            {
+              "test": {
+                "LastAppliedOptionId": "off",
+                "OriginalValues": [
+                  { "Hive": -2147483647, "Key": "Software\\Akari\\Test", "Name": "DWord", "Kind": 4, "Data": 10 },
+                  { "Hive": -2147483646, "Key": "Software\\Akari\\Test", "Name": "Missing", "Kind": null, "Data": null }
+                ]
+              }
+            }
+            """);
+
+        AssertSame(
+            new AppliedTweak(
+                "off",
+                [
+                    new OriginalValue(new RegistryLocation(RegistryHive.CurrentUser, @"Software\Akari\Test", "DWord"), RegistryValue.DWord(10)),
+                    new OriginalValue(new RegistryLocation(RegistryHive.LocalMachine, @"Software\Akari\Test", "Missing"), null),
+                ]),
+            new FileOriginalValuesStore(_folder).Get("test"));
     }
 
     [Fact]
@@ -94,12 +146,12 @@ public class FileOriginalValuesStoreTests : IDisposable
     public void Applying_a_tweak_creates_the_folder_and_file_and_undo_empties_it()
     {
         var location = new RegistryLocation(RegistryHive.CurrentUser, @"Software\Akari\Test", "Value");
-        var target = new RegistryTarget(location);
-        var off = new TweakOption("off", "Off", new Dictionary<RegistryTarget, RegistryValue?> { [target] = RegistryValue.DWord(0) });
-        var on = new TweakOption("on", "On", new Dictionary<RegistryTarget, RegistryValue?> { [target] = RegistryValue.DWord(1) });
+        var target = new TweakTarget(location);
+        var off = new TweakOption("off", "Off", new Dictionary<TweakTarget, MachineValue?> { [target] = RegistryValue.DWord(0) });
+        var on = new TweakOption("on", "On", new Dictionary<TweakTarget, MachineValue?> { [target] = RegistryValue.DWord(1) });
         var tweak = new DeclaredTweak("test", "Test", "A test Tweak.", Category.Gaming, "Test Group", [target], [off, on]);
         var engine = new TweakEngine(
-            new InMemoryMachine().WithRegistryValue(location, RegistryValue.DWord(1)),
+            new InMemoryMachine().With(location, RegistryValue.DWord(1)),
             new FileOriginalValuesStore(_folder));
 
         engine.Apply(tweak, off);

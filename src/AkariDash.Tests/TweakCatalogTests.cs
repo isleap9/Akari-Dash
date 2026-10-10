@@ -1,3 +1,4 @@
+using AkariDash.Core.Machine;
 using AkariDash.Core.Tweaks;
 using Xunit;
 
@@ -43,7 +44,7 @@ public class TweakCatalogTests
         var target = Assert.Single(tweak.Targets);
 
         // Each of the three 2-bit fields takes Default/first/second (0-2), as in AkariOS-Ultimate's tuner.
-        var values = tweak.Options.Select(option => (int)option.Values[target]!.Data).ToList();
+        var values = tweak.Options.Select(option => (int)((RegistryValue)option.Values[target]!).Data).ToList();
         Assert.Equal(27, values.Distinct().Count());
         Assert.All(values, value => Assert.All(new[] { value >> 4, (value >> 2) & 3, value & 3 }, field => Assert.InRange(field, 0, 2)));
     }
@@ -56,6 +57,27 @@ public class TweakCatalogTests
         Assert.Equal("Default · Default · High (0x02)", tweak.Options.Single(option => option.Id == "0x02").Label);
         Assert.Equal("Short · Variable · High (0x26)", tweak.Recommended?.Label);
         Assert.Equal("Long · Fixed · None (0x18)", tweak.Options.Single(option => option.Id == "0x18").Label);
+    }
+
+    [Fact]
+    public void Gaming_page_has_a_tweak_targeting_a_service_start_type_and_one_targeting_a_scheduled_task()
+    {
+        var gaming = TweakCatalog.All.Where(tweak => tweak.Category == Category.Gaming).ToList();
+
+        Assert.Contains(gaming, tweak => tweak.Targets.Any(target => target.Location is ServiceLocation));
+        Assert.Contains(gaming, tweak => tweak.Targets.Any(target => target.Location is ScheduledTaskLocation));
+    }
+
+    [Theory]
+    [MemberData(nameof(TweakIds))]
+    public void Every_option_value_is_the_kind_its_target_holds(string id)
+    {
+        var tweak = Find(id);
+
+        Assert.All(tweak.Options, option => Assert.All(option.Values, pair => Assert.True(
+            pair.Value is null || (pair.Key.Location, pair.Value) is
+                (RegistryLocation, RegistryValue) or (ServiceLocation, ServiceStartValue) or (ScheduledTaskLocation, TaskEnabledValue),
+            $"{option.Id}: {pair.Key.Location} cannot hold {pair.Value}")));
     }
 
     [Fact]

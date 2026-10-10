@@ -9,15 +9,15 @@ public class DryRunMachineTests
     private static readonly RegistryLocation Existing = new(RegistryHive.CurrentUser, @"Software\Akari\Test", "Existing");
     private static readonly RegistryLocation Missing = new(RegistryHive.CurrentUser, @"Software\Akari\Test", "Missing");
 
-    private readonly InMemoryMachine _inner = new InMemoryMachine().WithRegistryValue(Existing, RegistryValue.DWord(10));
+    private readonly InMemoryMachine _inner = new InMemoryMachine().With(Existing, RegistryValue.DWord(10));
 
     [Fact]
     public void Reads_pass_through_to_the_wrapped_machine()
     {
         var dryRun = new DryRunMachine(_inner);
 
-        Assert.Equal(RegistryValue.DWord(10), dryRun.ReadRegistryValue(Existing));
-        Assert.Null(dryRun.ReadRegistryValue(Missing));
+        Assert.Equal(RegistryValue.DWord(10), dryRun.Read(Existing));
+        Assert.Null(dryRun.Read(Missing));
     }
 
     [Fact]
@@ -25,10 +25,10 @@ public class DryRunMachineTests
     {
         var dryRun = new DryRunMachine(_inner);
 
-        dryRun.WriteRegistryValue(Existing, RegistryValue.DWord(0));
+        dryRun.Write(Existing, RegistryValue.DWord(0));
 
         Assert.Equal([new PlannedChange(Existing, RegistryValue.DWord(10), RegistryValue.DWord(0))], dryRun.PlannedChanges);
-        Assert.Equal(RegistryValue.DWord(10), _inner.ReadRegistryValue(Existing));
+        Assert.Equal(RegistryValue.DWord(10), _inner.Read(Existing));
     }
 
     [Fact]
@@ -36,12 +36,12 @@ public class DryRunMachineTests
     {
         var dryRun = new DryRunMachine(_inner);
 
-        dryRun.WriteRegistryValue(Missing, RegistryValue.DWord(1));
+        dryRun.Write(Missing, RegistryValue.DWord(1));
 
         var change = Assert.Single(dryRun.PlannedChanges);
         Assert.True(change.IsCreate);
         Assert.Equal(RegistryValue.DWord(1), change.After);
-        Assert.Null(_inner.ReadRegistryValue(Missing));
+        Assert.Null(_inner.Read(Missing));
     }
 
     [Fact]
@@ -49,12 +49,12 @@ public class DryRunMachineTests
     {
         var dryRun = new DryRunMachine(_inner);
 
-        dryRun.DeleteRegistryValue(Existing);
+        dryRun.Delete(Existing);
 
         var change = Assert.Single(dryRun.PlannedChanges);
         Assert.True(change.IsDelete);
         Assert.Equal(RegistryValue.DWord(10), change.Before);
-        Assert.Equal(RegistryValue.DWord(10), _inner.ReadRegistryValue(Existing));
+        Assert.Equal(RegistryValue.DWord(10), _inner.Read(Existing));
     }
 
     [Fact]
@@ -62,11 +62,11 @@ public class DryRunMachineTests
     {
         var dryRun = new DryRunMachine(_inner);
 
-        dryRun.WriteRegistryValue(Missing, RegistryValue.DWord(1));
-        dryRun.DeleteRegistryValue(Existing);
+        dryRun.Write(Missing, RegistryValue.DWord(1));
+        dryRun.Delete(Existing);
 
-        Assert.Equal(RegistryValue.DWord(1), dryRun.ReadRegistryValue(Missing));
-        Assert.Null(dryRun.ReadRegistryValue(Existing));
+        Assert.Equal(RegistryValue.DWord(1), dryRun.Read(Missing));
+        Assert.Null(dryRun.Read(Existing));
     }
 
     [Fact]
@@ -74,8 +74,8 @@ public class DryRunMachineTests
     {
         var dryRun = new DryRunMachine(_inner);
 
-        dryRun.WriteRegistryValue(Existing, RegistryValue.DWord(10));
-        dryRun.DeleteRegistryValue(Missing);
+        dryRun.Write(Existing, RegistryValue.DWord(10));
+        dryRun.Delete(Missing);
 
         Assert.Empty(dryRun.PlannedChanges);
     }
@@ -85,8 +85,8 @@ public class DryRunMachineTests
     {
         var dryRun = new DryRunMachine(_inner);
 
-        dryRun.WriteRegistryValue(Existing, RegistryValue.DWord(0));
-        dryRun.WriteRegistryValue(Existing, RegistryValue.DWord(5));
+        dryRun.Write(Existing, RegistryValue.DWord(0));
+        dryRun.Write(Existing, RegistryValue.DWord(5));
 
         Assert.Equal([new PlannedChange(Existing, RegistryValue.DWord(10), RegistryValue.DWord(5))], dryRun.PlannedChanges);
     }
@@ -96,8 +96,8 @@ public class DryRunMachineTests
     {
         var dryRun = new DryRunMachine(_inner);
 
-        dryRun.WriteRegistryValue(Existing, RegistryValue.DWord(0));
-        _inner.WriteRegistryValue(Existing, RegistryValue.DWord(7));
+        dryRun.Write(Existing, RegistryValue.DWord(0));
+        _inner.Write(Existing, RegistryValue.DWord(7));
 
         Assert.Equal(RegistryValue.DWord(10), Assert.Single(dryRun.PlannedChanges).Before);
     }
@@ -107,8 +107,8 @@ public class DryRunMachineTests
     {
         var dryRun = new DryRunMachine(_inner);
 
-        dryRun.WriteRegistryValue(Existing, RegistryValue.DWord(0));
-        dryRun.WriteRegistryValue(Existing, RegistryValue.DWord(10));
+        dryRun.Write(Existing, RegistryValue.DWord(0));
+        dryRun.Write(Existing, RegistryValue.DWord(10));
 
         Assert.Empty(dryRun.PlannedChanges);
     }

@@ -10,12 +10,14 @@ public static class TweakCatalog
     [
         GameMode(),
         ProcessorScheduling(),
+        SysMain(),
+        ScheduledDriveOptimization(),
     ];
 
     private static DeclaredTweak GameMode()
     {
         // Windows treats a missing value as Game Mode on.
-        var enabled = new RegistryTarget(
+        var enabled = new TweakTarget(
             new RegistryLocation(RegistryHive.CurrentUser, @"Software\Microsoft\GameBar", "AutoGameModeEnabled"),
             AbsentMeans: RegistryValue.DWord(1));
         var on = DWordOption(enabled, "on", "On", 1);
@@ -37,7 +39,7 @@ public static class TweakCatalog
         // type (bits 2-3) and foreground boost (bits 0-1). Every combination is offered, labelled
         // as in AkariOS-Ultimate's tuner (MIT); 0x26 is Akari-OS's "best performance of programs".
         // A fresh install has 0x02, where "Default" lets Windows choose (short, variable on desktops).
-        var separation = new RegistryTarget(
+        var separation = new TweakTarget(
             new RegistryLocation(RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\PriorityControl", "Win32PrioritySeparation"));
 
         string[] lengths = ["Default", "Long", "Short"];
@@ -63,6 +65,42 @@ public static class TweakCatalog
             Recommended: options.Single(option => option.Id == "0x26"));
     }
 
-    private static TweakOption DWordOption(RegistryTarget target, string id, string label, int value) =>
-        new(id, label, new Dictionary<RegistryTarget, RegistryValue?> { [target] = RegistryValue.DWord(value) });
+    private static DeclaredTweak SysMain()
+    {
+        // Akari-OS disables SysMain (Automatic is the Windows default).
+        var service = new TweakTarget(new ServiceLocation("SysMain"));
+        var off = Option(service, "off", "Off", new ServiceStartValue(ServiceStartType.Disabled));
+
+        return new DeclaredTweak(
+            Id: "gaming.sysmain",
+            Title: "SysMain (Superfetch)",
+            Description: "Preloads the apps you use most into memory so they open faster. On an SSD the gain is small, and its background disk and memory work can cause stutter while you play.",
+            Category: Category.Gaming,
+            Group: "Background activity",
+            Targets: [service],
+            Options: [off, Option(service, "on", "On", new ServiceStartValue(ServiceStartType.Automatic))],
+            Recommended: off);
+    }
+
+    private static DeclaredTweak ScheduledDriveOptimization()
+    {
+        // Akari-OS disables this task. No Recommended Option: on an SSD it is what sends TRIM, so
+        // turning it off trades background disk activity for drive upkeep.
+        var task = new TweakTarget(new ScheduledTaskLocation(@"\Microsoft\Windows\Defrag\ScheduledDefrag"));
+
+        return new DeclaredTweak(
+            Id: "gaming.scheduled-drive-optimization",
+            Title: "Scheduled drive optimization",
+            Description: "Windows defragments hard drives and trims SSDs on a weekly schedule in the background. Turning it off stops it starting mid-game; you can still optimize drives by hand.",
+            Category: Category.Gaming,
+            Group: "Background activity",
+            Targets: [task],
+            Options: [Option(task, "off", "Off", TaskEnabledValue.Off), Option(task, "on", "On", TaskEnabledValue.On)]);
+    }
+
+    private static TweakOption Option(TweakTarget target, string id, string label, MachineValue value) =>
+        new(id, label, new Dictionary<TweakTarget, MachineValue?> { [target] = value });
+
+    private static TweakOption DWordOption(TweakTarget target, string id, string label, int value) =>
+        Option(target, id, label, RegistryValue.DWord(value));
 }
