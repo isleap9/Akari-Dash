@@ -229,8 +229,10 @@ public sealed class WindowsMachine : IMachine
                 task = folder.GetTask(name);
             }
             // .NET turns these HRESULTs into FileNotFoundException and DirectoryNotFoundException,
-            // not COMException, so match on the HRESULT alone.
-            catch (Exception ex) when (ex.HResult is Native.ErrorFileNotFound or Native.ErrorPathNotFound)
+            // not COMException, and the message (sometimes a stale one) is not to be trusted.
+            catch (Exception ex) when (
+                ex is FileNotFoundException or DirectoryNotFoundException ||
+                ex.HResult is Native.ErrorFileNotFound or Native.ErrorPathNotFound)
             {
                 return missing;
             }
