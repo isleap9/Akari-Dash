@@ -7,7 +7,7 @@
         <StackPanel Padding="32" Spacing="16">
 
             <TextBlock
-                Text="{x:Bind Strings.Get('Settings.Title'), Mode=OneWay}"
+                Text="{x:Bind Strings.Get('Settings.Title')}"
                 Style="{StaticResource TitleTextBlockStyle}" />
 
             <!-- Appearance -->
@@ -17,10 +17,10 @@
                 Padding="16"
                 MaxWidth="480">
                 <StackPanel Spacing="12">
-                    <TextBlock Text="{x:Bind Strings.Get('Settings.Appearance'), Mode=OneWay}" Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <TextBlock Text="{x:Bind Strings.Get('Settings.Appearance')}" Style="{StaticResource SubtitleTextBlockStyle}" />
 
                     <ComboBox
-                        Header="{x:Bind Strings.Get('Settings.Theme'), Mode=OneWay}"
+                        Header="{x:Bind Strings.Get('Settings.Theme')}"
                         ItemsSource="{Binding Themes}"
                         SelectedItem="{Binding SelectedTheme, Mode=TwoWay}">
                         <ComboBox.ItemTemplate>
@@ -29,14 +29,6 @@
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
-
-                    <ComboBox
-                        Header="{x:Bind Strings.Get('Settings.Language'), Mode=OneWay}"
-                        Width="220"
-                        HorizontalAlignment="Left"
-                        ItemsSource="{Binding Cultures}"
-                        DisplayMemberPath="DisplayName"
-                        SelectedItem="{Binding SelectedCulture, Mode=TwoWay}" />
                 </StackPanel>
             </Border>
 
@@ -47,13 +39,13 @@
                 Padding="16"
                 MaxWidth="480">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="{x:Bind Strings.Get('Settings.About'), Mode=OneWay}" Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <TextBlock Text="{x:Bind Strings.Get('Settings.About')}" Style="{StaticResource SubtitleTextBlockStyle}" />
 
                     <TextBlock Text="{x:Bind AppName}" />
                     <TextBlock Text="{x:Bind AppVersionText}" />
                     <TextBlock
                         TextWrapping="Wrap"
-                        Text="{x:Bind Strings.Get('Settings.SettingsLocation'), Mode=OneWay}" />
+                        Text="{x:Bind Strings.Get('Settings.SettingsLocation')}" />
                     <TextBlock
                         TextWrapping="Wrap"
                         Opacity="0.8"

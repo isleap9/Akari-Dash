@@ -1,4 +1,3 @@
-using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -12,7 +11,6 @@ using AkariDash.App.ViewModels;
 using AkariDash.Core.Machine;
 using AkariDash.Core.Tweaks;
 using AkariDash.Framework;
-using AkariDash.Framework.Messaging;
 using AkariDash.Framework.Navigation;
 using AkariDash.Framework.Services;
 
@@ -77,12 +75,6 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
 
-        var messenger = Services.GetRequiredService<IMessenger>();
-
-        // Re-resolve localized strings whenever the culture changes.
-        var localizer = Services.GetRequiredService<LocalizedStrings>();
-        messenger.Register<CultureChangedMessage>(localizer, (r, _) => ((LocalizedStrings)r).Refresh());
-
         // Create and show the main window (it wires itself into navigation and theme).
         MainWindow = Services.GetRequiredService<MainWindow>();
         MainWindow.Closed += (_, _) => Shutdown();
@@ -90,10 +82,8 @@ public partial class App : Application
 
         DispatcherQueue.GetForCurrentThread().TryEnqueue(async () =>
         {
-            var cultureService = Services.GetRequiredService<ICultureService>();
             var themeService = Services.GetRequiredService<IThemeService>();
 
-            await cultureService.InitializeAsync();
             await themeService.InitializeAsync();
 
             MainWindow?.ApplyTheme(themeService.CurrentTheme);
@@ -108,7 +98,7 @@ public partial class App : Application
         builder.Logging.AddDebug();
         builder.Logging.AddProvider(new FileLoggerProvider(Path.Combine(SettingsFolder, "logs")));
 
-        // Framework services (settings, theme, culture, dialogs, windows, pickers, info bar).
+        // Framework services (settings, theme, dialogs, windows, pickers, info bar).
         builder.Services.AddMvvmFramework();
 
         // App services.

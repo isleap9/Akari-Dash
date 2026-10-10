@@ -105,59 +105,6 @@ public class ServicesTests
     }
 
     [Fact]
-    public async Task CultureService_initialize_uses_default()
-    {
-        var service = new CultureService(_settings, _messenger);
-
-        await service.InitializeAsync();
-
-        Assert.Equal("en-US", service.CurrentCulture.Name);
-    }
-
-    [Fact]
-    public async Task CultureService_initialize_loads_persisted_culture()
-    {
-        await _settings.SetAsync("Appearance.Culture", "zh-CN");
-        var service = new CultureService(_settings, _messenger);
-
-        await service.InitializeAsync();
-
-        Assert.Equal("zh-CN", service.CurrentCulture.Name);
-    }
-
-    [Fact]
-    public async Task CultureService_initialize_falls_back_for_unknown_culture()
-    {
-        await _settings.SetAsync("Appearance.Culture", "xx-XX");
-        var service = new CultureService(_settings, _messenger);
-
-        await service.InitializeAsync();
-
-        Assert.Equal("en-US", service.CurrentCulture.Name);
-    }
-
-    [Fact]
-    public async Task CultureService_set_culture_persists_and_publishes_message()
-    {
-        var service = new CultureService(_settings, _messenger);
-        CultureChangedMessage? received = null;
-        _messenger.Register<CultureChangedMessage>(this, (_, m) => received = m);
-        try
-        {
-            await service.SetCultureAsync(new System.Globalization.CultureInfo("zh-CN"));
-
-            Assert.Equal("zh-CN", service.CurrentCulture.Name);
-            Assert.Equal("zh-CN", await _settings.GetAsync<string>("Appearance.Culture"));
-            Assert.NotNull(received);
-            Assert.Equal("zh-CN", received.CultureName);
-        }
-        finally
-        {
-            _messenger.Unregister<CultureChangedMessage>(this);
-        }
-    }
-
-    [Fact]
     public void InfoBarService_show_sets_state()
     {
         var service = new InfoBarService();
@@ -235,7 +182,6 @@ public class ServicesTests
         Assert.NotNull(provider.GetRequiredService<ISettingsStorage>());
         Assert.NotNull(provider.GetRequiredService<ISettingsService>());
         Assert.NotNull(provider.GetRequiredService<IThemeService>());
-        Assert.NotNull(provider.GetRequiredService<ICultureService>());
         Assert.NotNull(provider.GetRequiredService<IInfoBarService>());
         Assert.NotNull(provider.GetRequiredService<IWindowService>());
     }

@@ -8,7 +8,7 @@
         <StackPanel Padding="32" Spacing="16">
 
             <TextBlock
-                Text="{x:Bind Strings.Get('Gaming.Title'), Mode=OneWay}"
+                Text="{x:Bind Strings.Get('Gaming.Title')}"
                 Style="{StaticResource TitleTextBlockStyle}" />
 
             <views:CategoryView ViewModel="{x:Bind ViewModel}" />

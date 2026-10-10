@@ -12,7 +12,7 @@ namespace AkariDash.Framework;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the framework services: settings, theme, culture, dialogs, windows,
+    /// Registers the framework services: settings, theme, dialogs, windows,
     /// file pickers, info bar and the community toolkit messenger.
     /// <para>
     /// The app must additionally register:
@@ -31,7 +31,6 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<ISettingsStorage, FileSettingsStorage>();
         services.AddSingleton<ISettingsService, SettingsService>();
-        services.AddSingleton<ICultureService, CultureService>();
         services.AddSingleton<IThemeService, ThemeService>();
         services.AddSingleton<IInfoBarService, InfoBarService>();
         services.AddSingleton<IWindowService, WindowService>();

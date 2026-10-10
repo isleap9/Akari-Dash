@@ -13,18 +13,18 @@
             <TextBlock
                 TextWrapping="Wrap"
                 Opacity="0.8"
-                Text="{x:Bind Strings.Get('Home.Greeting'), Mode=OneWay}" />
+                Text="{x:Bind Strings.Get('Home.Greeting')}" />
 
             <StackPanel
                 Margin="0,12,0,0"
                 Orientation="Horizontal"
                 Spacing="12">
                 <Button
-                    Content="{x:Bind Strings.Get('Home.ApplyAllRecommended'), Mode=OneWay}"
+                    Content="{x:Bind Strings.Get('Home.ApplyAllRecommended')}"
                     Style="{StaticResource AccentButtonStyle}"
                     Command="{Binding ApplyAllRecommendedCommand}" />
-                <Button Content="{x:Bind Strings.Get('Home.OpenSettings'), Mode=OneWay}" Command="{Binding OpenSettingsCommand}" />
-                <Button Content="{x:Bind Strings.Get('Home.About'), Mode=OneWay}" Command="{Binding ShowAboutCommand}" />
+                <Button Content="{x:Bind Strings.Get('Home.OpenSettings')}" Command="{Binding OpenSettingsCommand}" />
+                <Button Content="{x:Bind Strings.Get('Home.About')}" Command="{Binding ShowAboutCommand}" />
             </StackPanel>
 
             <StackPanel
@@ -34,14 +34,14 @@
                 CornerRadius="8"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                 <TextBlock
-                    Text="{x:Bind Strings.Get('Home.ThisPc'), Mode=OneWay}"
+                    Text="{x:Bind Strings.Get('Home.ThisPc')}"
                     Style="{StaticResource SubtitleTextBlockStyle}" />
 
                 <InfoBar
                     IsOpen="{Binding RunsAsOtherAccount}"
                     IsClosable="False"
                     Severity="Warning"
-                    Title="{x:Bind Strings.Get('Home.OtherAccountTitle'), Mode=OneWay}"
+                    Title="{x:Bind Strings.Get('Home.OtherAccountTitle')}"
                     Message="{Binding OtherAccountWarning}" />
 
                 <Grid ColumnSpacing="24" RowSpacing="8">
@@ -56,16 +56,16 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" Opacity="0.8" Text="{x:Bind Strings.Get('Home.Os'), Mode=OneWay}" />
+                    <TextBlock Grid.Row="0" Opacity="0.8" Text="{x:Bind Strings.Get('Home.Os')}" />
                     <TextBlock Grid.Row="0" Grid.Column="1" TextWrapping="Wrap" IsTextSelectionEnabled="True" Text="{Binding Os}" />
 
-                    <TextBlock Grid.Row="1" Opacity="0.8" Text="{x:Bind Strings.Get('Home.Cpu'), Mode=OneWay}" />
+                    <TextBlock Grid.Row="1" Opacity="0.8" Text="{x:Bind Strings.Get('Home.Cpu')}" />
                     <TextBlock Grid.Row="1" Grid.Column="1" TextWrapping="Wrap" IsTextSelectionEnabled="True" Text="{Binding Cpu}" />
 
-                    <TextBlock Grid.Row="2" Opacity="0.8" Text="{x:Bind Strings.Get('Home.Gpu'), Mode=OneWay}" />
+                    <TextBlock Grid.Row="2" Opacity="0.8" Text="{x:Bind Strings.Get('Home.Gpu')}" />
                     <TextBlock Grid.Row="2" Grid.Column="1" TextWrapping="Wrap" IsTextSelectionEnabled="True" Text="{Binding Gpu}" />
 
-                    <TextBlock Grid.Row="3" Opacity="0.8" Text="{x:Bind Strings.Get('Home.Ram'), Mode=OneWay}" />
+                    <TextBlock Grid.Row="3" Opacity="0.8" Text="{x:Bind Strings.Get('Home.Ram')}" />
                     <TextBlock Grid.Row="3" Grid.Column="1" TextWrapping="Wrap" IsTextSelectionEnabled="True" Text="{Binding Ram}" />
                 </Grid>
             </StackPanel>

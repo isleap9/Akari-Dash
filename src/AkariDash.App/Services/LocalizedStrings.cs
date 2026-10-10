@@ -1,32 +1,20 @@
-using System.ComponentModel;
 using System.Resources;
-using CommunityToolkit.Mvvm.Messaging;
 
 namespace AkariDash.App.Services;
 
 /// <summary>
-/// Localized string accessor. Exposes resources by key and raises
-/// <see cref="INotifyPropertyChanged"/> when the culture changes so that
-/// x:Bind function bindings (e.g. <c>{x:Bind Strings.Get("Key")}</c>) re-evaluate.
+/// The app's user-facing text, kept in Resources.resx (English only). Pages read it through
+/// x:Bind function bindings, e.g. <c>{x:Bind Strings.Get('Key')}</c>.
 /// </summary>
-public sealed class LocalizedStrings : INotifyPropertyChanged
+public sealed class LocalizedStrings
 {
     private readonly ResourceManager _resources = new(
         "AkariDash.App.Resources.Resources",
         typeof(LocalizedStrings).Assembly);
 
-    /// <summary>Returns the localized string for <paramref name="key"/> (or the key itself when missing).</summary>
+    /// <summary>Returns the string for <paramref name="key"/> (or the key itself when missing).</summary>
     public string Get(string key) => _resources.GetString(key) ?? key;
 
     /// <summary>Indexer form: <c>Strings["Key"]</c>.</summary>
     public string this[string key] => Get(key);
-
-    /// <summary>Raised when resources should be re-read (culture change).</summary>
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    /// <summary>Tells all bound elements to re-resolve their localized text.</summary>
-    public void Refresh()
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
-    }
 }

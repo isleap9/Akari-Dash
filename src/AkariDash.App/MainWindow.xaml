@@ -69,8 +69,8 @@
                     Severity="Warning"
                     IsClosable="False"
                     IsOpen="{x:Bind IsDryRunOnly}"
-                    Title="{x:Bind Strings.Get('DryRunBanner.Title'), Mode=OneWay}"
-                    Message="{x:Bind Strings.Get('DryRunBanner.Message'), Mode=OneWay}" />
+                    Title="{x:Bind Strings.Get('DryRunBanner.Title')}"
+                    Message="{x:Bind Strings.Get('DryRunBanner.Message')}" />
 
                 <Frame Grid.Row="1" x:Name="ContentFrame" />
 

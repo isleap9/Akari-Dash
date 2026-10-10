@@ -60,9 +60,6 @@
   <data name="Settings.Theme" xml:space="preserve">
     <value>Theme</value>
   </data>
-  <data name="Settings.Language" xml:space="preserve">
-    <value>Language</value>
-  </data>
   <data name="Settings.About" xml:space="preserve">
     <value>About</value>
   </data>
