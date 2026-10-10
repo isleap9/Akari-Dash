@@ -35,6 +35,12 @@
                                                 <TextBlock Text="{x:Bind Title}" Style="{StaticResource BodyStrongTextBlockStyle}" />
                                                 <TextBlock Text="{x:Bind Description}" TextWrapping="Wrap" Opacity="0.8" />
                                                 <TextBlock
+                                                    Visibility="{x:Bind HasRecommended}"
+                                                    Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}">
+                                                    <Run Text="Recommended:" FontWeight="SemiBold" />
+                                                    <Run Text="{x:Bind RecommendedLabel}" />
+                                                </TextBlock>
+                                                <TextBlock
                                                     Visibility="{x:Bind IsCustom}"
                                                     Foreground="{ThemeResource SystemFillColorCautionBrush}">
                                                     <Run Text="Custom:" />
@@ -63,6 +69,13 @@
                                                     Content="Undo"
                                                     Visibility="{x:Bind IsApplied}"
                                                     Command="{x:Bind UndoCommand}" />
+                                                <ComboBox
+                                                    Visibility="{x:Bind IsSelector}"
+                                                    MinWidth="280"
+                                                    PlaceholderText="Custom"
+                                                    ItemsSource="{x:Bind Options}"
+                                                    DisplayMemberPath="Label"
+                                                    SelectedItem="{x:Bind SelectedOption, Mode=TwoWay}" />
                                                 <ToggleSwitch
                                                     Visibility="{x:Bind IsToggleVisible}"
                                                     IsOn="{x:Bind IsOn, Mode=TwoWay}"

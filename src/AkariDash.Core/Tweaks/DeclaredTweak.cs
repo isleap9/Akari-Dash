@@ -1,6 +1,10 @@
 namespace AkariDash.Core.Tweaks;
 
-/// <summary>A Tweak described entirely as data and executed by the shared <see cref="TweakEngine"/>.</summary>
+/// <summary>
+/// A Tweak described entirely as data and executed by the shared <see cref="TweakEngine"/>.
+/// <paramref name="Recommended"/> is one of <paramref name="Options"/>, or <see langword="null"/>
+/// for a Tweak that is a matter of taste.
+/// </summary>
 public sealed record DeclaredTweak(
     string Id,
     string Title,
@@ -8,4 +12,5 @@ public sealed record DeclaredTweak(
     Category Category,
     string Group,
     IReadOnlyList<RegistryTarget> Targets,
-    IReadOnlyList<TweakOption> Options);
+    IReadOnlyList<TweakOption> Options,
+    TweakOption? Recommended = null);

@@ -8,7 +8,7 @@ namespace AkariDash.App.ViewModels;
 
 /// <summary>
 /// One Tweak row. A two-Option Tweak is shown as a toggle whose off side is its first Option
-/// and whose on side is its second.
+/// and whose on side is its second; a Tweak with more Options is shown as a selector.
 /// </summary>
 public sealed partial class TweakViewModel : ViewModelBase
 {
@@ -17,6 +17,7 @@ public sealed partial class TweakViewModel : ViewModelBase
     private readonly Action<DeclaredTweak> _undo;
     private readonly TweakOption? _driftedFrom;
     private bool _isOn;
+    private TweakOption? _selectedOption;
 
     /// <param name="isApplied">Whether Akari-Dash has applied this Tweak (and so can Undo it).</param>
     /// <param name="chooseOption">Called when the user picks an Option; the row is rebuilt afterwards.</param>
@@ -37,6 +38,9 @@ public sealed partial class TweakViewModel : ViewModelBase
         Description = tweak.Description;
         OffLabel = tweak.Options[0].Label;
         OnLabel = tweak.Options[1].Label;
+        Options = tweak.Options;
+        IsSelector = tweak.Options.Count > 2;
+        RecommendedLabel = tweak.Recommended?.Label;
 
         // A drifted row shows what the machine is actually in now.
         var actual = state;
@@ -47,13 +51,14 @@ public sealed partial class TweakViewModel : ViewModelBase
             actual = drifted.Actual;
         }
 
-        _isOn = actual is LiveState.InOption inOption && inOption.Option == tweak.Options[1];
+        _selectedOption = (actual as LiveState.InOption)?.Option;
+        _isOn = _selectedOption == tweak.Options[1];
 
         if (actual is LiveState.Custom custom)
         {
             // Drift takes precedence: a drifted Tweak shows its value in the Drift badge instead.
             IsCustom = !IsDrifted;
-            IsToggleVisible = false;
+            MatchesNoOption = true;
             CustomValue = Describe(custom);
         }
     }
@@ -77,6 +82,29 @@ public sealed partial class TweakViewModel : ViewModelBase
         }
     }
 
+    /// <summary>A Tweak with three or more Options is picked from a list instead of a toggle.</summary>
+    public bool IsSelector { get; }
+
+    public IReadOnlyList<TweakOption> Options { get; }
+
+    /// <summary>The Option the selector shows (none while Custom); picking one asks to put the Tweak into it.</summary>
+    public TweakOption? SelectedOption
+    {
+        get => _selectedOption;
+        set
+        {
+            if (value is not null && SetProperty(ref _selectedOption, value))
+            {
+                _chooseOption(_tweak, value);
+            }
+        }
+    }
+
+    /// <summary>The Recommended Option's label, or <see langword="null"/> for a matter-of-taste Tweak.</summary>
+    public string? RecommendedLabel { get; }
+
+    public bool HasRecommended => RecommendedLabel is not null;
+
     public bool IsCustom { get; }
 
     /// <summary>The Tweak is no longer in the Option Akari-Dash last applied; Re-apply is offered.</summary>
@@ -88,11 +116,14 @@ public sealed partial class TweakViewModel : ViewModelBase
     /// <summary>Undo is offered only on Tweaks Akari-Dash has applied.</summary>
     public bool IsApplied { get; }
 
-    /// <summary>The toggle is hidden while the live values match no Option: neither of its sides is true.</summary>
-    public bool IsToggleVisible { get; } = true;
+    /// <summary>The toggle is hidden while the live values match no Option (neither of its sides is true), and for selectors.</summary>
+    public bool IsToggleVisible => !IsSelector && !MatchesNoOption;
 
     /// <summary>The actual live value(s) when the Tweak is Custom.</summary>
     public string? CustomValue { get; }
+
+    /// <summary>The live values match none of the Options (Custom, or drifted to a Custom value).</summary>
+    private bool MatchesNoOption { get; }
 
     [RelayCommand]
     private void Undo() => _undo(_tweak);
