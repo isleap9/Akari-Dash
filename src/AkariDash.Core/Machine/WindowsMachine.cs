@@ -100,7 +100,21 @@ public sealed class WindowsMachine : IMachine
             var newestBefore = NewestRestorePoint(services);
 
             restore = services.Get("SystemRestore");
-            var result = (int)restore.CreateRestorePoint(description, Native.ModifySettings, Native.BeginSystemChange);
+            int result;
+            try
+            {
+                result = (int)restore.CreateRestorePoint(description, Native.ModifySettings, Native.BeginSystemChange);
+            }
+            catch (COMException ex) when (ex.HResult == Native.ErrorServiceDisabledHResult)
+            {
+                result = Native.ErrorServiceDisabled;
+            }
+
+            if (result == Native.ErrorServiceDisabled)
+            {
+                throw new InvalidOperationException("System Restore is turned off on this PC (System Protection is off for its drives).");
+            }
+
             if (result != 0)
             {
                 throw new Win32Exception(result);
@@ -312,6 +326,8 @@ public sealed class WindowsMachine : IMachine
         public const uint ServiceConfigDelayedAutoStartInfo = 3;
         public const int ErrorFileNotFound = unchecked((int)0x80070002);
         public const int ErrorPathNotFound = unchecked((int)0x80070003);
+        public const int ErrorServiceDisabled = 1058;
+        public const int ErrorServiceDisabledHResult = unchecked((int)0x80070422);
         public const int ModifySettings = 12;
         public const int BeginSystemChange = 100;
 
