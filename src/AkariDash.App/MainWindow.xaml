@@ -77,10 +77,10 @@
                 <InfoBar
                     Grid.Row="2"
                     x:Name="ShellInfoBar"
-                    Title="{x:Bind InfoBar.Title}"
-                    Message="{x:Bind InfoBar.Message}"
-                    Severity="{x:Bind InfoBar.Severity}"
-                    IsClosable="{x:Bind InfoBar.IsClosable}"
+                    Title="{x:Bind InfoBar.Title, Mode=OneWay}"
+                    Message="{x:Bind InfoBar.Message, Mode=OneWay}"
+                    Severity="{x:Bind InfoBar.Severity, Mode=OneWay}"
+                    IsClosable="{x:Bind InfoBar.IsClosable, Mode=OneWay}"
                     IsOpen="{x:Bind InfoBar.IsOpen, Mode=TwoWay}" />
             </Grid>
         </NavigationView>
