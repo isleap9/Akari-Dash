@@ -33,8 +33,8 @@ public class ServicesCatalogTests
         var services = Services.SelectMany(tweak => tweak.Targets).Select(target => target.Location).OfType<ServiceLocation>().Select(location => location.ServiceName);
         var tasks = Services.SelectMany(tweak => tweak.Targets).Select(target => target.Location).OfType<ScheduledTaskLocation>();
 
-        Assert.Equal(40, services.Distinct().Count());
-        Assert.Equal(18, tasks.Distinct().Count());
+        Assert.Equal(41, services.Distinct().Count());
+        Assert.Equal(19, tasks.Distinct().Count());
     }
 
     [Theory]
@@ -81,7 +81,8 @@ public class ServicesCatalogTests
     [InlineData("services.diagnostics-tracking")]
     [InlineData("services.compatibility-appraiser")]
     [InlineData("services.ceip-consolidator")]
-    public void Background_telemetry_recommends_off(string id)
+    [InlineData("services.sysmain")]
+    public void Background_work_with_a_performance_case_recommends_off(string id)
     {
         Assert.Equal("off", Find(id).Recommended?.Id);
     }
@@ -90,6 +91,7 @@ public class ServicesCatalogTests
     [InlineData("services.windows-search", "WSearch", ServiceStartType.AutomaticDelayed)]
     [InlineData("services.print-spooler", "Spooler", ServiceStartType.Automatic)]
     [InlineData("services.fax", "Fax", ServiceStartType.Manual)]
+    [InlineData("services.sysmain", "SysMain", ServiceStartType.Automatic)]
     public void On_puts_back_the_windows_default_start_type(string id, string service, ServiceStartType windowsDefault)
     {
         var tweak = Find(id);

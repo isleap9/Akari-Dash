@@ -6,7 +6,7 @@ namespace AkariDash.Core.Tweaks;
 // "off" (Disabled) and Windows default start type are AkariOS-Ultimate's (MIT) services-off and
 // services-default lists; which ones use delayed start, and every task path, are confirmed on
 // Windows itself in the VM. Anything that breaks a feature people rely on has no Recommended
-// Option; only background telemetry with nothing visible behind it recommends Off.
+// Option; only SysMain and background telemetry with nothing visible behind it recommend Off.
 public static partial class TweakCatalog
 {
     private const ServiceStartType Automatic = ServiceStartType.Automatic;
@@ -15,6 +15,15 @@ public static partial class TweakCatalog
 
     private static IEnumerable<DeclaredTweak> ServicesTweaks() =>
     [
+        // Performance (Akari-OS turns both off; on an SSD the defrag task is what sends TRIM, so it
+        // has no Recommended Option)
+        ServiceTweak("services.sysmain", "SysMain (Superfetch)",
+            "Preloads the apps you use most into memory so they open faster. On an SSD the gain is small, and its background disk and memory work can cause stutter while you play.",
+            "Performance", [("SysMain", Automatic)], recommendOff: true),
+        TaskTweak("services.scheduled-drive-optimization", "Scheduled drive optimization",
+            "Windows defragments hard drives and trims SSDs on a weekly schedule in the background. Turning it off stops it starting mid-game; you can still optimize drives by hand.",
+            "Performance", [@"\Microsoft\Windows\Defrag\ScheduledDefrag"]),
+
         // Printing and fax
         ServiceTweak("services.print-spooler", "Print Spooler",
             "Sends documents to printers. Turned off, nothing can print, including Microsoft Print to PDF.",

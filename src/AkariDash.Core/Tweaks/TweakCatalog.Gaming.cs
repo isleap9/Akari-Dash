@@ -22,8 +22,6 @@ public static partial class TweakCatalog
         SystemResponsiveness(),
         GamesPriority(),
         NetworkThrottling(),
-        SysMain(),
-        ScheduledDriveOptimization(),
         BackgroundApps(),
         AutomaticMaintenance(),
         StorageSense(),
@@ -186,41 +184,6 @@ public static partial class TweakCatalog
             Options: [off, DWordOption(throttlingOff, "on", "On", 0)],
             Recommended: off,
             Activation: Activation.AfterRestart);
-    }
-
-    private static DeclaredTweak SysMain()
-    {
-        // Akari-OS disables SysMain (Automatic is the Windows default). Only the start type
-        // changes, so a running SysMain keeps running until the next restart.
-        var service = new TweakTarget(new ServiceLocation("SysMain"));
-        var off = Option(service, "off", "Off", new ServiceStartValue(ServiceStartType.Disabled));
-
-        return new DeclaredTweak(
-            Id: "gaming.sysmain",
-            Title: "SysMain (Superfetch)",
-            Description: "Preloads the apps you use most into memory so they open faster. On an SSD the gain is small, and its background disk and memory work can cause stutter while you play.",
-            Category: Category.Gaming,
-            Group: "Background activity",
-            Targets: [service],
-            Options: [off, Option(service, "on", "On", new ServiceStartValue(ServiceStartType.Automatic))],
-            Recommended: off,
-            Activation: Activation.AfterRestart);
-    }
-
-    private static DeclaredTweak ScheduledDriveOptimization()
-    {
-        // Akari-OS disables this task. No Recommended Option: on an SSD it is what sends TRIM, so
-        // turning it off trades background disk activity for drive upkeep.
-        var task = new TweakTarget(new ScheduledTaskLocation(@"\Microsoft\Windows\Defrag\ScheduledDefrag"));
-
-        return new DeclaredTweak(
-            Id: "gaming.scheduled-drive-optimization",
-            Title: "Scheduled drive optimization",
-            Description: "Windows defragments hard drives and trims SSDs on a weekly schedule in the background. Turning it off stops it starting mid-game; you can still optimize drives by hand.",
-            Category: Category.Gaming,
-            Group: "Background activity",
-            Targets: [task],
-            Options: [Option(task, "off", "Off", TaskEnabledValue.Off), Option(task, "on", "On", TaskEnabledValue.On)]);
     }
 
     private static DeclaredTweak BackgroundApps()

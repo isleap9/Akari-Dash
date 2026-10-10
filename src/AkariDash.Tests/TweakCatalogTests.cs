@@ -35,7 +35,7 @@ public class TweakCatalogTests
     [Fact]
     public void SysMain_takes_effect_after_restart_because_a_running_service_keeps_running()
     {
-        Assert.Equal(Activation.AfterRestart, Find("gaming.sysmain").Activation);
+        Assert.Equal(Activation.AfterRestart, Find("services.sysmain").Activation);
     }
 
     [Theory]
@@ -163,12 +163,11 @@ public class TweakCatalogTests
     }
 
     [Fact]
-    public void Gaming_page_has_a_tweak_targeting_a_service_start_type_and_one_targeting_a_scheduled_task()
+    public void Services_and_scheduled_tasks_live_only_on_the_services_page()
     {
-        var gaming = TweakCatalog.All.Where(tweak => tweak.Category == Category.Gaming).ToList();
+        var elsewhere = TweakCatalog.All.Where(tweak => tweak.Category != Category.Services);
 
-        Assert.Contains(gaming, tweak => tweak.Targets.Any(target => target.Location is ServiceLocation));
-        Assert.Contains(gaming, tweak => tweak.Targets.Any(target => target.Location is ScheduledTaskLocation));
+        Assert.All(elsewhere, tweak => Assert.All(tweak.Targets, target => Assert.IsType<RegistryLocation>(target.Location)));
     }
 
     [Theory]
