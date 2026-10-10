@@ -72,6 +72,9 @@
   <data name="Privacy.Title" xml:space="preserve">
     <value>Privacy</value>
   </data>
+  <data name="Services.Title" xml:space="preserve">
+    <value>Services</value>
+  </data>
   <data name="DryRunBanner.Title" xml:space="preserve">
     <value>Dry Run only</value>
   </data>

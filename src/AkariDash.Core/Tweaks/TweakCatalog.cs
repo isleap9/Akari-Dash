@@ -3,8 +3,8 @@ using AkariDash.Core.Machine;
 namespace AkariDash.Core.Tweaks;
 
 /// <summary>
-/// Every Tweak Akari-Dash ships, one file per Category: TweakCatalog.Gaming.cs and
-/// TweakCatalog.Privacy.cs. This file holds the list and the helpers they share.
+/// Every Tweak Akari-Dash ships, one file per Category: TweakCatalog.Gaming.cs,
+/// TweakCatalog.Privacy.cs and TweakCatalog.Services.cs. This file holds the list and the helpers they share.
 /// </summary>
 public static partial class TweakCatalog
 {
@@ -12,6 +12,7 @@ public static partial class TweakCatalog
     [
         .. GamingTweaks(),
         .. PrivacyTweaks(),
+        .. ServicesTweaks(),
     ];
 
     private static TweakOption Option(TweakTarget target, string id, string label, MachineValue? value) =>
