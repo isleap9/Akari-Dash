@@ -40,6 +40,13 @@
                                                     <Run Text="Custom:" />
                                                     <Run Text="{x:Bind CustomValue}" />
                                                 </TextBlock>
+                                                <TextBlock
+                                                    Visibility="{x:Bind IsDrifted}"
+                                                    TextWrapping="Wrap"
+                                                    Foreground="{ThemeResource SystemFillColorCautionBrush}">
+                                                    <Run Text="Drift:" FontWeight="SemiBold" />
+                                                    <Run Text="{x:Bind DriftText}" />
+                                                </TextBlock>
                                             </StackPanel>
 
                                             <StackPanel
@@ -47,6 +54,11 @@
                                                 Orientation="Horizontal"
                                                 Spacing="12"
                                                 VerticalAlignment="Center">
+                                                <Button
+                                                    Content="Re-apply"
+                                                    Style="{StaticResource AccentButtonStyle}"
+                                                    Visibility="{x:Bind IsDrifted}"
+                                                    Command="{x:Bind ReapplyCommand}" />
                                                 <Button
                                                     Content="Undo"
                                                     Visibility="{x:Bind IsApplied}"

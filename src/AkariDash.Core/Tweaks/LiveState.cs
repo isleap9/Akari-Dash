@@ -14,6 +14,13 @@ public abstract record LiveState
 
     /// <summary>The machine matches none of the Options; <paramref name="Values"/> holds what is actually there.</summary>
     public sealed record Custom(IReadOnlyList<TargetValue> Values) : LiveState;
+
+    /// <summary>
+    /// Akari-Dash applied <paramref name="Expected"/> but the machine is no longer in it (typically
+    /// Windows reset it); <paramref name="Actual"/> is the <see cref="InOption"/> or <see cref="Custom"/>
+    /// state it is in instead. Shown in place of Custom whenever Akari-Dash has applied the Tweak.
+    /// </summary>
+    public sealed record Drifted(TweakOption Expected, LiveState Actual) : LiveState;
 }
 
 /// <summary>The live value of one target (<see langword="null"/> when it does not exist).</summary>

@@ -14,17 +14,22 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
     private readonly IOriginalValuesStore _store = store ?? new InMemoryOriginalValuesStore();
     private readonly IMachine _writes = applyTo ?? machine;
 
-    /// <summary>Reads which Option <paramref name="tweak"/> is in right now.</summary>
+    /// <summary>
+    /// Reads which Option <paramref name="tweak"/> is in right now, or <see cref="LiveState.Drifted"/>
+    /// when it is no longer in the Option Akari-Dash last applied.
+    /// </summary>
     public LiveState ReadLiveState(DeclaredTweak tweak)
     {
-        var live = tweak.Targets
-            .Select(target => new TargetValue(target, machine.ReadRegistryValue(target.Location)))
-            .ToList();
+        var live = ReadFrom(machine, tweak);
 
-        var option = tweak.Options.FirstOrDefault(option =>
-            live.All(value => Effective(value.Target, value.Value) == Effective(value.Target, option.Values[value.Target])));
+        // Applies that went to a Dry Run never reached the machine, so there is nothing to drift.
+        if (!ReferenceEquals(_writes, machine) || AppliedOption(tweak) is not { } applied)
+        {
+            return live;
+        }
 
-        return option is null ? new LiveState.Custom(live) : new LiveState.InOption(option);
+        var stillApplied = live is LiveState.InOption current && current.Option == applied;
+        return stillApplied ? live : new LiveState.Drifted(applied, live);
     }
 
     /// <summary>Lists what applying <paramref name="option"/> would change, writing nothing.</summary>
@@ -89,6 +94,18 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
 
         WriteAll(_writes, tweak, applied.OriginalValues.Select(original => (original.Location, original.Value)).ToList());
         _store.Clear(tweak.Id);
+    }
+
+    private static LiveState ReadFrom(IMachine source, DeclaredTweak tweak)
+    {
+        var live = tweak.Targets
+            .Select(target => new TargetValue(target, source.ReadRegistryValue(target.Location)))
+            .ToList();
+
+        var option = tweak.Options.FirstOrDefault(option =>
+            live.All(value => Effective(value.Target, value.Value) == Effective(value.Target, option.Values[value.Target])));
+
+        return option is null ? new LiveState.Custom(live) : new LiveState.InOption(option);
     }
 
     private static List<(RegistryLocation Location, RegistryValue? Value)> ValuesOf(DeclaredTweak tweak, TweakOption option) =>
