@@ -146,11 +146,14 @@ public sealed partial class TweakViewModel : ViewModelBase
     /// <summary>Greys out an Unavailable row.</summary>
     public double RowOpacity => IsUnavailable ? 0.5 : 1.0;
 
-    /// <summary>The toggle is hidden while the live values match no Option (neither of its sides is true), and for selectors.</summary>
+    /// <summary>The toggle is hidden while the live values match no Option (neither of its sides is true; the selector stands in), and for selectors.</summary>
     public bool IsToggleVisible => !IsSelector && !MatchesNoOption && !IsUnavailable;
 
-    /// <summary>The selector is shown for three or more Options, unless the Tweak is Unavailable.</summary>
-    public bool IsSelectorVisible => IsSelector && !IsUnavailable;
+    /// <summary>
+    /// The selector is shown for three or more Options, and in place of the toggle while the live values
+    /// match no Option, so a Custom Tweak can still be put into one; never for an Unavailable Tweak.
+    /// </summary>
+    public bool IsSelectorVisible => (IsSelector || MatchesNoOption) && !IsUnavailable;
 
     /// <summary>The actual live value(s) when the Tweak is Custom.</summary>
     public string? CustomValue { get; }
