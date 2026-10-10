@@ -24,4 +24,8 @@ public interface IMachine
 
     /// <summary>The makers of the graphics cards installed in this machine (empty when none is found).</summary>
     IReadOnlySet<GpuVendor> GpuVendors();
+
+    /// <summary>Creates a Windows restore point named <paramref name="description"/>.</summary>
+    /// <exception cref="Exception">No restore point was created (for example, System Restore is off); the type depends on the machine.</exception>
+    void CreateRestorePoint(string description);
 }

@@ -31,4 +31,6 @@ public sealed class RollbackFailingMachine(IMachine inner, MachineLocation failW
     }
 
     public IReadOnlySet<GpuVendor> GpuVendors() => inner.GpuVendors();
+
+    public void CreateRestorePoint(string description) => inner.CreateRestorePoint(description);
 }

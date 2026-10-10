@@ -13,6 +13,9 @@ public static class BuildInfo
     public static bool IsDryRunOnly => false;
 #endif
 
+    /// <summary>Shown while the session's first real apply waits for its restore point.</summary>
+    public const string RestorePointNote = "Creating a restore point first; this can take a minute.";
+
     /// <summary>Ends an apply preview: in the Phase 1 build, says that nothing will be written.</summary>
     public static string PreviewNote => IsDryRunOnly
         ? Environment.NewLine + Environment.NewLine + "Dry Run only: nothing will be written to this PC."

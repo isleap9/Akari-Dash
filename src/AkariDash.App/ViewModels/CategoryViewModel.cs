@@ -126,13 +126,39 @@ public sealed class CategoryViewModel(
         if (confirmed)
         {
             logger.LogInformation("Applying {Tweak} -> {Option}: {Changes}", tweak.Id, option.Id, string.Join("; ", changes));
-            engine.Apply(tweak, option);
+
+            var title = $"{tweak.Title}: {option.Label}";
+            if (engine.RestorePointDue)
+            {
+                infoBar.ShowInfo(title, BuildInfo.RestorePointNote);
+            }
+
+            // Off the UI thread: the session's first apply waits for a restore point, which can take a while.
+            try
+            {
+                await Task.Run(() => engine.Apply(tweak, option));
+            }
+            catch (Exception ex) when (engine.TakeRestorePointFailure() is { } noRestorePoint)
+            {
+                logger.LogWarning(noRestorePoint, "No restore point was created");
+                throw new InvalidOperationException($"{ex.Message} No restore point was created either: {noRestorePoint.Message}", ex);
+            }
+
             logger.LogInformation("Applied {Tweak} -> {Option}", tweak.Id, option.Id);
-            infoBar.ShowSuccess(
-                $"{tweak.Title}: {option.Label}",
-                BuildInfo.IsDryRunOnly
-                    ? $"Dry Run recorded {changes.Count} change(s); nothing was written to this PC, so its Live State is unchanged."
-                    : $"Applied {changes.Count} change(s).");
+
+            if (engine.TakeRestorePointFailure() is { } failure)
+            {
+                logger.LogWarning(failure, "No restore point was created");
+                infoBar.ShowWarning(title, $"Applied {changes.Count} change(s), but no restore point was created: {failure.Message}");
+            }
+            else
+            {
+                infoBar.ShowSuccess(
+                    title,
+                    BuildInfo.IsDryRunOnly
+                        ? $"Dry Run recorded {changes.Count} change(s); nothing was written to this PC, so its Live State is unchanged."
+                        : $"Applied {changes.Count} change(s).");
+            }
         }
     });
 
@@ -147,7 +173,7 @@ public sealed class CategoryViewModel(
         if (confirmed)
         {
             logger.LogInformation("Undoing {Tweak}", tweak.Id);
-            engine.Undo(tweak);
+            await Task.Run(() => engine.Undo(tweak));
             logger.LogInformation("Undid {Tweak}", tweak.Id);
             infoBar.ShowSuccess(
                 $"Undo {tweak.Title}",

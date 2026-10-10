@@ -7,7 +7,8 @@ namespace AkariDash.Core.Tweaks;
 /// <paramref name="machine"/>; <see cref="Apply"/> and <see cref="Undo"/> write to
 /// <paramref name="applyTo"/> (a <see cref="DryRunMachine"/> in Phase 1), or to
 /// <paramref name="machine"/> when not given. Original Values are kept in
-/// <paramref name="store"/> (this session only when not given).
+/// <paramref name="store"/> (this session only when not given). One engine is one session: the
+/// first apply that writes to the machine asks it for a restore point first.
 /// </summary>
 public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = null, IMachine? applyTo = null)
 {
@@ -15,13 +16,31 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
     private readonly IMachine _writes = applyTo ?? machine;
     private readonly List<DeclaredTweak> _changed = [];
 
+    // Applies and Undos may run off the UI thread (the first waits for a restore point), so they
+    // take turns: no write starts before the session's restore point has been asked for.
+    private readonly Lock _writing = new();
+    private volatile bool _restorePointRequested;
+    private Exception? _restorePointFailure;
+
+    /// <summary>The restore point's description, as listed in Windows' System Restore.</summary>
+    public const string RestorePointDescription = "Akari-Dash: before applying Tweaks";
+
     /// <summary>
     /// The Tweaks applied or undone through this engine (so, this session) whose change waits on a
     /// sign-out or restart. Immediate Tweaks never appear here.
     /// </summary>
-    public PendingActivation Pending => new(
-        _changed.Where(tweak => tweak.Activation == Activation.AfterSignOut).ToList(),
-        _changed.Where(tweak => tweak.Activation == Activation.AfterRestart).ToList());
+    public PendingActivation Pending
+    {
+        get
+        {
+            lock (_changed)
+            {
+                return new(
+                    _changed.Where(tweak => tweak.Activation == Activation.AfterSignOut).ToList(),
+                    _changed.Where(tweak => tweak.Activation == Activation.AfterRestart).ToList());
+            }
+        }
+    }
 
     /// <summary>
     /// Reads which Option <paramref name="tweak"/> is in right now, or <see cref="LiveState.Drifted"/>
@@ -75,7 +94,16 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
     /// <exception cref="TweakApplyException">A write failed; every target already written was rolled back.</exception>
     public void Apply(DeclaredTweak tweak, TweakOption option)
     {
+        lock (_writing)
+        {
+            ApplyInTurn(tweak, option);
+        }
+    }
+
+    private void ApplyInTurn(DeclaredTweak tweak, TweakOption option)
+    {
         ThrowIfUnavailable(tweak);
+        RequestRestorePointOnce();
 
         var applied = _store.Get(tweak.Id);
         var isFirstApply = applied is null;
@@ -109,6 +137,14 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
     /// <exception cref="TweakApplyException">A write failed; the Original Values are kept so Undo can be tried again.</exception>
     public void Undo(DeclaredTweak tweak)
     {
+        lock (_writing)
+        {
+            UndoInTurn(tweak);
+        }
+    }
+
+    private void UndoInTurn(DeclaredTweak tweak)
+    {
         if (_store.Get(tweak.Id) is not { } applied)
         {
             return;
@@ -119,11 +155,49 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
         MarkChanged(tweak);
     }
 
+    /// <summary>Whether the next apply will first wait for a restore point (never for a Dry Run).</summary>
+    public bool RestorePointDue => !_restorePointRequested && _writes is not DryRunMachine;
+
+    /// <summary>
+    /// Why the session's restore point could not be created, the first time it is asked after the
+    /// failure; <see langword="null"/> otherwise (created, not yet requested, or already reported).
+    /// </summary>
+    public Exception? TakeRestorePointFailure()
+    {
+        return Interlocked.Exchange(ref _restorePointFailure, null);
+    }
+
+    /// <summary>
+    /// Asks the machine applies write to for a restore point, once per session (a Dry Run ignores
+    /// it). A failure is kept for <see cref="TakeRestorePointFailure"/> and never stops the apply,
+    /// nor is it retried.
+    /// </summary>
+    private void RequestRestorePointOnce()
+    {
+        if (_restorePointRequested)
+        {
+            return;
+        }
+
+        _restorePointRequested = true;
+        try
+        {
+            _writes.CreateRestorePoint(RestorePointDescription);
+        }
+        catch (Exception ex)
+        {
+            _restorePointFailure = ex;
+        }
+    }
+
     private void MarkChanged(DeclaredTweak tweak)
     {
-        if (!_changed.Contains(tweak))
+        lock (_changed)
         {
-            _changed.Add(tweak);
+            if (!_changed.Contains(tweak))
+            {
+                _changed.Add(tweak);
+            }
         }
     }
 

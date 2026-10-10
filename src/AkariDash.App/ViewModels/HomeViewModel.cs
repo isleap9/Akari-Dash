@@ -77,7 +77,20 @@ public partial class HomeViewModel : ViewModelBase
             _logger.LogInformation(
                 "Applying all recommended: {Tweaks}",
                 string.Join("; ", plan.ToApply.Select(planned => $"{planned.Tweak.Id} -> {planned.Option.Id}")));
-            var results = _engine.ApplyRecommended(plan);
+
+            if (_engine.RestorePointDue)
+            {
+                _infoBar.ShowInfo(title, BuildInfo.RestorePointNote);
+            }
+
+            // Off the UI thread: the session's first apply waits for a restore point, which can take a while.
+            var results = await Task.Run(() => _engine.ApplyRecommended(plan));
+            var restorePointFailure = _engine.TakeRestorePointFailure();
+            if (restorePointFailure is not null)
+            {
+                _logger.LogWarning(restorePointFailure, "No restore point was created");
+            }
+
             foreach (var result in results)
             {
                 if (result.Succeeded)
@@ -95,6 +108,11 @@ public partial class HomeViewModel : ViewModelBase
             var applied = BuildInfo.IsDryRunOnly ? "recorded as a Dry Run" : "applied";
 
             var report = new StringBuilder();
+            if (restorePointFailure is not null)
+            {
+                report.Append(Paragraph("No restore point was created; the Tweaks were applied anyway:", [restorePointFailure.Message]));
+            }
+
             if (succeeded.Count > 0)
             {
                 report.Append(Paragraph(
@@ -120,13 +138,17 @@ public partial class HomeViewModel : ViewModelBase
 
             report.Append(skipped);
 
-            if (failed.Count == 0)
+            if (failed.Count > 0)
             {
-                _infoBar.ShowSuccess(title, $"{succeeded.Count} Tweak(s) {applied}.");
+                _infoBar.ShowWarning(title, $"{succeeded.Count} Tweak(s) {applied}, {failed.Count} failed; see the details for each.");
+            }
+            else if (restorePointFailure is not null)
+            {
+                _infoBar.ShowWarning(title, $"{succeeded.Count} Tweak(s) {applied}, but no restore point was created; see the details.");
             }
             else
             {
-                _infoBar.ShowWarning(title, $"{succeeded.Count} Tweak(s) {applied}, {failed.Count} failed; see the details for each.");
+                _infoBar.ShowSuccess(title, $"{succeeded.Count} Tweak(s) {applied}.");
             }
 
             await _dialogs.ShowInfoAsync(title, report.ToString().TrimStart());

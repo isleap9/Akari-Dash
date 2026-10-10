@@ -63,3 +63,7 @@ _Avoid_: Simulation, mock mode, preview mode
 **Drift**:
 When a **Tweak**'s **Live State** no longer matches the **Option** Akari-Dash last applied, typically because Windows reset it.
 _Avoid_: Reverted, out of sync, broken
+
+**Restore Point**:
+A Windows System Restore point Akari-Dash asks for once per session, just before its first real (non-**Dry Run**) apply; a safety net for the whole PC, separate from **Undo** and **Original Values**. If Windows cannot create one, the user is warned and the apply goes ahead.
+_Avoid_: Backup, snapshot, checkpoint

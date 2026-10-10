@@ -5,7 +5,8 @@ using Microsoft.Win32;
 namespace AkariDash.Core.Machine;
 
 /// <summary>
-/// The real machine: the Windows registry, the Service Control Manager and the Task Scheduler.
+/// The real machine: the Windows registry, the Service Control Manager, the Task Scheduler and
+/// System Restore.
 /// Verified manually in a VM only.
 /// </summary>
 public sealed class WindowsMachine : IMachine
@@ -83,6 +84,55 @@ public sealed class WindowsMachine : IMachine
         }
 
         return vendors;
+    }
+
+    // System Restore's WMI provider (late bound, like the Task Scheduler). Windows creates at most
+    // one restore point a day by default and then skips the request while still reporting success,
+    // so success counts only when a new restore point actually appears.
+    public void CreateRestorePoint(string description)
+    {
+        dynamic locator = Activator.CreateInstance(Type.GetTypeFromProgID("WbemScripting.SWbemLocator", throwOnError: true)!)!;
+        dynamic? services = null;
+        dynamic? restore = null;
+        try
+        {
+            services = locator.ConnectServer(".", @"root\default");
+            var newestBefore = NewestRestorePoint(services);
+
+            restore = services.Get("SystemRestore");
+            var result = (int)restore.CreateRestorePoint(description, Native.ModifySettings, Native.BeginSystemChange);
+            if (result != 0)
+            {
+                throw new Win32Exception(result);
+            }
+
+            if (NewestRestorePoint(services) <= newestBefore)
+            {
+                throw new InvalidOperationException(
+                    "Windows created no new restore point; by default it allows only one a day, and one was made in the last 24 hours.");
+            }
+        }
+        finally
+        {
+            foreach (var comObject in new object?[] { restore, services, locator })
+            {
+                if (comObject is not null)
+                {
+                    Marshal.FinalReleaseComObject(comObject);
+                }
+            }
+        }
+    }
+
+    private static uint NewestRestorePoint(dynamic services)
+    {
+        uint newest = 0;
+        foreach (var point in services.ExecQuery("SELECT SequenceNumber FROM SystemRestore"))
+        {
+            newest = Math.Max(newest, (uint)point.SequenceNumber);
+        }
+
+        return newest;
     }
 
     private static RegistryValue? ReadRegistryValue(RegistryLocation location)
@@ -262,6 +312,8 @@ public sealed class WindowsMachine : IMachine
         public const uint ServiceConfigDelayedAutoStartInfo = 3;
         public const int ErrorFileNotFound = unchecked((int)0x80070002);
         public const int ErrorPathNotFound = unchecked((int)0x80070003);
+        public const int ModifySettings = 12;
+        public const int BeginSystemChange = 100;
 
         [StructLayout(LayoutKind.Sequential)]
         public struct ServiceDelayedAutoStartInfo
