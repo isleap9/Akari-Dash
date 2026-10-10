@@ -119,9 +119,7 @@ public sealed class CategoryViewModel(
             $"{tweak.Title}: {option.Label}",
             "What will change:" + Environment.NewLine + Environment.NewLine +
                 string.Join(Environment.NewLine, changes) +
-                (BuildInfo.IsDryRunOnly
-                    ? Environment.NewLine + Environment.NewLine + "Dry Run only: nothing will be written to this PC."
-                    : string.Empty),
+                BuildInfo.PreviewNote,
             "Apply",
             "Cancel");
 

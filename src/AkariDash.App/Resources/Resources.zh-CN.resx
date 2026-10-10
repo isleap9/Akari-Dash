@@ -18,6 +18,9 @@
   <data name="Home.Greeting" xml:space="preserve">
     <value>为游戏优化 Windows，准确查看每项调整会改变什么，并可随时撤销。</value>
   </data>
+  <data name="Home.ApplyAllRecommended" xml:space="preserve">
+    <value>应用全部推荐项</value>
+  </data>
   <data name="Home.OpenSettings" xml:space="preserve">
     <value>打开设置</value>
   </data>

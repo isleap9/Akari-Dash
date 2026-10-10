@@ -19,6 +19,10 @@
                 Margin="0,12,0,0"
                 Orientation="Horizontal"
                 Spacing="12">
+                <Button
+                    Content="{x:Bind Strings.Get('Home.ApplyAllRecommended'), Mode=OneWay}"
+                    Style="{StaticResource AccentButtonStyle}"
+                    Command="{Binding ApplyAllRecommendedCommand}" />
                 <Button Content="{x:Bind Strings.Get('Home.OpenSettings'), Mode=OneWay}" Command="{Binding OpenSettingsCommand}" />
                 <Button Content="{x:Bind Strings.Get('Home.About'), Mode=OneWay}" Command="{Binding ShowAboutCommand}" />
             </StackPanel>

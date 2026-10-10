@@ -128,6 +128,69 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
     }
 
     /// <summary>
+    /// The combined preview for putting each of <paramref name="tweaks"/> into its Recommended Option,
+    /// writing nothing. Unavailable Tweaks, Tweaks without a Recommended Option, Tweaks already in
+    /// it, and Tweaks whose values cannot be read are skipped.
+    /// </summary>
+    public RecommendedPlan PlanRecommended(IEnumerable<DeclaredTweak> tweaks)
+    {
+        var toApply = new List<PlannedTweak>();
+        var skipped = new List<SkippedTweak>();
+
+        foreach (var tweak in tweaks)
+        {
+            try
+            {
+                Plan(tweak);
+            }
+            catch (Exception ex)
+            {
+                skipped.Add(new SkippedTweak(tweak, $"Could not read its current values: {ex.Message}"));
+            }
+        }
+
+        return new RecommendedPlan(toApply, skipped);
+
+        void Plan(DeclaredTweak tweak)
+        {
+            if (UnavailableReason(tweak) is { } reason)
+            {
+                skipped.Add(new SkippedTweak(tweak, reason));
+            }
+            else if (tweak.Recommended is not { } recommended)
+            {
+                skipped.Add(new SkippedTweak(tweak, "No Recommended Option; this one is a matter of taste."));
+            }
+            else if (Preview(tweak, recommended) is { Count: > 0 } changes)
+            {
+                toApply.Add(new PlannedTweak(tweak, recommended, changes));
+            }
+            else
+            {
+                skipped.Add(new SkippedTweak(tweak, $"Already {recommended.Label}."));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Applies every Tweak in <paramref name="plan"/>, one at a time, and reports how each went.
+    /// A failing Tweak is rolled back on its own (see <see cref="Apply"/>) and does not stop the rest.
+    /// </summary>
+    public IReadOnlyList<TweakResult> ApplyRecommended(RecommendedPlan plan) =>
+        plan.ToApply.Select(planned =>
+        {
+            try
+            {
+                Apply(planned.Tweak, planned.Option);
+                return new TweakResult(planned.Tweak, planned.Option, null);
+            }
+            catch (Exception ex)
+            {
+                return new TweakResult(planned.Tweak, planned.Option, ex);
+            }
+        }).ToList();
+
+    /// <summary>
     /// Why <paramref name="tweak"/> cannot be used on this machine, or <see langword="null"/> when it can.
     /// A missing registry value is normal (it counts as <see cref="TweakTarget.AbsentMeans"/>), but a
     /// service or scheduled task cannot be created, so one that does not exist leaves nothing to change.

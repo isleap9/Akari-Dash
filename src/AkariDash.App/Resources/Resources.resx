@@ -18,6 +18,9 @@
   <data name="Home.Greeting" xml:space="preserve">
     <value>Tune Windows for gaming, see exactly what each Tweak changes, and undo it whenever you like.</value>
   </data>
+  <data name="Home.ApplyAllRecommended" xml:space="preserve">
+    <value>Apply all recommended</value>
+  </data>
   <data name="Home.OpenSettings" xml:space="preserve">
     <value>Open Settings</value>
   </data>
