@@ -27,6 +27,30 @@
   <data name="Home.About" xml:space="preserve">
     <value>关于</value>
   </data>
+  <data name="Home.ThisPc" xml:space="preserve">
+    <value>此电脑</value>
+  </data>
+  <data name="Home.Os" xml:space="preserve">
+    <value>Windows</value>
+  </data>
+  <data name="Home.Cpu" xml:space="preserve">
+    <value>处理器</value>
+  </data>
+  <data name="Home.Gpu" xml:space="preserve">
+    <value>显卡</value>
+  </data>
+  <data name="Home.Ram" xml:space="preserve">
+    <value>内存</value>
+  </data>
+  <data name="Home.NotAvailable" xml:space="preserve">
+    <value>不可用</value>
+  </data>
+  <data name="Home.OtherAccountTitle" xml:space="preserve">
+    <value>正在以其他账户运行</value>
+  </data>
+  <data name="Home.OtherAccountWarning" xml:space="preserve">
+    <value>Akari-Dash 正以 {0} 运行，但当前登录的是 {1}。按用户生效的调整会更改 {0} 的设置，而不是 {1} 的。要调整你自己的账户，请以管理员身份登录（或将你的账户设为管理员）后再启动 Akari-Dash。</value>
+  </data>
   <data name="Settings.Title" xml:space="preserve">
     <value>设置</value>
   </data>

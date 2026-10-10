@@ -1,17 +1,21 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Security.Principal;
 using Microsoft.Win32;
 
 namespace AkariDash.Core.Machine;
 
 /// <summary>
-/// The real machine: the Windows registry, the Service Control Manager, the Task Scheduler and
-/// System Restore.
+/// The real machine: the Windows registry, the Service Control Manager, the Task Scheduler,
+/// System Restore, WMI and Remote Desktop Services (for who is signed in).
 /// Verified manually in a VM only.
 /// </summary>
 public sealed class WindowsMachine : IMachine
 {
     private const string DisplayClassKey = @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
+    private const string CurrentVersionKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
+    private const string ProcessorKey = @"HARDWARE\DESCRIPTION\System\CentralProcessor\0";
 
     public MachineValue? Read(MachineLocation location) => location switch
     {
@@ -84,6 +88,132 @@ public sealed class WindowsMachine : IMachine
         }
 
         return vendors;
+    }
+
+    // Each fact is read on its own, so one Windows cannot report leaves the others intact.
+    public PcFacts DescribePc() => new(
+        ProductName: Try(() => ReadLocalMachineValue(CurrentVersionKey, "ProductName") as string),
+        // DisplayVersion (e.g. 24H2) replaced ReleaseId (e.g. 2004) in Windows 10 20H2.
+        DisplayVersion: Try(() =>
+            ReadLocalMachineValue(CurrentVersionKey, "DisplayVersion") as string ??
+            ReadLocalMachineValue(CurrentVersionKey, "ReleaseId") as string),
+        Build: Try(() => int.TryParse(ReadLocalMachineValue(CurrentVersionKey, "CurrentBuildNumber") as string, out var build) ? build : (int?)null),
+        Revision: Try(() => ReadLocalMachineValue(CurrentVersionKey, "UBR") as int?),
+        Cpu: Try(() => ReadLocalMachineValue(ProcessorKey, "ProcessorNameString") as string),
+        Gpus: Try(GpuNames) ?? [],
+        InstalledRamKilobytes: Try(InstalledRamKilobytes),
+        RunningAs: Try(() => WindowsIdentity.GetCurrent().Name),
+        SignedIn: Try(SignedInUser));
+
+    // WMI lists only adapters that are present, unlike the Display class key, which keeps a subkey
+    // for every card ever installed. Adapters that are not PCI devices (the Remote Display
+    // Adapter, virtual displays for streaming) are not graphics cards and are left out.
+    private static List<string> GpuNames()
+    {
+        var names = new List<string>();
+
+        dynamic locator = Activator.CreateInstance(Type.GetTypeFromProgID("WbemScripting.SWbemLocator", throwOnError: true)!)!;
+        dynamic? services = null;
+        try
+        {
+            services = locator.ConnectServer(".", @"root\cimv2");
+            foreach (var adapter in services.ExecQuery("SELECT Name, PNPDeviceID FROM Win32_VideoController"))
+            {
+                if (adapter.PNPDeviceID is string deviceId &&
+                    deviceId.StartsWith(@"PCI\", StringComparison.OrdinalIgnoreCase) &&
+                    adapter.Name is string name)
+                {
+                    names.Add(name);
+                }
+            }
+        }
+        finally
+        {
+            foreach (var comObject in new object?[] { services, locator })
+            {
+                if (comObject is not null)
+                {
+                    Marshal.FinalReleaseComObject(comObject);
+                }
+            }
+        }
+
+        return names;
+    }
+
+    // The installed memory comes from the firmware's memory tables, which many VMs leave empty;
+    // then the memory Windows can use is the next best thing.
+    private static ulong? InstalledRamKilobytes()
+    {
+        if (Native.GetPhysicallyInstalledSystemMemory(out var kilobytes))
+        {
+            return kilobytes;
+        }
+
+        var status = new Native.MemoryStatusEx { Length = (uint)Marshal.SizeOf<Native.MemoryStatusEx>() };
+        return Native.GlobalMemoryStatusEx(ref status) ? status.TotalPhys / 1024 : null;
+    }
+
+    private static object? ReadLocalMachineValue(string keyPath, string name)
+    {
+        using var baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+        using var key = baseKey.OpenSubKey(keyPath, writable: false);
+        return key?.GetValue(name);
+    }
+
+    // The user signed in to the session this process runs in. Elevating with another account's
+    // credentials keeps the process in the signed-in user's session, so this tells the two apart.
+    private static string? SignedInUser()
+    {
+        var session = Process.GetCurrentProcess().SessionId;
+        var user = SessionText(session, Native.WtsUserName);
+        if (string.IsNullOrEmpty(user))
+        {
+            return null;
+        }
+
+        var domain = SessionText(session, Native.WtsDomainName);
+        var account = new NTAccount(string.IsNullOrEmpty(domain) ? user : $@"{domain}\{user}");
+
+        // Spelled the way the account's SID resolves, as WindowsIdentity names the running account,
+        // since the session's domain part can differ (e.g. for Microsoft Entra ID accounts).
+        try
+        {
+            return account.Translate(typeof(SecurityIdentifier)).Translate(typeof(NTAccount)).Value;
+        }
+        catch (IdentityNotMappedException)
+        {
+            return account.Value;
+        }
+    }
+
+    private static string? SessionText(int session, int infoClass)
+    {
+        if (!Native.WTSQuerySessionInformationW(IntPtr.Zero, session, infoClass, out var buffer, out _))
+        {
+            throw new Win32Exception();
+        }
+
+        try
+        {
+            return Marshal.PtrToStringUni(buffer);
+        }
+        finally
+        {
+            Native.WTSFreeMemory(buffer);
+        }
+    }
+
+    private static T? Try<T>(Func<T?> read)
+    {
+        try
+        {
+            return read();
+        }
+        catch (Exception)
+        {
+            return default;
+        }
     }
 
     // System Restore's WMI provider (late bound, like the Task Scheduler). Windows creates at most
@@ -330,6 +460,8 @@ public sealed class WindowsMachine : IMachine
         public const int ErrorServiceDisabledHResult = unchecked((int)0x80070422);
         public const int ModifySettings = 12;
         public const int BeginSystemChange = 100;
+        public const int WtsUserName = 5;
+        public const int WtsDomainName = 7;
 
         [StructLayout(LayoutKind.Sequential)]
         public struct ServiceDelayedAutoStartInfo
@@ -358,5 +490,34 @@ public sealed class WindowsMachine : IMachine
         [DllImport("advapi32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool CloseServiceHandle(IntPtr handle);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool GetPhysicallyInstalledSystemMemory(out ulong totalMemoryInKilobytes);
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct MemoryStatusEx
+        {
+            public uint Length;
+            public uint MemoryLoad;
+            public ulong TotalPhys;
+            public ulong AvailPhys;
+            public ulong TotalPageFile;
+            public ulong AvailPageFile;
+            public ulong TotalVirtual;
+            public ulong AvailVirtual;
+            public ulong AvailExtendedVirtual;
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool GlobalMemoryStatusEx(ref MemoryStatusEx buffer);
+
+        [DllImport("wtsapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool WTSQuerySessionInformationW(IntPtr server, int sessionId, int infoClass, out IntPtr buffer, out int bytesReturned);
+
+        [DllImport("wtsapi32.dll")]
+        public static extern void WTSFreeMemory(IntPtr memory);
     }
 }

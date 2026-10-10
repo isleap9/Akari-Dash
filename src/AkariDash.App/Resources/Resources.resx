@@ -27,6 +27,30 @@
   <data name="Home.About" xml:space="preserve">
     <value>About</value>
   </data>
+  <data name="Home.ThisPc" xml:space="preserve">
+    <value>This PC</value>
+  </data>
+  <data name="Home.Os" xml:space="preserve">
+    <value>Windows</value>
+  </data>
+  <data name="Home.Cpu" xml:space="preserve">
+    <value>Processor</value>
+  </data>
+  <data name="Home.Gpu" xml:space="preserve">
+    <value>Graphics</value>
+  </data>
+  <data name="Home.Ram" xml:space="preserve">
+    <value>Memory</value>
+  </data>
+  <data name="Home.NotAvailable" xml:space="preserve">
+    <value>Not available</value>
+  </data>
+  <data name="Home.OtherAccountTitle" xml:space="preserve">
+    <value>Running as another account</value>
+  </data>
+  <data name="Home.OtherAccountWarning" xml:space="preserve">
+    <value>Akari-Dash is running as {0}, but {1} is signed in. Per-user Tweaks would change {0}'s settings, not {1}'s. To tune your own account, sign in as an administrator, or make your account one, and start Akari-Dash from there.</value>
+  </data>
   <data name="Settings.Title" xml:space="preserve">
     <value>Settings</value>
   </data>

@@ -1,7 +1,9 @@
 using System.Text;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using AkariDash.App.Services;
 using AkariDash.App.Views;
+using AkariDash.Core.Machine;
 using AkariDash.Core.Tweaks;
 using AkariDash.Framework.Navigation;
 using AkariDash.Framework.Services;
@@ -22,6 +24,8 @@ public partial class HomeViewModel : ViewModelBase
         IDialogService dialogs,
         IInfoBarService infoBar,
         TweakEngine engine,
+        IMachine machine,
+        LocalizedStrings strings,
         ILogger<HomeViewModel> logger)
     {
         _navigation = navigation;
@@ -30,7 +34,43 @@ public partial class HomeViewModel : ViewModelBase
         _engine = engine;
         _logger = logger;
         Title = "Home";
+
+        PcFacts facts;
+        try
+        {
+            facts = machine.DescribePc();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not describe this PC");
+            facts = PcFacts.Unknown;
+        }
+
+        var pc = new ThisPc(facts);
+        var notAvailable = strings.Get("Home.NotAvailable");
+        Os = pc.Os ?? notAvailable;
+        Cpu = pc.Cpu ?? notAvailable;
+        Gpu = pc.Gpu ?? notAvailable;
+        Ram = pc.Ram ?? notAvailable;
+        RunsAsOtherAccount = pc.RunsAsOtherAccount;
+        OtherAccountWarning = pc.RunsAsOtherAccount
+            ? string.Format(strings.Get("Home.OtherAccountWarning"), pc.RunningAs, pc.SignedIn)
+            : string.Empty;
     }
+
+    // This PC: a snapshot taken when Home opens, never refreshed (no live monitoring, ADR-0002).
+    public string Os { get; }
+
+    public string Cpu { get; }
+
+    public string Gpu { get; }
+
+    public string Ram { get; }
+
+    /// <summary>Akari-Dash runs elevated as someone other than the signed-in user.</summary>
+    public bool RunsAsOtherAccount { get; }
+
+    public string OtherAccountWarning { get; }
 
     [RelayCommand]
     private void OpenSettings() => _navigation.NavigateTo<SettingsPage>();

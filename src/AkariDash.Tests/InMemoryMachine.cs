@@ -10,6 +10,7 @@ public sealed class InMemoryMachine : IMachine
     private readonly HashSet<GpuVendor> _gpuVendors = [];
     private readonly List<string> _restorePoints = [];
     private bool _restorePointsFail;
+    private PcFacts _pc = PcFacts.Unknown;
 
     /// <summary>The description of every restore point asked for, in order (including ones that failed).</summary>
     public IReadOnlyList<string> RestorePointsRequested => _restorePoints;
@@ -34,6 +35,13 @@ public sealed class InMemoryMachine : IMachine
         return this;
     }
 
+    /// <summary>Makes the machine describe itself as <paramref name="pc"/>; a new machine reports nothing.</summary>
+    public InMemoryMachine WithPc(PcFacts pc)
+    {
+        _pc = pc;
+        return this;
+    }
+
     /// <summary>Makes every restore point fail, as it would with System Restore turned off.</summary>
     public InMemoryMachine FailingRestorePoints()
     {
@@ -42,6 +50,8 @@ public sealed class InMemoryMachine : IMachine
     }
 
     public IReadOnlySet<GpuVendor> GpuVendors() => _gpuVendors;
+
+    public PcFacts DescribePc() => _pc;
 
     public void CreateRestorePoint(string description)
     {

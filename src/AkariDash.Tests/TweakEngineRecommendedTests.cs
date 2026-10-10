@@ -172,5 +172,7 @@ internal sealed class ReadFailingMachine(IMachine inner, MachineLocation failRea
 
     public IReadOnlySet<GpuVendor> GpuVendors() => inner.GpuVendors();
 
+    public PcFacts DescribePc() => inner.DescribePc();
+
     public void CreateRestorePoint(string description) => inner.CreateRestorePoint(description);
 }

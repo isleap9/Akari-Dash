@@ -23,6 +23,8 @@ public sealed class DryRunMachine(IMachine inner) : IMachine
 
     public IReadOnlySet<GpuVendor> GpuVendors() => inner.GpuVendors();
 
+    public PcFacts DescribePc() => inner.DescribePc();
+
     // A Dry Run writes nothing, so there is nothing to protect with a restore point.
     public void CreateRestorePoint(string description)
     {
