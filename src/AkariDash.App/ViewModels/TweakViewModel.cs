@@ -43,11 +43,12 @@ public sealed partial class TweakViewModel : ViewModelBase
         RecommendedLabel = tweak.Recommended?.Label;
         ActivationText = tweak.Activation switch
         {
-            Activation.Immediately => "Takes effect immediately",
-            Activation.AfterSignOut => "Takes effect after sign-out",
-            Activation.AfterRestart => "Takes effect after restart",
+            Activation.Immediately => "Immediately",
+            Activation.AfterSignOut => "After sign-out",
+            Activation.AfterRestart => "After restart",
             _ => throw new UnreachableException($"Unknown Activation: {tweak.Activation}"),
         };
+        IsDelayed = tweak.Activation != Activation.Immediately;
 
         if (state is LiveState.Unavailable unavailable)
         {
@@ -119,6 +120,11 @@ public sealed partial class TweakViewModel : ViewModelBase
 
     /// <summary>When applying or undoing this Tweak takes effect.</summary>
     public string ActivationText { get; }
+
+    /// <summary>The Tweak takes effect only after a sign-out or restart, so its Activation is highlighted.</summary>
+    public bool IsDelayed { get; }
+
+    public bool IsImmediate => !IsDelayed;
 
     public bool IsCustom { get; }
 

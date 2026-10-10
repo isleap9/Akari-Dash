@@ -42,7 +42,16 @@
                                             <StackPanel Spacing="4">
                                                 <TextBlock Text="{x:Bind Title}" Style="{StaticResource BodyStrongTextBlockStyle}" />
                                                 <TextBlock Text="{x:Bind Description}" TextWrapping="Wrap" Opacity="0.8" />
-                                                <TextBlock Text="{x:Bind ActivationText}" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.8" />
+                                                <TextBlock Visibility="{x:Bind IsImmediate}" Opacity="0.8">
+                                                    <Run Text="Takes effect:" FontWeight="SemiBold" />
+                                                    <Run Text="{x:Bind ActivationText}" />
+                                                </TextBlock>
+                                                <TextBlock
+                                                    Visibility="{x:Bind IsDelayed}"
+                                                    Foreground="{ThemeResource SystemFillColorCautionBrush}">
+                                                    <Run Text="Takes effect:" FontWeight="SemiBold" />
+                                                    <Run Text="{x:Bind ActivationText}" FontWeight="SemiBold" />
+                                                </TextBlock>
                                                 <TextBlock
                                                     Visibility="{x:Bind HasRecommended}"
                                                     Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}">
