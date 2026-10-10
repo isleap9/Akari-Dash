@@ -5,7 +5,7 @@ A Windows desktop dashboard that optimizes a PC for gaming by applying, reading 
 ## Language
 
 **Tweak**:
-One named change to Windows that Akari-Dash can apply and undo as a unit: if any part of an apply fails, the parts already written are rolled back to their **Original Values**.
+One named change to Windows that Akari-Dash can apply and undo as a unit: if any part of an apply fails, the parts already written are rolled back to what they held just before that apply (their **Original Values** on a first apply), so a failed **Option** switch leaves the Tweak in the Option it was in.
 _Avoid_: Setting, optimization, script, action
 
 **Declared Tweak**:
@@ -25,7 +25,7 @@ The **Option** Akari-Dash suggests for a **Tweak** on performance grounds; "appl
 _Avoid_: Default, preset, optimal value
 
 **Live State**:
-Which **Option** the machine is actually in right now, read fresh from the system rather than from Akari-Dash's own records.
+Which **Option** the machine is actually in right now, read fresh from the system rather than from Akari-Dash's own records. A missing value counts as whatever Windows does when it is absent (e.g. Game Mode is on when its value does not exist). When Akari-Dash has applied the Tweak, its records are used only to tell **Drift** apart from **Custom**.
 _Avoid_: Status, current value, saved state
 
 **Custom**:
