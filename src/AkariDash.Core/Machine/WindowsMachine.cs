@@ -228,7 +228,9 @@ public sealed class WindowsMachine : IMachine
                 folder = service.GetFolder(folderPath);
                 task = folder.GetTask(name);
             }
-            catch (COMException ex) when (ex.HResult is Native.ErrorFileNotFound or Native.ErrorPathNotFound)
+            // .NET turns these HRESULTs into FileNotFoundException and DirectoryNotFoundException,
+            // not COMException, so match on the HRESULT alone.
+            catch (Exception ex) when (ex.HResult is Native.ErrorFileNotFound or Native.ErrorPathNotFound)
             {
                 return missing;
             }
