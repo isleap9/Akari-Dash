@@ -1,5 +1,6 @@
 using AkariDash.Core.Machine;
 using AkariDash.Core.Tweaks;
+using Microsoft.Win32;
 using Xunit;
 
 namespace AkariDash.Tests;
@@ -35,6 +36,78 @@ public class TweakCatalogTests
     public void SysMain_takes_effect_after_restart_because_a_running_service_keeps_running()
     {
         Assert.Equal(Activation.AfterRestart, Find("gaming.sysmain").Activation);
+    }
+
+    [Theory]
+    [MemberData(nameof(TweakIds))]
+    public void Every_tweak_has_at_least_two_options_with_unique_ids(string id)
+    {
+        var tweak = Find(id);
+
+        Assert.True(tweak.Options.Count >= 2, $"{id} has fewer than two Options");
+        Assert.Equal(tweak.Options.Count, tweak.Options.Select(option => option.Id).Distinct().Count());
+    }
+
+    [Theory]
+    [MemberData(nameof(TweakIds))]
+    public void Every_tweak_has_a_title_description_and_group(string id)
+    {
+        var tweak = Find(id);
+
+        Assert.False(string.IsNullOrWhiteSpace(tweak.Title));
+        Assert.False(string.IsNullOrWhiteSpace(tweak.Description));
+        Assert.False(string.IsNullOrWhiteSpace(tweak.Group));
+    }
+
+    [Theory]
+    [InlineData("gaming.game-captures")]
+    [InlineData("gaming.mouse-acceleration")]
+    [InlineData("gaming.sticky-keys-shortcut")]
+    [InlineData("gaming.game-bar-controller-button")]
+    [InlineData("gaming.background-apps")]
+    public void Taste_based_tweaks_have_no_recommended_option(string id)
+    {
+        Assert.Null(Find(id).Recommended);
+    }
+
+    [Theory]
+    [InlineData("gaming.background-recording", "off")]
+    [InlineData("gaming.hardware-gpu-scheduling", "on")]
+    [InlineData("gaming.power-throttling", "off")]
+    public void Performance_tweaks_recommend(string id, string option)
+    {
+        Assert.Equal(option, Find(id).Recommended?.Id);
+    }
+
+    [Theory]
+    [InlineData("gaming.hardware-gpu-scheduling", Activation.AfterRestart)]
+    [InlineData("gaming.power-throttling", Activation.AfterRestart)]
+    [InlineData("gaming.mouse-acceleration", Activation.AfterSignOut)]
+    [InlineData("gaming.sticky-keys-shortcut", Activation.AfterSignOut)]
+    public void Tweaks_that_windows_reads_only_at_sign_in_or_startup_declare_their_activation(string id, Activation activation)
+    {
+        Assert.Equal(activation, Find(id).Activation);
+    }
+
+    [Fact]
+    public void Hardware_gpu_scheduling_lets_windows_decide_by_deleting_the_value()
+    {
+        var tweak = Find("gaming.hardware-gpu-scheduling");
+        var target = Assert.Single(tweak.Targets);
+
+        Assert.Null(tweak.Options.Single(option => option.Id == "windows-decides").Values[target]);
+    }
+
+    [Theory]
+    [InlineData("MouseSpeed", "1")]
+    [InlineData("MouseThreshold1", "6")]
+    [InlineData("MouseThreshold2", "10")]
+    public void Mouse_acceleration_on_writes_the_windows_defaults(string name, string windowsDefault)
+    {
+        var tweak = Find("gaming.mouse-acceleration");
+        var target = tweak.Targets.Single(target => target.Location == new RegistryLocation(RegistryHive.CurrentUser, @"Control Panel\Mouse", name));
+
+        Assert.Equal(RegistryValue.String(windowsDefault), tweak.Options.Single(option => option.Id == "on").Values[target]);
     }
 
     [Fact]
