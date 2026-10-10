@@ -3,8 +3,8 @@ using Microsoft.Win32;
 
 namespace AkariDash.Core.Tweaks;
 
-/// <summary>Every Tweak Akari-Dash ships.</summary>
-public static class TweakCatalog
+/// <summary>Every Tweak Akari-Dash ships. Privacy Tweaks live in TweakCatalog.Privacy.cs.</summary>
+public static partial class TweakCatalog
 {
     public static IReadOnlyList<DeclaredTweak> All { get; } =
     [
@@ -20,6 +20,7 @@ public static class TweakCatalog
         BackgroundApps(),
         MouseAcceleration(),
         StickyKeysShortcut(),
+        .. PrivacyTweaks(),
     ];
 
     private static DeclaredTweak GameMode()

@@ -4,4 +4,5 @@ namespace AkariDash.Core.Tweaks;
 public enum Category
 {
     Gaming,
+    Privacy,
 }

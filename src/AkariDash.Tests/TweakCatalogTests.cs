@@ -164,4 +164,45 @@ public class TweakCatalogTests
     {
         Assert.Equal("on", Find("gaming.game-mode").Recommended?.Id);
     }
+
+    [Fact]
+    public void Privacy_has_tweaks_in_several_groups()
+    {
+        var privacy = TweakCatalog.All.Where(tweak => tweak.Category == Category.Privacy).ToList();
+
+        Assert.True(privacy.Select(tweak => tweak.Group).Distinct().Count() >= 3);
+        Assert.All(privacy, tweak => Assert.StartsWith("privacy.", tweak.Id));
+    }
+
+    [Fact]
+    public void Only_automatic_app_installs_has_a_recommended_option_in_privacy()
+    {
+        // Recommended Options are for performance; only the silent app installs cost background work.
+        var recommended = Assert.Single(TweakCatalog.All, tweak => tweak.Category == Category.Privacy && tweak.Recommended is not null);
+
+        Assert.Equal("privacy.automatic-app-installs", recommended.Id);
+        Assert.Equal("off", recommended.Recommended?.Id);
+    }
+
+    [Fact]
+    public void Feedback_frequency_automatically_deletes_both_values_so_windows_decides_again()
+    {
+        var tweak = Find("privacy.feedback-frequency");
+        var automatically = tweak.Options.Single(option => option.Id == "automatically");
+
+        Assert.Equal(2, tweak.Targets.Count);
+        Assert.All(tweak.Targets, target => Assert.Null(automatically.Values[target]));
+    }
+
+    [Theory]
+    [InlineData("privacy.diagnostic-data")]
+    [InlineData("privacy.activity-history")]
+    [InlineData("privacy.web-search-in-start")]
+    public void Policy_tweaks_can_remove_the_policy_again(string id)
+    {
+        var tweak = Find(id);
+        var target = Assert.Single(tweak.Targets);
+
+        Assert.Contains(tweak.Options, option => option.Values[target] is null);
+    }
 }

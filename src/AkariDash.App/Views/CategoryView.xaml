@@ -1,0 +1,110 @@
+<UserControl
+    x:Class="AkariDash.App.Views.CategoryView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:AkariDash.App.ViewModels">
+
+    <StackPanel Spacing="16">
+        <InfoBar
+            IsOpen="{x:Bind ViewModel.HasPending, Mode=OneWay}"
+            IsClosable="False"
+            Severity="Warning"
+            Title="{x:Bind ViewModel.PendingTitle, Mode=OneWay}"
+            Message="{x:Bind ViewModel.PendingMessage, Mode=OneWay}" />
+
+        <ItemsControl ItemsSource="{x:Bind ViewModel.Groups, Mode=OneWay}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:TweakGroupViewModel">
+                    <StackPanel Margin="0,0,0,24" Spacing="8">
+                        <TextBlock Text="{x:Bind Name}" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+                        <ItemsControl ItemsSource="{x:Bind Tweaks}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:TweakViewModel">
+                                    <Grid
+                                        Margin="0,0,0,4"
+                                        Padding="16"
+                                        ColumnSpacing="16"
+                                        CornerRadius="8"
+                                        Opacity="{x:Bind RowOpacity}"
+                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Text="{x:Bind Title}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                            <TextBlock Text="{x:Bind Description}" TextWrapping="Wrap" Opacity="0.8" />
+                                            <TextBlock Visibility="{x:Bind IsImmediate}" Opacity="0.8">
+                                                <Run Text="Takes effect:" FontWeight="SemiBold" />
+                                                <Run Text="{x:Bind ActivationText}" />
+                                            </TextBlock>
+                                            <TextBlock
+                                                Visibility="{x:Bind IsDelayed}"
+                                                Foreground="{ThemeResource SystemFillColorCautionBrush}">
+                                                <Run Text="Takes effect:" FontWeight="SemiBold" />
+                                                <Run Text="{x:Bind ActivationText}" FontWeight="SemiBold" />
+                                            </TextBlock>
+                                            <TextBlock
+                                                Visibility="{x:Bind HasRecommended}"
+                                                Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}">
+                                                <Run Text="Recommended:" FontWeight="SemiBold" />
+                                                <Run Text="{x:Bind RecommendedLabel}" />
+                                            </TextBlock>
+                                            <TextBlock
+                                                Visibility="{x:Bind IsCustom}"
+                                                Foreground="{ThemeResource SystemFillColorCautionBrush}">
+                                                <Run Text="Custom:" />
+                                                <Run Text="{x:Bind CustomValue}" />
+                                            </TextBlock>
+                                            <TextBlock
+                                                Visibility="{x:Bind IsDrifted}"
+                                                TextWrapping="Wrap"
+                                                Foreground="{ThemeResource SystemFillColorCautionBrush}">
+                                                <Run Text="Drift:" FontWeight="SemiBold" />
+                                                <Run Text="{x:Bind DriftText}" />
+                                            </TextBlock>
+                                            <TextBlock Visibility="{x:Bind IsUnavailable}" TextWrapping="Wrap">
+                                                <Run Text="Unavailable:" FontWeight="SemiBold" />
+                                                <Run Text="{x:Bind UnavailableReason}" />
+                                            </TextBlock>
+                                        </StackPanel>
+
+                                        <StackPanel
+                                            Grid.Column="1"
+                                            Orientation="Horizontal"
+                                            Spacing="12"
+                                            VerticalAlignment="Center">
+                                            <Button
+                                                Content="Re-apply"
+                                                Style="{StaticResource AccentButtonStyle}"
+                                                Visibility="{x:Bind IsDrifted}"
+                                                Command="{x:Bind ReapplyCommand}" />
+                                            <Button
+                                                Content="Undo"
+                                                Visibility="{x:Bind IsApplied}"
+                                                Command="{x:Bind UndoCommand}" />
+                                            <ComboBox
+                                                Visibility="{x:Bind IsSelectorVisible}"
+                                                MinWidth="280"
+                                                PlaceholderText="Custom"
+                                                ItemsSource="{x:Bind Options}"
+                                                DisplayMemberPath="Label"
+                                                SelectedItem="{x:Bind SelectedOption, Mode=TwoWay}" />
+                                            <ToggleSwitch
+                                                Visibility="{x:Bind IsToggleVisible}"
+                                                IsOn="{x:Bind IsOn, Mode=TwoWay}"
+                                                OffContent="{x:Bind OffLabel}"
+                                                OnContent="{x:Bind OnLabel}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
+</UserControl>
