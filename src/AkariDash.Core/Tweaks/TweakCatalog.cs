@@ -67,7 +67,8 @@ public static class TweakCatalog
 
     private static DeclaredTweak SysMain()
     {
-        // Akari-OS disables SysMain (Automatic is the Windows default).
+        // Akari-OS disables SysMain (Automatic is the Windows default). Only the start type
+        // changes, so a running SysMain keeps running until the next restart.
         var service = new TweakTarget(new ServiceLocation("SysMain"));
         var off = Option(service, "off", "Off", new ServiceStartValue(ServiceStartType.Disabled));
 
@@ -79,7 +80,8 @@ public static class TweakCatalog
             Group: "Background activity",
             Targets: [service],
             Options: [off, Option(service, "on", "On", new ServiceStartValue(ServiceStartType.Automatic))],
-            Recommended: off);
+            Recommended: off,
+            Activation: Activation.AfterRestart);
     }
 
     private static DeclaredTweak ScheduledDriveOptimization()

@@ -13,6 +13,15 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
 {
     private readonly IOriginalValuesStore _store = store ?? new InMemoryOriginalValuesStore();
     private readonly IMachine _writes = applyTo ?? machine;
+    private readonly List<DeclaredTweak> _changed = [];
+
+    /// <summary>
+    /// The Tweaks applied or undone through this engine (so, this session) whose change waits on a
+    /// sign-out or restart. Immediate Tweaks never appear here.
+    /// </summary>
+    public PendingActivation Pending => new(
+        _changed.Where(tweak => tweak.Activation == Activation.AfterSignOut).ToList(),
+        _changed.Where(tweak => tweak.Activation == Activation.AfterRestart).ToList());
 
     /// <summary>
     /// Reads which Option <paramref name="tweak"/> is in right now, or <see cref="LiveState.Drifted"/>
@@ -93,6 +102,7 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
         }
 
         _store.Save(tweak.Id, applied! with { LastAppliedOptionId = option.Id });
+        MarkChanged(tweak);
     }
 
     /// <summary>Puts <paramref name="tweak"/>'s targets back to their Original Values, then forgets them. Does nothing if it was not applied.</summary>
@@ -106,6 +116,15 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
 
         WriteAll(_writes, tweak, applied.OriginalValues.Select(original => (original.Location, original.Value)).ToList());
         _store.Clear(tweak.Id);
+        MarkChanged(tweak);
+    }
+
+    private void MarkChanged(DeclaredTweak tweak)
+    {
+        if (!_changed.Contains(tweak))
+        {
+            _changed.Add(tweak);
+        }
     }
 
     /// <summary>

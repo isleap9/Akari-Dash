@@ -15,6 +15,8 @@ public sealed class CategoryViewModel(
     : ViewModelBase, INavigationAware
 {
     private IReadOnlyList<TweakGroupViewModel> _groups = [];
+    private string? _pendingTitle;
+    private string? _pendingMessage;
     private bool _busy;
 
     /// <summary>The Category this page shows; set by the page when it is created.</summary>
@@ -25,6 +27,28 @@ public sealed class CategoryViewModel(
         get => _groups;
         private set => SetProperty(ref _groups, value);
     }
+
+    /// <summary>The pending banner's title, or <see langword="null"/> when nothing waits on a sign-out or restart.</summary>
+    public string? PendingTitle
+    {
+        get => _pendingTitle;
+        private set
+        {
+            if (SetProperty(ref _pendingTitle, value))
+            {
+                OnPropertyChanged(nameof(HasPending));
+            }
+        }
+    }
+
+    /// <summary>Which Tweaks wait on a restart and which on a sign-out.</summary>
+    public string? PendingMessage
+    {
+        get => _pendingMessage;
+        private set => SetProperty(ref _pendingMessage, value);
+    }
+
+    public bool HasPending => PendingTitle is not null;
 
     public void OnNavigatedTo(object? parameter) => Refresh();
 
@@ -46,6 +70,40 @@ public sealed class CategoryViewModel(
                     ChooseOption,
                     Undo)).ToList()))
             .ToList();
+
+        ShowPending(engine.Pending);
+    }
+
+    /// <summary>Summarises every Tweak changed this session that still waits on a sign-out or restart, across all Categories.</summary>
+    private void ShowPending(PendingActivation pending)
+    {
+        if (pending.IsEmpty)
+        {
+            PendingTitle = null;
+            PendingMessage = null;
+            return;
+        }
+
+        PendingTitle = pending.NeedsRestart ? "Restart to finish" : "Sign out to finish";
+
+        var lines = new List<string>();
+        AddWaiting(lines, "a restart", pending.AfterRestart);
+        AddWaiting(lines, "a sign-out", pending.AfterSignOut);
+
+        if (BuildInfo.IsDryRunOnly)
+        {
+            lines.Add("Dry Run only: nothing was written to this PC, so nothing is actually waiting.");
+        }
+
+        PendingMessage = string.Join(" ", lines);
+    }
+
+    private static void AddWaiting(List<string> lines, string waitingFor, IReadOnlyList<DeclaredTweak> tweaks)
+    {
+        if (tweaks.Count > 0)
+        {
+            lines.Add($"Waiting for {waitingFor}: {string.Join(", ", tweaks.Select(tweak => tweak.Title))}.");
+        }
     }
 
     // async void: called from the toggle's binding setter, and never throws (errors go to the info bar).

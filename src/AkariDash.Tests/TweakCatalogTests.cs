@@ -32,6 +32,12 @@ public class TweakCatalogTests
     }
 
     [Fact]
+    public void SysMain_takes_effect_after_restart_because_a_running_service_keeps_running()
+    {
+        Assert.Equal(Activation.AfterRestart, Find("gaming.sysmain").Activation);
+    }
+
+    [Fact]
     public void Tweak_ids_are_unique()
     {
         Assert.Equal(TweakCatalog.All.Count, TweakCatalog.All.Select(tweak => tweak.Id).Distinct().Count());

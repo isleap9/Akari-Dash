@@ -41,6 +41,13 @@ public sealed partial class TweakViewModel : ViewModelBase
         Options = tweak.Options;
         IsSelector = tweak.Options.Count > 2;
         RecommendedLabel = tweak.Recommended?.Label;
+        ActivationText = tweak.Activation switch
+        {
+            Activation.Immediately => "Takes effect immediately",
+            Activation.AfterSignOut => "Takes effect after sign-out",
+            Activation.AfterRestart => "Takes effect after restart",
+            _ => throw new UnreachableException($"Unknown Activation: {tweak.Activation}"),
+        };
 
         if (state is LiveState.Unavailable unavailable)
         {
@@ -109,6 +116,9 @@ public sealed partial class TweakViewModel : ViewModelBase
     public string? RecommendedLabel { get; }
 
     public bool HasRecommended => RecommendedLabel is not null;
+
+    /// <summary>When applying or undoing this Tweak takes effect.</summary>
+    public string ActivationText { get; }
 
     public bool IsCustom { get; }
 

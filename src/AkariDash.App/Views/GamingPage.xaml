@@ -11,6 +11,13 @@
                 Text="{x:Bind Strings.Get('Gaming.Title'), Mode=OneWay}"
                 Style="{StaticResource TitleTextBlockStyle}" />
 
+            <InfoBar
+                IsOpen="{x:Bind ViewModel.HasPending, Mode=OneWay}"
+                IsClosable="False"
+                Severity="Warning"
+                Title="{x:Bind ViewModel.PendingTitle, Mode=OneWay}"
+                Message="{x:Bind ViewModel.PendingMessage, Mode=OneWay}" />
+
             <ItemsControl ItemsSource="{x:Bind ViewModel.Groups, Mode=OneWay}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:TweakGroupViewModel">
@@ -35,6 +42,7 @@
                                             <StackPanel Spacing="4">
                                                 <TextBlock Text="{x:Bind Title}" Style="{StaticResource BodyStrongTextBlockStyle}" />
                                                 <TextBlock Text="{x:Bind Description}" TextWrapping="Wrap" Opacity="0.8" />
+                                                <TextBlock Text="{x:Bind ActivationText}" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.8" />
                                                 <TextBlock
                                                     Visibility="{x:Bind HasRecommended}"
                                                     Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}">
