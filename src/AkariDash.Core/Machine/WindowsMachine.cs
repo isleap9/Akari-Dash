@@ -23,6 +23,7 @@ public sealed class WindowsMachine : IMachine
         ServiceLocation service => ReadServiceStartType(service),
         ScheduledTaskLocation task => ReadTaskEnabled(task),
         RegistryBitLocation bit => bit.ReadFrom(ReadRegistryValue(bit.Value)),
+        BootSettingLocation boot => ReadBootSetting(boot),
         _ => throw Unsupported(location),
     };
 
@@ -42,6 +43,9 @@ public sealed class WindowsMachine : IMachine
             case (RegistryBitLocation bit, BitValue set):
                 WriteRegistryValue(bit.Value, bit.WriteInto(ReadRegistryValue(bit.Value), set.IsSet));
                 break;
+            case (BootSettingLocation boot, BootSettingValue setting):
+                RunBcdedit("/set", "{current}", boot.Name, setting.Text);
+                break;
             default:
                 throw new ArgumentException($"{location} cannot hold {value.GetType().Name}.", nameof(value));
         }
@@ -52,6 +56,14 @@ public sealed class WindowsMachine : IMachine
         if (location is RegistryLocation registry)
         {
             DeleteRegistryValue(registry);
+        }
+        else if (location is BootSettingLocation boot)
+        {
+            // bcdedit fails on a setting that is not there, so a missing one is left alone.
+            if (ReadBootSetting(boot) is not null)
+            {
+                RunBcdedit("/deletevalue", "{current}", boot.Name);
+            }
         }
         else if (Read(location) is not null)
         {
@@ -283,10 +295,22 @@ public sealed class WindowsMachine : IMachine
         return newest;
     }
 
+    // Some keys (such as SmartScreen's WTDS\Components) let only SYSTEM or TrustedInstaller read
+    // them; that is reported naming the key, so the Tweak can show it as Unavailable.
     private static RegistryValue? ReadRegistryValue(RegistryLocation location)
     {
         using var baseKey = RegistryKey.OpenBaseKey(location.Hive, RegistryView.Registry64);
-        using var key = baseKey.OpenSubKey(location.Key, writable: false);
+        RegistryKey? key;
+        try
+        {
+            key = baseKey.OpenSubKey(location.Key, writable: false);
+        }
+        catch (System.Security.SecurityException ex)
+        {
+            throw new UnauthorizedAccessException($"Windows does not let Akari-Dash read {location}.", ex);
+        }
+
+        using var _ = key;
 
         var data = key?.GetValue(location.Name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
         return data is null ? null : new RegistryValue(key!.GetValueKind(location.Name), data);
@@ -447,6 +471,47 @@ public sealed class WindowsMachine : IMachine
                 }
             }
         }
+    }
+
+    // bcdedit /enum {current} lists one setting per line: its name, spaces, then its value. Names are
+    // never translated; Yes/No may be, but the text read is what is written back on Undo.
+    private static BootSettingValue? ReadBootSetting(BootSettingLocation location)
+    {
+        foreach (var line in RunBcdedit("/enum", "{current}").Split('\n'))
+        {
+            var trimmed = line.TrimEnd('\r');
+            var nameEnd = trimmed.IndexOf(' ');
+            if (nameEnd > 0 && trimmed[..nameEnd].Equals(location.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                return new BootSettingValue(trimmed[nameEnd..].Trim());
+            }
+        }
+
+        return null;
+    }
+
+    // Runs System32's own bcdedit, never one found on PATH, and fails with its message.
+    private static string RunBcdedit(params string[] arguments)
+    {
+        var start = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "bcdedit.exe"))
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        foreach (var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("bcdedit could not be started.");
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        return process.ExitCode == 0
+            ? output
+            : throw new InvalidOperationException($"bcdedit {string.Join(' ', arguments)} failed: {(error + output).Trim()}");
     }
 
     private static NotSupportedException Unsupported(MachineLocation location) =>

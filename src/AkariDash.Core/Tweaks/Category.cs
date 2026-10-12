@@ -6,5 +6,6 @@ public enum Category
     Gaming,
     Privacy,
     Services,
+    Security,
     Windows,
 }

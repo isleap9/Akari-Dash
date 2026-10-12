@@ -14,7 +14,7 @@ namespace AkariDash.Core.Tweaks;
 // keeps that setting inside DirectXUserGlobalSettings (see WindowedGameOptimizations). Desktop
 // composition cannot be turned off since Windows 8, so CompositionPolicy does nothing.
 // ServicesPipeTimeout's "faster" 30 seconds is already Windows' default. Nagle's algorithm is set per
-// network adapter, so it waits for the per-adapter work that DNS needs. The UserPreferencesMask
+// network adapter, with DNS, in TweakCatalog.Network.cs. The UserPreferencesMask
 // effects are single bits (RegistryBitLocation), so changing or undoing one leaves the others alone.
 public static partial class TweakCatalog
 {
@@ -36,6 +36,7 @@ public static partial class TweakCatalog
         GamesPriority(),
         GamesGpuPriority(),
         NetworkThrottling(),
+        .. NetworkTweaks(),
         BackgroundApps(),
         AutomaticMaintenance(),
         StorageSense(),

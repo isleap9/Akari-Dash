@@ -46,9 +46,21 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
     /// <summary>
     /// Reads which Option <paramref name="tweak"/> is in right now, or <see cref="LiveState.Drifted"/>
     /// when it is no longer in the Option Akari-Dash last applied, or <see cref="LiveState.Unavailable"/>
-    /// when it cannot be used on this machine.
+    /// when it cannot be used on this machine, including when Windows does not let it be read.
     /// </summary>
     public LiveState ReadLiveState(DeclaredTweak tweak)
+    {
+        try
+        {
+            return ReadLiveStateUnguarded(tweak);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return new LiveState.Unavailable(ex.Message);
+        }
+    }
+
+    private LiveState ReadLiveStateUnguarded(DeclaredTweak tweak)
     {
         if (UnavailableReason(tweak) is { } reason)
         {
@@ -320,7 +332,7 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
 
         var missing = tweak.Targets
             .Select(target => target.Location)
-            .FirstOrDefault(location => location is not RegistryLocation && machine.Read(location) is null);
+            .FirstOrDefault(location => location is not (RegistryLocation or BootSettingLocation) && machine.Read(location) is null);
 
         return missing switch
         {

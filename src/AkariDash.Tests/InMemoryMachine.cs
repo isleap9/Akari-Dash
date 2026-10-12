@@ -10,6 +10,7 @@ public sealed class InMemoryMachine : IMachine
 {
     private readonly Dictionary<MachineLocation, MachineValue> _values = [];
     private readonly HashSet<MachineLocation> _failing = [];
+    private readonly HashSet<MachineLocation> _unreadable = [];
     private readonly HashSet<GpuVendor> _gpuVendors = [];
     private readonly List<string> _restorePoints = [];
     private bool _restorePointsFail;
@@ -25,6 +26,13 @@ public sealed class InMemoryMachine : IMachine
     }
 
     /// <summary>Makes every write or delete of <paramref name="location"/> fail, as access denied would.</summary>
+    /// <summary>Makes every read of <paramref name="location"/> fail, as a key only SYSTEM may read would.</summary>
+    public InMemoryMachine FailingReadsOf(MachineLocation location)
+    {
+        _unreadable.Add(location);
+        return this;
+    }
+
     public InMemoryMachine FailingWritesTo(MachineLocation location)
     {
         _failing.Add(location);
@@ -65,9 +73,11 @@ public sealed class InMemoryMachine : IMachine
         }
     }
 
-    public MachineValue? Read(MachineLocation location) => location is RegistryBitLocation bit
-        ? bit.ReadFrom(_values.GetValueOrDefault(bit.Value))
-        : _values.GetValueOrDefault(location);
+    public MachineValue? Read(MachineLocation location) => _unreadable.Contains(location)
+        ? throw new UnauthorizedAccessException($"Windows does not let Akari-Dash read {location}.")
+        : location is RegistryBitLocation bit
+            ? bit.ReadFrom(_values.GetValueOrDefault(bit.Value))
+            : _values.GetValueOrDefault(location);
 
     // Like the real machine, services and scheduled tasks can only be changed, never created or deleted.
     public void Write(MachineLocation location, MachineValue value)
@@ -79,7 +89,7 @@ public sealed class InMemoryMachine : IMachine
             return;
         }
 
-        if (location is not RegistryLocation && !_values.ContainsKey(location))
+        if (location is not (RegistryLocation or BootSettingLocation) && !_values.ContainsKey(location))
         {
             throw new InvalidOperationException($"{location} does not exist.");
         }
@@ -90,7 +100,7 @@ public sealed class InMemoryMachine : IMachine
     public void Delete(MachineLocation location)
     {
         ThrowIfFailing(location);
-        if (location is not RegistryLocation && Read(location) is not null)
+        if (location is not (RegistryLocation or BootSettingLocation) && Read(location) is not null)
         {
             throw new NotSupportedException($"{location} cannot be deleted.");
         }

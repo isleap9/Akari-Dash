@@ -168,7 +168,8 @@ public class TweakCatalogTests
         foreach (var tweak in TweakCatalog.All)
         {
             var isServices = tweak.Category == Category.Services;
-            var isTasks = tweak is { Category: Category.Gaming, Group: "Scheduled tasks" };
+            // Defender's own tasks sit with the rest of Defender Optimize on the Security page.
+            var isTasks = tweak is { Category: Category.Gaming, Group: "Scheduled tasks" } or { Category: Category.Security, Group: "Microsoft Defender" };
 
             Assert.All(tweak.Targets, target => Assert.True(
                 target.Location switch
@@ -189,7 +190,8 @@ public class TweakCatalogTests
 
         Assert.All(tweak.Options, option => Assert.All(option.Values, pair => Assert.True(
             pair.Value is null || (pair.Key.Location, pair.Value) is
-                (RegistryLocation, RegistryValue) or (RegistryBitLocation, BitValue) or (ServiceLocation, ServiceStartValue) or (ScheduledTaskLocation, TaskEnabledValue),
+                (RegistryLocation, RegistryValue) or (RegistryBitLocation, BitValue) or (BootSettingLocation, BootSettingValue)
+                    or (ServiceLocation, ServiceStartValue) or (ScheduledTaskLocation, TaskEnabledValue),
             $"{option.Id}: {pair.Key.Location} cannot hold {pair.Value}")));
     }
 

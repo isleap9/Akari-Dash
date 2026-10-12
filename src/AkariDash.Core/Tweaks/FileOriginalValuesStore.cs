@@ -16,6 +16,7 @@ public sealed class FileOriginalValuesStore(string folder) : IOriginalValuesStor
     private const string ServiceType = "service";
     private const string TaskType = "task";
     private const string BitType = "bit";
+    private const string BootType = "boot";
 
     private readonly string _filePath = Path.Combine(folder, "original-values.json");
     private readonly object _lock = new();
@@ -110,6 +111,9 @@ public sealed class FileOriginalValuesStore(string folder) : IOriginalValuesStor
         (ScheduledTaskLocation task, null) => new ValueRecord(TaskType, null, null, task.Path, null, null),
         (ScheduledTaskLocation task, TaskEnabledValue enabled) => new ValueRecord(
             TaskType, null, null, task.Path, null, JsonSerializer.SerializeToElement(enabled.Enabled)),
+        (BootSettingLocation boot, null) => new ValueRecord(BootType, null, null, boot.Name, null, null),
+        (BootSettingLocation boot, BootSettingValue setting) => new ValueRecord(
+            BootType, null, null, boot.Name, null, JsonSerializer.SerializeToElement(setting.Text)),
         (RegistryBitLocation bit, BitValue set) => new ValueRecord(
             BitType, bit.Hive, bit.Key, bit.Name, null, JsonSerializer.SerializeToElement(set.IsSet), bit.ByteIndex, bit.Mask),
         _ => throw new ArgumentException($"{location} cannot hold {value}.", nameof(value)),
@@ -130,6 +134,9 @@ public sealed class FileOriginalValuesStore(string folder) : IOriginalValuesStor
         TaskType => new OriginalValue(
             new ScheduledTaskLocation(value.Name),
             value.Data is { } data ? new TaskEnabledValue(data.GetBoolean()) : null),
+        BootType => new OriginalValue(
+            new BootSettingLocation(value.Name),
+            value.Data is { } data ? new BootSettingValue(data.GetString()!) : null),
         BitType => new OriginalValue(
             new RegistryBitLocation(value.Hive!.Value, value.Key!, value.Name, value.Byte!.Value, value.Mask!.Value),
             value.Data is { } data ? new BitValue(data.GetBoolean()) : null),
@@ -148,8 +155,9 @@ public sealed class FileOriginalValuesStore(string folder) : IOriginalValuesStor
 
     // Type is null for a registry value (files written before service and task targets have no
     // Type), "service" for a service's start type (Name is the service), "task" for a scheduled
-    // task's enabled state (Name is the task path) and "bit" for one bit of a binary registry
-    // value (Byte and Mask say which). Data is null when it did not exist.
+    // task's enabled state (Name is the task path), "bit" for one bit of a binary registry value
+    // (Byte and Mask say which) and "boot" for a boot setting (Name is its bcdedit name). Data is
+    // null when it did not exist.
     private sealed record ValueRecord(
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Type,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RegistryHive? Hive,

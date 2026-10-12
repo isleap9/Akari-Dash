@@ -6,8 +6,9 @@ namespace AkariDash.Tests;
 
 public class ScheduledTaskCatalogTests
 {
+    // Defender's own tasks are on the Security page (SecurityCatalogTests); every other task is here.
     private static readonly IReadOnlyList<DeclaredTweak> Tasks =
-        TweakCatalog.All.Where(tweak => tweak.Targets.All(target => target.Location is ScheduledTaskLocation)).ToList();
+        TweakCatalog.All.Where(tweak => tweak.Category != Category.Security && tweak.Targets.All(target => target.Location is ScheduledTaskLocation)).ToList();
 
     public static TheoryData<string> TaskTweakIds => new(Tasks.Select(tweak => tweak.Id));
 

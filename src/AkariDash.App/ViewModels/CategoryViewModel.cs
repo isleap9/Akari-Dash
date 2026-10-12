@@ -65,7 +65,7 @@ public sealed class CategoryViewModel(
                 group.Key,
                 group.Select(tweak => new TweakViewModel(
                     tweak,
-                    engine.ReadLiveState(tweak),
+                    ReadLiveState(tweak),
                     isApplied: engine.IsApplied(tweak),
                     ChooseOption,
                     Undo,
@@ -73,6 +73,20 @@ public sealed class CategoryViewModel(
             .ToList();
 
         ShowPending(engine.Pending);
+    }
+
+    // One Tweak that cannot be read must never take the page down: it shows as Unavailable instead.
+    private LiveState ReadLiveState(DeclaredTweak tweak)
+    {
+        try
+        {
+            return engine.ReadLiveState(tweak);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Could not read {Tweak}", tweak.Id);
+            return new LiveState.Unavailable($"Akari-Dash could not read its current values: {ex.Message}");
+        }
     }
 
     /// <summary>Summarises every Tweak changed this session that still waits on a sign-out or restart, across all Categories.</summary>
