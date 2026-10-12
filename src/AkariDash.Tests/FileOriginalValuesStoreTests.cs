@@ -143,6 +143,18 @@ public class FileOriginalValuesStoreTests : IDisposable
     }
 
     [Fact]
+    public void Lists_every_saved_tweak_id_and_none_when_there_is_no_file()
+    {
+        var store = new FileOriginalValuesStore(_folder);
+        Assert.Empty(store.AppliedTweakIds());
+
+        store.Save("first", Applied);
+        store.Save("second", Applied);
+
+        Assert.Equal(["first", "second"], new FileOriginalValuesStore(_folder).AppliedTweakIds().Order());
+    }
+
+    [Fact]
     public void Applying_a_tweak_creates_the_folder_and_file_and_undo_empties_it()
     {
         var location = new RegistryLocation(RegistryHive.CurrentUser, @"Software\Akari\Test", "Value");

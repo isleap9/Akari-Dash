@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Text;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
@@ -56,6 +57,68 @@ public partial class HomeViewModel : ViewModelBase
         OtherAccountWarning = pc.RunsAsOtherAccount
             ? string.Format(strings.Get("Home.OtherAccountWarning"), pc.RunningAs, pc.SignedIn)
             : string.Empty;
+
+        LoadRetiredTweaks();
+    }
+
+    /// <summary>Tweaks Akari-Dash applied that this version no longer has, so they can still be undone (#20).</summary>
+    public ObservableCollection<RetiredTweakViewModel> RetiredTweaks { get; } = [];
+
+    public bool HasRetiredTweaks => RetiredTweaks.Count > 0;
+
+    private void LoadRetiredTweaks()
+    {
+        RetiredTweaks.Clear();
+        try
+        {
+            foreach (var retired in _engine.RetiredTweaks(TweakCatalog.All))
+            {
+                RetiredTweaks.Add(new RetiredTweakViewModel(retired, UndoRetiredAsync));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not read the saved Original Values");
+        }
+
+        OnPropertyChanged(nameof(HasRetiredTweaks));
+    }
+
+    private async Task UndoRetiredAsync(RetiredTweak retired)
+    {
+        var title = $"Undo {retired.Id}";
+        try
+        {
+            var confirmed = await _dialogs.ConfirmAsync(
+                title,
+                "This Tweak is no longer in Akari-Dash. Put back the values this PC had before Akari-Dash changed them?" +
+                Paragraph("What will change:", retired.OriginalValues.Select(original => $"{original.Location} → {MachineValue.Describe(original.Value)}")),
+                "Undo",
+                "Cancel");
+
+            if (!confirmed)
+            {
+                return;
+            }
+
+            _logger.LogInformation("Undoing retired {Tweak}", retired.Id);
+            await Task.Run(() => _engine.UndoRetired(retired.Id));
+            _logger.LogInformation("Undid retired {Tweak}", retired.Id);
+            _infoBar.ShowSuccess(
+                title,
+                BuildInfo.IsDryRunOnly
+                    ? "Dry Run recorded the Undo; nothing was written to this PC."
+                    : "Undone: these values are back to what this PC had before Akari-Dash changed them. Some may need a sign-out or restart.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Undo of retired {Tweak} failed", retired.Id);
+            _infoBar.ShowError(title, ex.Message);
+        }
+        finally
+        {
+            LoadRetiredTweaks();
+        }
     }
 
     // This PC: a snapshot taken when Home opens, never refreshed (no live monitoring, ADR-0002).

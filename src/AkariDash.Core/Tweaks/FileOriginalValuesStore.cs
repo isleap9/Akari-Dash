@@ -30,6 +30,14 @@ public sealed class FileOriginalValuesStore(string folder) : IOriginalValuesStor
         }
     }
 
+    public IReadOnlyList<string> AppliedTweakIds()
+    {
+        lock (_lock)
+        {
+            return [.. Load().Keys];
+        }
+    }
+
     public void Save(string tweakId, AppliedTweak applied)
     {
         lock (_lock)

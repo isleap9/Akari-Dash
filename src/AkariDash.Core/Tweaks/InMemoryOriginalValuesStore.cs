@@ -7,6 +7,8 @@ public sealed class InMemoryOriginalValuesStore : IOriginalValuesStore
 
     public AppliedTweak? Get(string tweakId) => _applied.GetValueOrDefault(tweakId);
 
+    public IReadOnlyList<string> AppliedTweakIds() => [.. _applied.Keys];
+
     public void Save(string tweakId, AppliedTweak applied) => _applied[tweakId] = applied;
 
     public void Clear(string tweakId) => _applied.Remove(tweakId);

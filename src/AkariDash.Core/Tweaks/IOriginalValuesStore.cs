@@ -6,6 +6,9 @@ public interface IOriginalValuesStore
     /// <summary>The record for <paramref name="tweakId"/>, or <see langword="null"/> when it has not been applied.</summary>
     AppliedTweak? Get(string tweakId);
 
+    /// <summary>The ids of every Tweak with a saved record.</summary>
+    IReadOnlyList<string> AppliedTweakIds();
+
     void Save(string tweakId, AppliedTweak applied);
 
     void Clear(string tweakId);

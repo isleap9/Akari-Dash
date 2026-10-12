@@ -42,6 +42,12 @@
   <data name="Home.Ram" xml:space="preserve">
     <value>Memory</value>
   </data>
+  <data name="Home.RetiredTitle" xml:space="preserve">
+    <value>Changes from Tweaks no longer in Akari-Dash</value>
+  </data>
+  <data name="Home.RetiredMessage" xml:space="preserve">
+    <value>Akari-Dash once applied these Tweaks, but this version no longer has them. Undo puts back the values this PC had before.</value>
+  </data>
   <data name="Home.NotAvailable" xml:space="preserve">
     <value>Not available</value>
   </data>

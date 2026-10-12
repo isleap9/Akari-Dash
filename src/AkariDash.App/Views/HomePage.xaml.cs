@@ -10,9 +10,12 @@ public sealed partial class HomePage : Page
     /// <summary>Localized string accessor used by x:Bind function bindings.</summary>
     public LocalizedStrings Strings { get; }
 
+    public HomeViewModel ViewModel { get; }
+
     public HomePage(HomeViewModel viewModel)
     {
         Strings = App.Services.GetRequiredService<LocalizedStrings>();
+        ViewModel = viewModel;
         InitializeComponent();
         DataContext = viewModel;
     }

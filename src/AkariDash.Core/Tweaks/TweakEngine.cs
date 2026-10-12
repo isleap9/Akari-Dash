@@ -73,7 +73,7 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
         ThrowIfUnavailable(tweak);
 
         var dryRun = new DryRunMachine(machine);
-        WriteAll(dryRun, tweak, ValuesOf(tweak, option));
+        WriteAll(dryRun, tweak.Title, ValuesOf(tweak, option));
         return dryRun.PlannedChanges;
     }
 
@@ -119,7 +119,7 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
 
         try
         {
-            WriteAll(_writes, tweak, ValuesOf(tweak, option));
+            WriteAll(_writes, tweak.Title, ValuesOf(tweak, option));
         }
         catch (TweakApplyException error) when (isFirstApply && error.RolledBack)
         {
@@ -150,9 +150,43 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
             return;
         }
 
-        WriteAll(_writes, tweak, applied.OriginalValues.Select(original => (original.Location, original.Value)).ToList());
+        WriteAll(_writes, tweak.Title, applied.OriginalValues.Select(original => (original.Location, original.Value)).ToList());
         _store.Clear(tweak.Id);
         MarkChanged(tweak);
+    }
+
+    /// <summary>
+    /// Tweaks Akari-Dash applied that are no longer in <paramref name="catalog"/>, for example because
+    /// a later version dropped them. Their Original Values are still saved, so they can still be undone.
+    /// </summary>
+    public IReadOnlyList<RetiredTweak> RetiredTweaks(IEnumerable<DeclaredTweak> catalog)
+    {
+        var known = catalog.Select(tweak => tweak.Id).ToHashSet();
+
+        return _store.AppliedTweakIds()
+            .Where(id => !known.Contains(id))
+            .Select(id => _store.Get(id) is { } applied ? new RetiredTweak(id, applied.OriginalValues) : null)
+            .OfType<RetiredTweak>()
+            .ToList();
+    }
+
+    /// <summary>
+    /// Puts a retired Tweak's targets back to their Original Values, then forgets them, working from
+    /// the saved values alone. Does nothing if <paramref name="tweakId"/> has no saved record.
+    /// </summary>
+    /// <exception cref="TweakApplyException">A write failed; the Original Values are kept so Undo can be tried again.</exception>
+    public void UndoRetired(string tweakId)
+    {
+        lock (_writing)
+        {
+            if (_store.Get(tweakId) is not { } applied)
+            {
+                return;
+            }
+
+            WriteAll(_writes, tweakId, applied.OriginalValues.Select(original => (original.Location, original.Value)).ToList());
+            _store.Clear(tweakId);
+        }
     }
 
     /// <summary>Whether the next apply will first wait for a restore point (never for a Dry Run).</summary>
@@ -324,7 +358,7 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
     /// are put back to what they held before this call (for a first apply, the Original Values),
     /// so a failed Option switch leaves the Tweak in the Option it was in.
     /// </summary>
-    private static void WriteAll(IMachine target, DeclaredTweak tweak, IReadOnlyList<(MachineLocation Location, MachineValue? Value)> values)
+    private static void WriteAll(IMachine target, string tweakTitle, IReadOnlyList<(MachineLocation Location, MachineValue? Value)> values)
     {
         var before = values.Select(value => target.Read(value.Location)).ToList();
 
@@ -349,7 +383,7 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
                     }
                 }
 
-                throw new TweakApplyException(tweak, values[i].Location, notRolledBack, ex);
+                throw new TweakApplyException(tweakTitle, values[i].Location, notRolledBack, ex);
             }
         }
     }
