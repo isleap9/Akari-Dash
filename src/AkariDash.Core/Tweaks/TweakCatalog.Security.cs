@@ -64,10 +64,15 @@ public static partial class TweakCatalog
         // not even an anti-cheat that sets the policy again, can start VBS) and the policy value; here
         // the policy is set to 0, Microsoft's documented off. Turning the hypervisor off also stops
         // WSL2, Hyper-V and Windows Sandbox. Undo puts the original boot settings back.
+        //
+        // A missing hypervisorlaunchtype is Auto, which is how Windows ships: a PC can run VBS and
+        // memory integrity with no hypervisor boot setting at all, because memory integrity starts the
+        // hypervisor by itself. So Auto is the setting's AbsentMeans, and "Let Windows decide" still
+        // writes it, to force the hypervisor back on after Off deleted it.
         TweakTarget[] targets =
         [
             new(new RegistryLocation(RegistryHive.LocalMachine, DeviceGuardKey, "EnableVirtualizationBasedSecurity")),
-            new(new BootSettingLocation("hypervisorlaunchtype")),
+            new(new BootSettingLocation("hypervisorlaunchtype"), AbsentMeans: new BootSettingValue("Auto")),
             new(new BootSettingLocation("isolatedcontext")),
             new(new BootSettingLocation("allowedinmemorysettings")),
         ];
@@ -158,10 +163,16 @@ public static partial class TweakCatalog
     private static DeclaredTweak ExploitProtection()
     {
         // Defender Optimize writes this MitigationOptions mask, which turns off system-wide exploit
-        // mitigations but keeps Control Flow Guard on, as Vanguard needs. Windows uses its own
-        // defaults when the value is missing.
+        // mitigations but keeps Control Flow Guard on, as Vanguard needs. Each nibble is one
+        // mitigation: 1 enables it, 2 disables it, 0 leaves it at Windows' default.
+        //
+        // Windows uses its own defaults when the value is missing, and Windows Security's "Reset all to
+        // default" writes those same defaults out as an explicit all-enabled mask instead of deleting
+        // the value. Both are Windows' default, so that mask is the target's AbsentMeans and either one
+        // reads as "Windows default"; a mask the user built by hand still reads as Custom.
         var mitigations = new TweakTarget(
-            new RegistryLocation(RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Session Manager\kernel", "MitigationOptions"));
+            new RegistryLocation(RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Session Manager\kernel", "MitigationOptions"),
+            AbsentMeans: new RegistryValue(RegistryValueKind.Binary, Convert.FromHexString("111111000001000000000000000000000000000000000000")));
 
         return SecurityTweak("security.exploit-protection", "Exploit protection",
             "System-wide protections against attacks on bugs in apps, such as data execution prevention and address randomisation. Off keeps Control Flow Guard on, which Vanguard needs.",
