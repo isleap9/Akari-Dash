@@ -6,7 +6,9 @@ namespace AkariDash.Core.Tweaks;
 // Gaming Tweaks, written from Akari-OS (MIT), AkariOS-Ultimate (MIT; processor scheduling, exclusive
 // fullscreen and the Windows defaults it restores), Winhance as of its last MIT commit (4dc441a0; GPU
 // priority, NVIDIA sharpening, Game Bar tips, prefetch, the extra visual effects and accessibility
-// shortcuts) and Microsoft's documentation of the Multimedia Class Scheduler and the Storage Sense policy.
+// shortcuts), public write-ups of the wallpaper quality value and the WebView2 search feature override
+// (Winhance's newer "Other" section lists both, but nothing is taken from that version) and Microsoft's
+// documentation of the Multimedia Class Scheduler and the Storage Sense policy.
 //
 // Left out from Winhance's Gaming page: its VRR switch writes a VRROptimizeEnable DWORD, but Windows
 // keeps that setting inside DirectXUserGlobalSettings (see WindowedGameOptimizations). Desktop
@@ -28,6 +30,7 @@ public static partial class TweakCatalog
         WindowedGameOptimizations(),
         FullscreenOptimizations(),
         ProcessorScheduling(),
+        SvcHostSplit(),
         PowerThrottling(),
         SystemResponsiveness(),
         GamesPriority(),
@@ -38,6 +41,7 @@ public static partial class TweakCatalog
         StorageSense(),
         StartupDelay(),
         Prefetch(),
+        SearchWebView2(),
         MenuShowDelay(),
         WindowAnimations(),
         TaskbarAnimations(),
@@ -49,7 +53,14 @@ public static partial class TweakCatalog
         IconLabelShadows(),
         SaveTaskbarThumbnails(),
         FontSmoothing(),
+        WallpaperQuality(),
         MouseAcceleration(),
+    ];
+
+    // Listed after the Scheduled tasks (TweakCatalog.cs), so Accessibility is the last section on the
+    // Gaming page, as in Winhance.
+    private static IEnumerable<DeclaredTweak> AccessibilityTweaks() =>
+    [
         StickyKeysShortcut(),
         AccessibilityShortcut("gaming.filter-keys-shortcut", "Filter Keys shortcut", "Holding the right Shift key for eight seconds turns on Filter Keys, which ignores quick or repeated key presses.", "Keyboard Response", "126", "2"),
         AccessibilityShortcut("gaming.toggle-keys-shortcut", "Toggle Keys shortcut", "Holding Num Lock for five seconds turns on Toggle Keys, which beeps whenever Caps Lock, Num Lock or Scroll Lock is pressed.", "ToggleKeys", "62", "34"),
@@ -266,7 +277,7 @@ public static partial class TweakCatalog
             Title: "Sticky Keys shortcut",
             Description: "Pressing Shift five times asks whether to turn on Sticky Keys, which can pull you out of a game that uses Shift a lot.",
             Category: Category.Gaming,
-            Group: "Input",
+            Group: "Accessibility",
             Targets: [flags],
             Options: [Option(flags, "off", "Off", RegistryValue.String("2")), Option(flags, "on", "On", RegistryValue.String("510"))],
             Activation: Activation.AfterSignOut);
@@ -698,6 +709,92 @@ public static partial class TweakCatalog
             Activation: Activation.AfterSignOut);
     }
 
+    private static DeclaredTweak WallpaperQuality()
+    {
+        // JPEGImportQuality (documented by ElevenForum and NinjaOne): Windows re-saves a JPG wallpaper
+        // at 85% quality when the value is missing; 100 keeps it as it is.
+        var quality = new TweakTarget(
+            new RegistryLocation(RegistryHive.CurrentUser, @"Control Panel\Desktop", "JPEGImportQuality"),
+            AbsentMeans: RegistryValue.DWord(85));
+
+        return new DeclaredTweak(
+            Id: "gaming.wallpaper-quality",
+            Title: "Desktop wallpaper quality",
+            Description: "Windows shrinks JPG wallpapers to 85% quality, which can blur them. Full quality keeps them sharp. Set your wallpaper again afterwards for it to apply.",
+            Category: Category.Gaming,
+            Group: "Visual effects",
+            Targets: [quality],
+            Options: [DWordOption(quality, "full", "Full quality", 100), Option(quality, "compressed", "Compressed (Windows default)", null)],
+            Activation: Activation.AfterSignOut);
+    }
+
+    private static DeclaredTweak SvcHostSplit()
+    {
+        // AkariOS-Ultimate's SvcHost split tuner, which sits next to its processor scheduling tuner and
+        // is drawn the same way here. Windows runs services in their own svchost.exe when RAM is above
+        // SvcHostSplitThresholdInKB (3670016 KB, about 3.5 GB, by default). Match RAM sets it to this
+        // PC's RAM rounded up to whole GB, as AkariOS-Ultimate does; 0xFFFFFFFF never splits.
+        var threshold = new TweakTarget(
+            new RegistryLocation(RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control", "SvcHostSplitThresholdInKB"),
+            AbsentMeans: RegistryValue.DWord(3670016));
+
+        var windowsDefault = DWordOption(threshold, "windows-default", "Windows default", 3670016);
+        List<TweakOption> options = [windowsDefault];
+        string? ram = null;
+        if (MatchRamKilobytes() is { } matchRam)
+        {
+            options.Add(DWordOption(threshold, "match-ram", "Match RAM", unchecked((int)matchRam)));
+            ram = $"RAM: {matchRam / (1024 * 1024)} GB";
+        }
+
+        options.Add(DWordOption(threshold, "never", "Never split", unchecked((int)0xFFFFFFFF)));
+
+        return new DeclaredTweak(
+            Id: "gaming.svchost-split",
+            Title: "SvcHost split threshold",
+            Description: "Controls how many svchost.exe processes Windows creates. Merging them saves memory, but one crash takes more services down. Restart to apply.",
+            Category: Category.Gaming,
+            Group: "Processor",
+            Targets: [threshold],
+            Options: options,
+            Activation: Activation.AfterRestart,
+            Tuner: new TunerLayout(windowsDefault, "KB", ram));
+
+        // This PC's RAM rounded up to whole GB, in KB, kept below 0xFFFFFFFF (Never split).
+        static uint? MatchRamKilobytes()
+        {
+            if (WindowsMachine.InstalledRamKilobytes() is not { } kilobytes || kilobytes == 0)
+            {
+                return null;
+            }
+
+            const ulong gigabyte = 1024 * 1024;
+            var rounded = (kilobytes + gigabyte - 1) / gigabyte * gigabyte;
+            return rounded >= uint.MaxValue ? null : (uint)rounded;
+        }
+    }
+
+    private static DeclaredTweak SearchWebView2()
+    {
+        // A Windows feature override (NTLite community; the same as vivetool /disable /id:37926450):
+        // EnabledState 1 turns the WebView2-based search box off on builds 26200.7462 and later.
+        // NTLite's version also writes four zero values, but EnabledState alone does it (seen on build
+        // 26300), and that is what vivetool and AkariOS-Ultimate leave behind. Deleting it hands the
+        // feature back to Windows. It is not a documented setting, so an update may reset it (Drift).
+        var state = new TweakTarget(new RegistryLocation(
+            RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\FeatureManagement\Overrides\8\1694661260", "EnabledState"));
+
+        return new DeclaredTweak(
+            Id: "gaming.search-webview2",
+            Title: "WebView2 in Windows Search",
+            Description: "The search box in Start and the taskbar runs on WebView2, an Edge engine that keeps several background processes running. Off switches to the older search box without web content, on Windows 11 build 26200.7462 and later.",
+            Category: Category.Gaming,
+            Group: "Background activity",
+            Targets: [state],
+            Options: [Option(state, "off", "Off", RegistryValue.DWord(1)), Option(state, "windows-decides", "Let Windows decide", null)],
+            Activation: Activation.AfterRestart);
+    }
+
     private static DeclaredTweak AccessibilityShortcut(string id, string title, string description, string key, string onFlags, string offFlags)
     {
         // Akari-OS and Winhance write these Flags strings, as for Sticky Keys; the on value is Windows' own.
@@ -705,7 +802,7 @@ public static partial class TweakCatalog
             new RegistryLocation(RegistryHive.CurrentUser, $@"Control Panel\Accessibility\{key}", "Flags"),
             AbsentMeans: RegistryValue.String(onFlags));
 
-        return new DeclaredTweak(id, title, description, Category.Gaming, "Input", [flags],
+        return new DeclaredTweak(id, title, description, Category.Gaming, "Accessibility", [flags],
             [Option(flags, "off", "Off", RegistryValue.String(offFlags)), Option(flags, "on", "On", RegistryValue.String(onFlags))],
             Activation: Activation.AfterSignOut);
     }
@@ -714,7 +811,7 @@ public static partial class TweakCatalog
         // Winhance turns WinEnterLaunchEnabled off; Windows treats a missing value as on.
         GamingOnOff("gaming.narrator-shortcut", "Narrator shortcut",
             "Windows + Ctrl + Enter starts Narrator, the screen reader, which then reads everything aloud.",
-            "Input", @"Software\Microsoft\Narrator\NoRoam", "WinEnterLaunchEnabled", onValue: 1, offValue: 0, absent: 1);
+            "Accessibility", @"Software\Microsoft\Narrator\NoRoam", "WinEnterLaunchEnabled", onValue: 1, offValue: 0, absent: 1);
 
     private const string MultimediaSystemProfile = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile";
 }

@@ -13,6 +13,7 @@ public static partial class TweakCatalog
     [
         .. GamingTweaks(),
         .. ScheduledTaskTweaks(),
+        .. AccessibilityTweaks(),
         .. PrivacyTweaks(),
         .. ServicesTweaks(),
         .. WindowsTweaks(),

@@ -40,6 +40,75 @@ public class GamingWinhanceTests
     }
 
     [Fact]
+    public void Search_webview2_off_sets_the_feature_override_and_windows_decides_deletes_it()
+    {
+        var tweak = Find("gaming.search-webview2");
+        var target = Assert.Single(tweak.Targets);
+
+        Assert.Equal(RegistryValue.DWord(1), tweak.Options.Single(option => option.Id == "off").Values[target]);
+        Assert.Null(tweak.Options.Single(option => option.Id == "windows-decides").Values[target]);
+    }
+
+    [Theory]
+    [InlineData("gaming.wallpaper-quality", 85)]
+    [InlineData("gaming.svchost-split", 3670016)]
+    public void Missing_values_count_as_windows_default(string id, int windowsDefault)
+    {
+        Assert.Equal(RegistryValue.DWord(windowsDefault), Assert.Single(Find(id).Targets).AbsentMeans);
+    }
+
+    [Fact]
+    public void Accessibility_shortcuts_are_the_last_section_on_the_gaming_page()
+    {
+        var gaming = TweakCatalog.All.Where(tweak => tweak.Category == Category.Gaming).ToList();
+
+        Assert.Equal("Accessibility", gaming.Last().Group);
+        Assert.Equal(
+            ["gaming.sticky-keys-shortcut", "gaming.filter-keys-shortcut", "gaming.toggle-keys-shortcut",
+             "gaming.mouse-keys-shortcut", "gaming.high-contrast-shortcut", "gaming.narrator-shortcut"],
+            gaming.Where(tweak => tweak.Group == "Accessibility").Select(tweak => tweak.Id));
+    }
+
+    [Fact]
+    public void Svchost_split_sits_right_after_processor_scheduling()
+    {
+        var ids = TweakCatalog.All.Select(tweak => tweak.Id).ToList();
+
+        Assert.Equal("Processor", Find("gaming.svchost-split").Group);
+        Assert.Equal(ids.IndexOf("gaming.processor-scheduling") + 1, ids.IndexOf("gaming.svchost-split"));
+    }
+
+    [Fact]
+    public void Svchost_split_is_a_tuner_with_akarios_ultimates_three_presets()
+    {
+        var tweak = Find("gaming.svchost-split");
+        var target = Assert.Single(tweak.Targets);
+
+        Assert.Equal(["windows-default", "match-ram", "never"], tweak.Options.Select(option => option.Id));
+        Assert.Equal(["Windows default", "Match RAM", "Never split"], tweak.Options.Select(option => option.Label));
+        Assert.Equal("windows-default", tweak.Tuner?.DefaultOption.Id);
+        Assert.Equal("KB", tweak.Tuner?.Unit);
+        Assert.Equal(RegistryValue.DWord(unchecked((int)0xFFFFFFFF)), tweak.Options[2].Values[target]);
+    }
+
+    [Fact]
+    public void Match_ram_is_this_pcs_ram_rounded_up_to_whole_gigabytes_in_kilobytes()
+    {
+        var tweak = Find("gaming.svchost-split");
+        var matchRam = (RegistryValue)tweak.Options.Single(option => option.Id == "match-ram").Values[tweak.Targets[0]]!;
+        var kilobytes = unchecked((uint)(int)matchRam.Data);
+
+        Assert.Equal(0u, kilobytes % (1024 * 1024));
+        Assert.Equal($"RAM: {kilobytes / (1024 * 1024)} GB", tweak.Tuner?.Detail);
+    }
+
+    [Fact]
+    public void Only_the_svchost_split_is_drawn_as_a_tuner()
+    {
+        Assert.Equal(["gaming.svchost-split"], TweakCatalog.All.Where(tweak => tweak.Tuner is not null).Select(tweak => tweak.Id));
+    }
+
+    [Fact]
     public void Settings_that_do_nothing_or_need_a_single_bit_are_left_out()
     {
         var names = TweakCatalog.All.SelectMany(tweak => tweak.Targets).Select(target => target.Location).OfType<RegistryLocation>().Select(location => location.Name);

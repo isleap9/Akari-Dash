@@ -8,13 +8,15 @@ namespace AkariDash.App.ViewModels;
 
 /// <summary>
 /// One Tweak row. A two-Option Tweak is shown as a toggle whose off side is its first Option
-/// and whose on side is its second; a Tweak with more Options is shown as a selector.
+/// and whose on side is its second; a Tweak with more Options is shown as a selector. A Tweak with a
+/// <see cref="TunerLayout"/> is drawn as a tuner card instead: chips, a Current line and buttons.
 /// </summary>
 public sealed partial class TweakViewModel : ViewModelBase
 {
     private readonly DeclaredTweak _tweak;
     private readonly Action<DeclaredTweak, TweakOption> _chooseOption;
     private readonly Action<DeclaredTweak> _undo;
+    private readonly Action? _refresh;
     private readonly TweakOption? _driftedFrom;
     private bool _isOn;
     private TweakOption? _selectedOption;
@@ -22,16 +24,19 @@ public sealed partial class TweakViewModel : ViewModelBase
     /// <param name="isApplied">Whether Akari-Dash has applied this Tweak (and so can Undo it).</param>
     /// <param name="chooseOption">Called when the user picks an Option; the row is rebuilt afterwards.</param>
     /// <param name="undo">Called when the user asks to Undo; the row is rebuilt afterwards.</param>
+    /// <param name="refresh">Re-reads every row; a tuner card's Read current button calls it.</param>
     public TweakViewModel(
         DeclaredTweak tweak,
         LiveState state,
         bool isApplied,
         Action<DeclaredTweak, TweakOption> chooseOption,
-        Action<DeclaredTweak> undo)
+        Action<DeclaredTweak> undo,
+        Action? refresh = null)
     {
         _tweak = tweak;
         _chooseOption = chooseOption;
         _undo = undo;
+        _refresh = refresh;
         IsApplied = isApplied;
 
         Title = tweak.Title;
@@ -74,7 +79,68 @@ public sealed partial class TweakViewModel : ViewModelBase
             MatchesNoOption = true;
             CustomValue = Describe(custom);
         }
+
+        if (tweak.Tuner is { } tuner)
+        {
+            Chips = tweak.Options.Select(option => new TunerChipViewModel(option, option == _selectedOption, Pick)).ToList();
+            var current = actual switch
+            {
+                LiveState.InOption inOption => inOption.Option.Values[tweak.Targets[0]],
+                LiveState.Custom customValue => customValue.Values[0].Value,
+                _ => null,
+            };
+            TunerCurrent = $"Current: {DescribeNumber(current, tuner.Unit)}" + (tuner.Detail is { } detail ? $"   |   {detail}" : string.Empty);
+        }
     }
+
+    /// <summary>The Tweak is drawn as a tuner card instead of a row.</summary>
+    public bool IsTuner => _tweak.Tuner is not null;
+
+    /// <summary>A tuner card's Options; one is checked when the live value matches it.</summary>
+    public IReadOnlyList<TunerChipViewModel> Chips { get; } = [];
+
+    /// <summary>A tuner card's "Current: ..." line, with its detail (such as this PC's RAM).</summary>
+    public string? TunerCurrent { get; }
+
+    /// <summary>Re-reads the live value, like AkariOS-Ultimate's Read current.</summary>
+    [RelayCommand]
+    private void ReadCurrent() => _refresh?.Invoke();
+
+    /// <summary>Applies the tuner's Windows default, like AkariOS-Ultimate's Default button.</summary>
+    [RelayCommand]
+    private void ApplyDefault()
+    {
+        if (_tweak.Tuner is { } tuner)
+        {
+            _chooseOption(_tweak, tuner.DefaultOption);
+        }
+    }
+
+    /// <summary>Applies the checked chip; it asks first, like every other change.</summary>
+    [RelayCommand]
+    private void ApplyChip()
+    {
+        if (Chips.FirstOrDefault(chip => chip.IsChecked == true) is { } chip)
+        {
+            _chooseOption(_tweak, chip.Option);
+        }
+    }
+
+    private void Pick(TunerChipViewModel picked)
+    {
+        foreach (var chip in Chips.Where(chip => chip != picked))
+        {
+            chip.Clear();
+        }
+    }
+
+    // A DWORD shown as AkariOS-Ultimate shows it: unsigned, with thousands separators.
+    private static string DescribeNumber(MachineValue? value, string unit) => value switch
+    {
+        RegistryValue { Data: int number } => $"{unchecked((uint)number):N0} {unit}",
+        null => "not set",
+        _ => $"{MachineValue.Describe(value)} {unit}",
+    };
 
     public string Description { get; }
 

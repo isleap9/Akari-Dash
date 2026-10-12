@@ -2,7 +2,168 @@
     x:Class="AkariDash.App.Views.CategoryView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:vm="using:AkariDash.App.ViewModels">
+    xmlns:vm="using:AkariDash.App.ViewModels"
+    xmlns:views="using:AkariDash.App.Views">
+
+    <UserControl.Resources>
+        <DataTemplate x:Key="RowTemplate" x:DataType="vm:TweakViewModel">
+            <Grid
+                Margin="0,0,0,4"
+                Padding="16"
+                ColumnSpacing="16"
+                CornerRadius="8"
+                Opacity="{x:Bind RowOpacity}"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Spacing="4">
+                    <TextBlock Text="{x:Bind Title}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock Text="{x:Bind Description}" TextWrapping="Wrap" Opacity="0.8" />
+                    <TextBlock Visibility="{x:Bind IsImmediate}" Opacity="0.8">
+                        <Run Text="Takes effect:" FontWeight="SemiBold" />
+                        <Run Text="{x:Bind ActivationText}" />
+                    </TextBlock>
+                    <TextBlock
+                        Visibility="{x:Bind IsDelayed}"
+                        Foreground="{ThemeResource SystemFillColorCautionBrush}">
+                        <Run Text="Takes effect:" FontWeight="SemiBold" />
+                        <Run Text="{x:Bind ActivationText}" FontWeight="SemiBold" />
+                    </TextBlock>
+                    <TextBlock
+                        Visibility="{x:Bind HasRecommended}"
+                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}">
+                        <Run Text="Recommended:" FontWeight="SemiBold" />
+                        <Run Text="{x:Bind RecommendedLabel}" />
+                    </TextBlock>
+                    <TextBlock
+                        Visibility="{x:Bind IsCustom}"
+                        Foreground="{ThemeResource SystemFillColorCautionBrush}">
+                        <Run Text="Custom:" />
+                        <Run Text="{x:Bind CustomValue}" />
+                    </TextBlock>
+                    <TextBlock
+                        Visibility="{x:Bind IsDrifted}"
+                        TextWrapping="Wrap"
+                        Foreground="{ThemeResource SystemFillColorCautionBrush}">
+                        <Run Text="Drift:" FontWeight="SemiBold" />
+                        <Run Text="{x:Bind DriftText}" />
+                    </TextBlock>
+                    <TextBlock Visibility="{x:Bind IsUnavailable}" TextWrapping="Wrap">
+                        <Run Text="Unavailable:" FontWeight="SemiBold" />
+                        <Run Text="{x:Bind UnavailableReason}" />
+                    </TextBlock>
+                </StackPanel>
+
+                <StackPanel
+                    Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="12"
+                    VerticalAlignment="Center">
+                    <Button
+                        Content="Re-apply"
+                        Style="{StaticResource AccentButtonStyle}"
+                        Visibility="{x:Bind IsDrifted}"
+                        Command="{x:Bind ReapplyCommand}" />
+                    <Button
+                        Content="Undo"
+                        Visibility="{x:Bind IsApplied}"
+                        Command="{x:Bind UndoCommand}" />
+                    <ComboBox
+                        Visibility="{x:Bind IsSelectorVisible}"
+                        MinWidth="280"
+                        PlaceholderText="Custom"
+                        ItemsSource="{x:Bind Options}"
+                        DisplayMemberPath="Label"
+                        SelectedItem="{x:Bind SelectedOption, Mode=TwoWay}" />
+                    <ToggleSwitch
+                        Visibility="{x:Bind IsToggleVisible}"
+                        IsOn="{x:Bind IsOn, Mode=TwoWay}"
+                        OffContent="{x:Bind OffLabel}"
+                        OnContent="{x:Bind OnLabel}" />
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+        <!-- A tuner card, drawn like AkariOS-Ultimate's tuners: chips, a Current line, and
+             Read current / Default / Apply (plus Undo). Apply asks first, like every other change. -->
+        <DataTemplate x:Key="TunerTemplate" x:DataType="vm:TweakViewModel">
+            <StackPanel
+                Margin="0,0,0,4"
+                Padding="16"
+                Spacing="12"
+                CornerRadius="8"
+                Opacity="{x:Bind RowOpacity}"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="{x:Bind Title}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock Text="{x:Bind Description}" TextWrapping="Wrap" Opacity="0.8" />
+                    <TextBlock
+                        Visibility="{x:Bind IsDrifted}"
+                        TextWrapping="Wrap"
+                        Foreground="{ThemeResource SystemFillColorCautionBrush}">
+                        <Run Text="Drift:" FontWeight="SemiBold" />
+                        <Run Text="{x:Bind DriftText}" />
+                    </TextBlock>
+                    <TextBlock Visibility="{x:Bind IsUnavailable}" TextWrapping="Wrap">
+                        <Run Text="Unavailable:" FontWeight="SemiBold" />
+                        <Run Text="{x:Bind UnavailableReason}" />
+                    </TextBlock>
+                </StackPanel>
+
+                <ItemsControl ItemsSource="{x:Bind Chips}" IsEnabled="{x:Bind IsSelectorVisible}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="6" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:TunerChipViewModel">
+                            <ToggleButton
+                                Content="{x:Bind Label}"
+                                Padding="11,4"
+                                CornerRadius="4"
+                                IsChecked="{x:Bind IsChecked, Mode=TwoWay}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Opacity="0.8"
+                        IsTextSelectionEnabled="True"
+                        Text="{x:Bind TunerCurrent}" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                        <Button Content="Read current" Command="{x:Bind ReadCurrentCommand}" />
+                        <Button Content="Default" Command="{x:Bind ApplyDefaultCommand}" IsEnabled="{x:Bind IsSelectorVisible}" />
+                        <Button
+                            Content="Apply"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Command="{x:Bind ApplyChipCommand}"
+                            IsEnabled="{x:Bind IsSelectorVisible}" />
+                        <Button Content="Undo" Visibility="{x:Bind IsApplied}" Command="{x:Bind UndoCommand}" />
+                    </StackPanel>
+                </Grid>
+                <TextBlock Foreground="{ThemeResource SystemFillColorCautionBrush}">
+                    <Run Text="Takes effect:" FontWeight="SemiBold" />
+                    <Run Text="{x:Bind ActivationText}" FontWeight="SemiBold" />
+                </TextBlock>
+            </StackPanel>
+        </DataTemplate>
+
+        <views:TweakTemplateSelector
+            x:Key="TweakTemplates"
+            RowTemplate="{StaticResource RowTemplate}"
+            TunerTemplate="{StaticResource TunerTemplate}" />
+    </UserControl.Resources>
+
 
     <StackPanel Spacing="16">
         <InfoBar
@@ -18,90 +179,7 @@
                     <StackPanel Margin="0,0,0,24" Spacing="8">
                         <TextBlock Text="{x:Bind Name}" Style="{StaticResource SubtitleTextBlockStyle}" />
 
-                        <ItemsControl ItemsSource="{x:Bind Tweaks}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:TweakViewModel">
-                                    <Grid
-                                        Margin="0,0,0,4"
-                                        Padding="16"
-                                        ColumnSpacing="16"
-                                        CornerRadius="8"
-                                        Opacity="{x:Bind RowOpacity}"
-                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-
-                                        <StackPanel Spacing="4">
-                                            <TextBlock Text="{x:Bind Title}" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                            <TextBlock Text="{x:Bind Description}" TextWrapping="Wrap" Opacity="0.8" />
-                                            <TextBlock Visibility="{x:Bind IsImmediate}" Opacity="0.8">
-                                                <Run Text="Takes effect:" FontWeight="SemiBold" />
-                                                <Run Text="{x:Bind ActivationText}" />
-                                            </TextBlock>
-                                            <TextBlock
-                                                Visibility="{x:Bind IsDelayed}"
-                                                Foreground="{ThemeResource SystemFillColorCautionBrush}">
-                                                <Run Text="Takes effect:" FontWeight="SemiBold" />
-                                                <Run Text="{x:Bind ActivationText}" FontWeight="SemiBold" />
-                                            </TextBlock>
-                                            <TextBlock
-                                                Visibility="{x:Bind HasRecommended}"
-                                                Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}">
-                                                <Run Text="Recommended:" FontWeight="SemiBold" />
-                                                <Run Text="{x:Bind RecommendedLabel}" />
-                                            </TextBlock>
-                                            <TextBlock
-                                                Visibility="{x:Bind IsCustom}"
-                                                Foreground="{ThemeResource SystemFillColorCautionBrush}">
-                                                <Run Text="Custom:" />
-                                                <Run Text="{x:Bind CustomValue}" />
-                                            </TextBlock>
-                                            <TextBlock
-                                                Visibility="{x:Bind IsDrifted}"
-                                                TextWrapping="Wrap"
-                                                Foreground="{ThemeResource SystemFillColorCautionBrush}">
-                                                <Run Text="Drift:" FontWeight="SemiBold" />
-                                                <Run Text="{x:Bind DriftText}" />
-                                            </TextBlock>
-                                            <TextBlock Visibility="{x:Bind IsUnavailable}" TextWrapping="Wrap">
-                                                <Run Text="Unavailable:" FontWeight="SemiBold" />
-                                                <Run Text="{x:Bind UnavailableReason}" />
-                                            </TextBlock>
-                                        </StackPanel>
-
-                                        <StackPanel
-                                            Grid.Column="1"
-                                            Orientation="Horizontal"
-                                            Spacing="12"
-                                            VerticalAlignment="Center">
-                                            <Button
-                                                Content="Re-apply"
-                                                Style="{StaticResource AccentButtonStyle}"
-                                                Visibility="{x:Bind IsDrifted}"
-                                                Command="{x:Bind ReapplyCommand}" />
-                                            <Button
-                                                Content="Undo"
-                                                Visibility="{x:Bind IsApplied}"
-                                                Command="{x:Bind UndoCommand}" />
-                                            <ComboBox
-                                                Visibility="{x:Bind IsSelectorVisible}"
-                                                MinWidth="280"
-                                                PlaceholderText="Custom"
-                                                ItemsSource="{x:Bind Options}"
-                                                DisplayMemberPath="Label"
-                                                SelectedItem="{x:Bind SelectedOption, Mode=TwoWay}" />
-                                            <ToggleSwitch
-                                                Visibility="{x:Bind IsToggleVisible}"
-                                                IsOn="{x:Bind IsOn, Mode=TwoWay}"
-                                                OffContent="{x:Bind OffLabel}"
-                                                OnContent="{x:Bind OnLabel}" />
-                                        </StackPanel>
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                        <ItemsControl ItemsSource="{x:Bind Tweaks}" ItemTemplateSelector="{StaticResource TweakTemplates}" />
                     </StackPanel>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>

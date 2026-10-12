@@ -68,7 +68,8 @@ public sealed class CategoryViewModel(
                     engine.ReadLiveState(tweak),
                     isApplied: engine.IsApplied(tweak),
                     ChooseOption,
-                    Undo)).ToList()))
+                    Undo,
+                    Refresh)).ToList()))
             .ToList();
 
         ShowPending(engine.Pending);

@@ -142,8 +142,8 @@ public sealed class WindowsMachine : IMachine
     }
 
     // The installed memory comes from the firmware's memory tables, which many VMs leave empty;
-    // then the memory Windows can use is the next best thing.
-    private static ulong? InstalledRamKilobytes()
+    // then the memory Windows can use is the next best thing. Also used by the svchost split Tweak.
+    internal static ulong? InstalledRamKilobytes()
     {
         if (Native.GetPhysicallyInstalledSystemMemory(out var kilobytes))
         {

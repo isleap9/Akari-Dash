@@ -7,7 +7,8 @@ namespace AkariDash.Core.Tweaks;
 /// <paramref name="Recommended"/> is one of <paramref name="Options"/>, or <see langword="null"/>
 /// for a Tweak that is a matter of taste. A Tweak with <paramref name="RequiresGpu"/> is Unavailable
 /// on machines without a graphics card from that vendor. <paramref name="Activation"/> says when
-/// applying or undoing it takes effect.
+/// applying or undoing it takes effect. A Tweak with <paramref name="Tuner"/> is drawn as a tuner card
+/// instead of a row.
 /// </summary>
 public sealed record DeclaredTweak(
     string Id,
@@ -19,4 +20,5 @@ public sealed record DeclaredTweak(
     IReadOnlyList<TweakOption> Options,
     TweakOption? Recommended = null,
     GpuVendor? RequiresGpu = null,
-    Activation Activation = Activation.Immediately);
+    Activation Activation = Activation.Immediately,
+    TunerLayout? Tuner = null);
