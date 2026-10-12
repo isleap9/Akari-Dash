@@ -163,11 +163,22 @@ public class TweakCatalogTests
     }
 
     [Fact]
-    public void Services_and_scheduled_tasks_live_only_on_the_services_page()
+    public void Services_live_only_on_the_services_page_and_tasks_only_in_gamings_scheduled_tasks()
     {
-        var elsewhere = TweakCatalog.All.Where(tweak => tweak.Category != Category.Services);
+        foreach (var tweak in TweakCatalog.All)
+        {
+            var isServices = tweak.Category == Category.Services;
+            var isTasks = tweak is { Category: Category.Gaming, Group: "Scheduled tasks" };
 
-        Assert.All(elsewhere, tweak => Assert.All(tweak.Targets, target => Assert.IsType<RegistryLocation>(target.Location)));
+            Assert.All(tweak.Targets, target => Assert.True(
+                target.Location switch
+                {
+                    ServiceLocation => isServices,
+                    ScheduledTaskLocation => isTasks,
+                    _ => !isServices && !isTasks,
+                },
+                $"{tweak.Id} ({tweak.Category} / {tweak.Group}) targets {target.Location}"));
+        }
     }
 
     [Theory]

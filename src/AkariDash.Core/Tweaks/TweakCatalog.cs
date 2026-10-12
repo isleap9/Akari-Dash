@@ -4,13 +4,15 @@ namespace AkariDash.Core.Tweaks;
 
 /// <summary>
 /// Every Tweak Akari-Dash ships, one file per Category: TweakCatalog.Gaming.cs,
-/// TweakCatalog.Privacy.cs, TweakCatalog.Services.cs and TweakCatalog.Windows.cs. This file holds the list and the helpers they share.
+/// TweakCatalog.ScheduledTasks.cs (on the Gaming page), TweakCatalog.Privacy.cs, TweakCatalog.Services.cs
+/// and TweakCatalog.Windows.cs. This file holds the list and the helpers they share.
 /// </summary>
 public static partial class TweakCatalog
 {
     public static IReadOnlyList<DeclaredTweak> All { get; } =
     [
         .. GamingTweaks(),
+        .. ScheduledTaskTweaks(),
         .. PrivacyTweaks(),
         .. ServicesTweaks(),
         .. WindowsTweaks(),

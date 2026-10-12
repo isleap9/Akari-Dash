@@ -12,29 +12,24 @@ public class ServicesCatalogTests
     public static TheoryData<string> ServiceTweakIds =>
         new(Services.Where(tweak => tweak.Targets.All(target => target.Location is ServiceLocation)).Select(tweak => tweak.Id));
 
-    public static TheoryData<string> TaskTweakIds =>
-        new(Services.Where(tweak => tweak.Targets.All(target => target.Location is ScheduledTaskLocation)).Select(tweak => tweak.Id));
-
     private static DeclaredTweak Find(string id) => Services.Single(tweak => tweak.Id == id);
 
     [Fact]
-    public void Services_page_holds_only_service_and_task_tweaks()
+    public void Services_page_holds_only_service_tweaks()
     {
         Assert.All(Services, tweak =>
         {
             Assert.StartsWith("services.", tweak.Id);
-            Assert.All(tweak.Targets, target => Assert.True(target.Location is ServiceLocation or ScheduledTaskLocation, $"{tweak.Id} targets {target.Location}"));
+            Assert.All(tweak.Targets, target => Assert.IsType<ServiceLocation>(target.Location));
         });
     }
 
     [Fact]
-    public void Services_page_covers_every_listed_service_and_task()
+    public void Services_page_covers_every_listed_service()
     {
         var services = Services.SelectMany(tweak => tweak.Targets).Select(target => target.Location).OfType<ServiceLocation>().Select(location => location.ServiceName);
-        var tasks = Services.SelectMany(tweak => tweak.Targets).Select(target => target.Location).OfType<ScheduledTaskLocation>();
 
         Assert.Equal(41, services.Distinct().Count());
-        Assert.Equal(19, tasks.Distinct().Count());
     }
 
     [Theory]
@@ -46,19 +41,6 @@ public class ServicesCatalogTests
 
         Assert.All(tweak.Targets, target => Assert.Equal(new ServiceStartValue(ServiceStartType.Disabled), off.Values[target]));
         Assert.Equal(Activation.AfterRestart, tweak.Activation);
-    }
-
-    [Theory]
-    [MemberData(nameof(TaskTweakIds))]
-    public void Task_tweaks_switch_every_task_off_and_on(string id)
-    {
-        var tweak = Find(id);
-
-        Assert.All(tweak.Targets, target =>
-        {
-            Assert.Equal(TaskEnabledValue.Off, tweak.Options.Single(option => option.Id == "off").Values[target]);
-            Assert.Equal(TaskEnabledValue.On, tweak.Options.Single(option => option.Id == "on").Values[target]);
-        });
     }
 
     [Theory]
@@ -79,8 +61,6 @@ public class ServicesCatalogTests
 
     [Theory]
     [InlineData("services.diagnostics-tracking")]
-    [InlineData("services.compatibility-appraiser")]
-    [InlineData("services.ceip-consolidator")]
     [InlineData("services.sysmain")]
     public void Background_work_with_a_performance_case_recommends_off(string id)
     {
