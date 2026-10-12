@@ -9,7 +9,7 @@ One named change to Windows that Akari-Dash can apply and undo as a unit: if any
 _Avoid_: Setting, optimization, script, action
 
 **Declared Tweak**:
-A **Tweak** described entirely as data (registry values, service start types, scheduled tasks) and executed by the shared engine.
+A **Tweak** described entirely as data (registry values, single bits of a binary registry value, service start types, scheduled tasks) and executed by the shared engine.
 _Avoid_: Registry tweak, simple tweak
 
 **Coded Tweak**:

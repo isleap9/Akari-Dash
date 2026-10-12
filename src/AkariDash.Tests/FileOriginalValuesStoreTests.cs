@@ -143,6 +143,20 @@ public class FileOriginalValuesStoreTests : IDisposable
     }
 
     [Fact]
+    public void Round_trips_a_bit_of_a_binary_value()
+    {
+        var bit = new RegistryBitLocation(RegistryHive.CurrentUser, @"Control Panel\Desktop", "UserPreferencesMask", 1, 0x20);
+        var applied = new AppliedTweak("off", [new OriginalValue(bit, BitValue.On)]);
+        new FileOriginalValuesStore(_folder).Save("bit", applied);
+
+        var reopened = new FileOriginalValuesStore(_folder).Get("bit");
+
+        var original = Assert.Single(reopened!.OriginalValues);
+        Assert.Equal(bit, original.Location);
+        Assert.Equal(BitValue.On, original.Value);
+    }
+
+    [Fact]
     public void Lists_every_saved_tweak_id_and_none_when_there_is_no_file()
     {
         var store = new FileOriginalValuesStore(_folder);

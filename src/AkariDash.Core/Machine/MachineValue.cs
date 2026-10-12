@@ -1,8 +1,8 @@
 namespace AkariDash.Core.Machine;
 
 /// <summary>
-/// What a <see cref="MachineLocation"/> holds: a <see cref="RegistryValue"/>, a
-/// <see cref="ServiceStartValue"/> or a <see cref="TaskEnabledValue"/>. A location that does not
+/// What a <see cref="MachineLocation"/> holds: a <see cref="RegistryValue"/>, a <see cref="BitValue"/>,
+/// a <see cref="ServiceStartValue"/> or a <see cref="TaskEnabledValue"/>. A location that does not
 /// exist is represented by <see langword="null"/> wherever a <see cref="MachineValue"/> is expected.
 /// </summary>
 public abstract record MachineValue

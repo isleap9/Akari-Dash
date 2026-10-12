@@ -22,6 +22,7 @@ public sealed class WindowsMachine : IMachine
         RegistryLocation registry => ReadRegistryValue(registry),
         ServiceLocation service => ReadServiceStartType(service),
         ScheduledTaskLocation task => ReadTaskEnabled(task),
+        RegistryBitLocation bit => bit.ReadFrom(ReadRegistryValue(bit.Value)),
         _ => throw Unsupported(location),
     };
 
@@ -37,6 +38,9 @@ public sealed class WindowsMachine : IMachine
                 break;
             case (ScheduledTaskLocation task, TaskEnabledValue enabled):
                 WriteTaskEnabled(task, enabled.Enabled);
+                break;
+            case (RegistryBitLocation bit, BitValue set):
+                WriteRegistryValue(bit.Value, bit.WriteInto(ReadRegistryValue(bit.Value), set.IsSet));
                 break;
             default:
                 throw new ArgumentException($"{location} cannot hold {value.GetType().Name}.", nameof(value));

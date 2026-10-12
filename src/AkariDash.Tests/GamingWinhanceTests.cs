@@ -109,13 +109,14 @@ public class GamingWinhanceTests
     }
 
     [Fact]
-    public void Settings_that_do_nothing_or_need_a_single_bit_are_left_out()
+    public void Settings_that_do_nothing_are_left_out_and_the_mask_is_never_written_whole()
     {
         var names = TweakCatalog.All.SelectMany(tweak => tweak.Targets).Select(target => target.Location).OfType<RegistryLocation>().Select(location => location.Name);
 
         Assert.DoesNotContain("CompositionPolicy", names);
         Assert.DoesNotContain("ServicesPipeTimeout", names);
         Assert.DoesNotContain("VRROptimizeEnable", names);
+        // UserPreferencesMask effects are single bits (RegistryBitLocation), never the whole value.
         Assert.DoesNotContain("UserPreferencesMask", names);
     }
 }

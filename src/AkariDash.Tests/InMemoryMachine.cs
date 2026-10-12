@@ -2,7 +2,10 @@ using AkariDash.Core.Machine;
 
 namespace AkariDash.Tests;
 
-/// <summary>Fake Windows for tests: registry values, service start types and scheduled tasks held in a dictionary.</summary>
+/// <summary>
+/// Fake Windows for tests: registry values, service start types and scheduled tasks held in a
+/// dictionary. A bit of a binary value is read from and written into the whole value, as on Windows.
+/// </summary>
 public sealed class InMemoryMachine : IMachine
 {
     private readonly Dictionary<MachineLocation, MachineValue> _values = [];
@@ -62,13 +65,20 @@ public sealed class InMemoryMachine : IMachine
         }
     }
 
-    public MachineValue? Read(MachineLocation location) =>
-        _values.GetValueOrDefault(location);
+    public MachineValue? Read(MachineLocation location) => location is RegistryBitLocation bit
+        ? bit.ReadFrom(_values.GetValueOrDefault(bit.Value))
+        : _values.GetValueOrDefault(location);
 
     // Like the real machine, services and scheduled tasks can only be changed, never created or deleted.
     public void Write(MachineLocation location, MachineValue value)
     {
         ThrowIfFailing(location);
+        if (location is RegistryBitLocation bit)
+        {
+            _values[bit.Value] = bit.WriteInto(_values.GetValueOrDefault(bit.Value), ((BitValue)value).IsSet);
+            return;
+        }
+
         if (location is not RegistryLocation && !_values.ContainsKey(location))
         {
             throw new InvalidOperationException($"{location} does not exist.");
@@ -80,7 +90,7 @@ public sealed class InMemoryMachine : IMachine
     public void Delete(MachineLocation location)
     {
         ThrowIfFailing(location);
-        if (location is not RegistryLocation && _values.ContainsKey(location))
+        if (location is not RegistryLocation && Read(location) is not null)
         {
             throw new NotSupportedException($"{location} cannot be deleted.");
         }

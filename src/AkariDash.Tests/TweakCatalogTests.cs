@@ -189,7 +189,7 @@ public class TweakCatalogTests
 
         Assert.All(tweak.Options, option => Assert.All(option.Values, pair => Assert.True(
             pair.Value is null || (pair.Key.Location, pair.Value) is
-                (RegistryLocation, RegistryValue) or (ServiceLocation, ServiceStartValue) or (ScheduledTaskLocation, TaskEnabledValue),
+                (RegistryLocation, RegistryValue) or (RegistryBitLocation, BitValue) or (ServiceLocation, ServiceStartValue) or (ScheduledTaskLocation, TaskEnabledValue),
             $"{option.Id}: {pair.Key.Location} cannot hold {pair.Value}")));
     }
 

@@ -1,4 +1,5 @@
 using AkariDash.Core.Machine;
+using Microsoft.Win32;
 
 namespace AkariDash.Core.Tweaks;
 
@@ -325,6 +326,9 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
         {
             ServiceLocation service => $"The {service.ServiceName} service is not installed on this PC.",
             ScheduledTaskLocation task => $"The scheduled task {task.Path} does not exist on this PC.",
+            RegistryBitLocation bit => machine.Read(bit.Value) is RegistryValue { Kind: var kind } && kind != RegistryValueKind.Binary
+                ? $"{bit.Value} holds {kind} data instead of binary, so its bits cannot be read. Some tweak scripts write it with the wrong type."
+                : $"{bit.Value} does not exist on this PC, or is too short.",
             null => null,
             _ => $"{missing} does not exist on this PC.",
         };

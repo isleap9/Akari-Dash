@@ -15,7 +15,7 @@ namespace AkariDash.Core.Tweaks;
 // composition cannot be turned off since Windows 8, so CompositionPolicy does nothing.
 // ServicesPipeTimeout's "faster" 30 seconds is already Windows' default. Nagle's algorithm is set per
 // network adapter, so it waits for the per-adapter work that DNS needs. The UserPreferencesMask
-// effects need a way to change one bit of a value.
+// effects are single bits (RegistryBitLocation), so changing or undoing one leaves the others alone.
 public static partial class TweakCatalog
 {
     private static IEnumerable<DeclaredTweak> GamingTweaks() =>
@@ -42,18 +42,7 @@ public static partial class TweakCatalog
         StartupDelay(),
         Prefetch(),
         SearchWebView2(),
-        MenuShowDelay(),
-        WindowAnimations(),
-        TaskbarAnimations(),
-        Peek(),
-        Transparency(),
-        DragFullWindows(),
-        ThumbnailsInsteadOfIcons(),
-        TranslucentSelection(),
-        IconLabelShadows(),
-        SaveTaskbarThumbnails(),
-        FontSmoothing(),
-        WallpaperQuality(),
+        .. VisualEffectsTweaks(),
         MouseAcceleration(),
     ];
 
@@ -68,6 +57,123 @@ public static partial class TweakCatalog
         AccessibilityShortcut("gaming.high-contrast-shortcut", "High Contrast shortcut", "Left Alt + left Shift + Print Screen switches the screen to high contrast colours.", "HighContrast", "126", "4194"),
         NarratorShortcut(),
     ];
+
+    // The Visual effects section: the preset first, then every effect it switches. Each effect's
+    // values come from its own Tweak, so the preset and the single Tweaks always agree.
+    private static IEnumerable<DeclaredTweak> VisualEffectsTweaks()
+    {
+        var animateControls = MaskBit("gaming.animate-controls", "Animate controls and elements inside windows",
+            "Buttons, scroll bars and other controls inside windows animate when you use them.", 4, 0x02);
+        var menuAnimation = MaskBit("gaming.menu-animation", "Fade or slide menus into view",
+            "Menus fade or slide in when they open, instead of appearing at once.", 0, 0x02);
+        var comboBoxAnimation = MaskBit("gaming.combo-box-animation", "Slide open combo boxes",
+            "Drop-down lists slide open instead of appearing at once.", 0, 0x04);
+        var smoothScrolling = MaskBit("gaming.smooth-scroll-lists", "Smooth-scroll list boxes",
+            "Lists scroll smoothly instead of jumping a line at a time.", 0, 0x08);
+        var fadeMenuItems = MaskBit("gaming.fade-menu-items", "Fade out menu items after clicking",
+            "The item you click in a menu fades out instead of vanishing at once.", 1, 0x04);
+        var tooltipAnimation = MaskBit("gaming.tooltip-animation", "Fade or slide tooltips into view",
+            "Tooltips fade or slide in instead of appearing at once.", 1, 0x08);
+        var pointerShadow = MaskBit("gaming.pointer-shadow", "Shadows under the mouse pointer",
+            "Draws a small shadow under the mouse pointer.", 1, 0x20);
+        var windowShadows = MaskBit("gaming.window-shadows", "Shadows under windows",
+            "Draws a soft shadow around windows and menus.", 2, 0x04);
+
+        var windowAnimations = WindowAnimations();
+        var taskbarAnimations = TaskbarAnimations();
+        var peek = Peek();
+        var drag = DragFullWindows();
+        var thumbnails = ThumbnailsInsteadOfIcons();
+        var translucentSelection = TranslucentSelection();
+        var iconLabelShadows = IconLabelShadows();
+        var saveThumbnails = SaveTaskbarThumbnails();
+        var fontSmoothing = FontSmoothing();
+
+        // Winhance's three presets (MIT, 4dc441a0): which effects each turns on. Its "Let Windows
+        // choose" applies this balanced mix, because VisualFXSetting = 0 alone changes nothing.
+        (DeclaredTweak Effect, bool Balanced)[] effects =
+        [
+            (animateControls, false), (windowAnimations, false), (taskbarAnimations, false), (peek, true),
+            (menuAnimation, false), (tooltipAnimation, false), (fadeMenuItems, false), (saveThumbnails, true),
+            (pointerShadow, false), (windowShadows, false), (thumbnails, true), (translucentSelection, true),
+            (drag, true), (comboBoxAnimation, false), (fontSmoothing, true), (smoothScrolling, true),
+            (iconLabelShadows, false),
+        ];
+
+        return
+        [
+            VisualEffectsPreset(effects),
+            MenuShowDelay(),
+            windowAnimations,
+            taskbarAnimations,
+            peek,
+            Transparency(),
+            drag,
+            thumbnails,
+            translucentSelection,
+            iconLabelShadows,
+            saveThumbnails,
+            fontSmoothing,
+            WallpaperQuality(),
+            animateControls,
+            menuAnimation,
+            comboBoxAnimation,
+            smoothScrolling,
+            fadeMenuItems,
+            tooltipAnimation,
+            pointerShadow,
+            windowShadows,
+        ];
+    }
+
+    /// <summary>
+    /// One visual effect stored as a bit of UserPreferencesMask (Microsoft's SystemParametersInfo
+    /// documentation; byte and bit as in Winhance's MIT snapshot). Only that bit is changed or undone.
+    /// </summary>
+    private static DeclaredTweak MaskBit(string id, string title, string description, int byteIndex, byte mask)
+    {
+        var bit = new TweakTarget(new RegistryBitLocation(RegistryHive.CurrentUser, @"Control Panel\Desktop", "UserPreferencesMask", byteIndex, mask));
+
+        return new DeclaredTweak(id, title, description, Category.Gaming, "Visual effects", [bit],
+            [Option(bit, "off", "Off", BitValue.Off), Option(bit, "on", "On", BitValue.On)],
+            Activation: Activation.AfterSignOut);
+    }
+
+    private static DeclaredTweak VisualEffectsPreset((DeclaredTweak Effect, bool Balanced)[] effects)
+    {
+        // VisualFXSetting is the choice shown in System Properties > Performance Options:
+        // 0 let Windows choose, 1 best appearance, 2 best performance.
+        var setting = new TweakTarget(new RegistryLocation(
+            RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects", "VisualFXSetting"));
+        TweakTarget[] targets = [setting, .. effects.Select(effect => effect.Effect.Targets.Single())];
+
+        return new DeclaredTweak(
+            Id: "gaming.visual-effects-preset",
+            Title: "Visual effects",
+            Description: "Sets every visual effect below at once, like System Properties > Performance Options. Best performance turns them all off; Balanced keeps the ones that make Windows easier to use, such as thumbnails and smooth fonts.",
+            Category: Category.Gaming,
+            Group: "Visual effects",
+            Targets: targets,
+            Options:
+            [
+                Preset("appearance", "Best appearance", 1, _ => true),
+                Preset("balanced", "Balanced", 0, effect => effect.Balanced),
+                Preset("performance", "Best performance", 2, _ => false),
+            ],
+            Activation: Activation.AfterSignOut);
+
+        TweakOption Preset(string id, string label, int fxSetting, Func<(DeclaredTweak Effect, bool Balanced), bool> on)
+        {
+            var values = new Dictionary<TweakTarget, MachineValue?> { [setting] = RegistryValue.DWord(fxSetting) };
+            foreach (var effect in effects)
+            {
+                var option = effect.Effect.Options.Single(option => option.Id == (on(effect) ? "on" : "off"));
+                values[effect.Effect.Targets.Single()] = option.Values[effect.Effect.Targets.Single()];
+            }
+
+            return new TweakOption(id, label, values);
+        }
+    }
 
     private static DeclaredTweak GameMode()
     {
