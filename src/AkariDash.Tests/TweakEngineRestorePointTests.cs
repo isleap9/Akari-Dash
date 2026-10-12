@@ -189,6 +189,29 @@ public class TweakEngineRestorePointTests
         Assert.Single(_machine.RestorePointsRequested);
     }
 
+    [Fact]
+    public void A_restore_point_created_on_request_counts_for_the_session()
+    {
+        var engine = new TweakEngine(_machine);
+
+        engine.CreateRestorePointNow();
+        engine.Apply(First, First.Options[1]);
+
+        Assert.Single(_machine.RestorePointsRequested);
+        Assert.False(engine.RestorePointDue);
+    }
+
+    [Fact]
+    public void A_failed_restore_point_on_request_throws_and_leaves_one_due_for_the_first_apply()
+    {
+        _machine.FailingRestorePoints();
+        var engine = new TweakEngine(_machine);
+
+        Assert.ThrowsAny<Exception>(engine.CreateRestorePointNow);
+
+        Assert.True(engine.RestorePointDue);
+    }
+
     /// <summary>Holds every restore point in creation until <see cref="Finish"/> is set.</summary>
     private sealed class SlowRestorePointMachine(InMemoryMachine inner) : IMachine
     {

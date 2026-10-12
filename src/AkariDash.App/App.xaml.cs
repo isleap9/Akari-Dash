@@ -87,7 +87,33 @@ public partial class App : Application
             await themeService.InitializeAsync();
 
             MainWindow?.ApplyTheme(themeService.CurrentTheme);
+
+            await OfferFirstRunRestorePointAsync();
         });
+    }
+
+    // The popup needs the window's content loaded (a dialog cannot open before it has a XamlRoot),
+    // and a failure in it must never take the app down.
+    private static async Task OfferFirstRunRestorePointAsync()
+    {
+        try
+        {
+            if (MainWindow?.Content is FrameworkElement { XamlRoot: null } content)
+            {
+                var loaded = new TaskCompletionSource();
+                content.Loaded += (_, _) => loaded.TrySetResult();
+                if (content.XamlRoot is null)
+                {
+                    await loaded.Task;
+                }
+            }
+
+            await Services.GetRequiredService<FirstRunRestorePoint>().OfferAsync();
+        }
+        catch (Exception ex)
+        {
+            Services.GetRequiredService<ILogger<App>>().LogWarning(ex, "The first-run restore point popup could not be shown");
+        }
     }
 
     private static IHost BuildHost()
@@ -103,6 +129,7 @@ public partial class App : Application
 
         // App services.
         builder.Services.AddSingleton<LocalizedStrings>();
+        builder.Services.AddSingleton<FirstRunRestorePoint>();
 
         // Tweak engine: Live State is always read from the real machine.
         builder.Services.AddSingleton<IMachine, WindowsMachine>();

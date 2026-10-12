@@ -111,10 +111,12 @@ public class GamingWinhanceTests
     [Fact]
     public void Graphics_has_winhances_settings_plus_mpo_in_order()
     {
+        // Automatic color management is there only when Windows has display data, so it is left out here.
         Assert.Equal(
             ["gaming.hardware-gpu-scheduling", "gaming.nvidia-sharpening", "gaming.games-gpu-priority", "gaming.windowed-game-optimizations",
-             "gaming.vrr-optimizations", "gaming.fullscreen-optimizations", "gaming.mpo", "gaming.mpo-min-fps"],
-            TweakCatalog.All.Where(tweak => tweak is { Category: Category.Gaming, Group: "Graphics" }).Select(tweak => tweak.Id));
+             "gaming.vrr-optimizations", "gaming.auto-hdr", "gaming.fullscreen-optimizations", "gaming.mpo", "gaming.mpo-min-fps"],
+            TweakCatalog.All.Where(tweak => tweak is { Category: Category.Gaming, Group: "Graphics" } && tweak.Id != "gaming.auto-color-management")
+                .Select(tweak => tweak.Id));
     }
 
     [Theory]

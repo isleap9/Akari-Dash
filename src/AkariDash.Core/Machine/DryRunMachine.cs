@@ -30,6 +30,11 @@ public sealed class DryRunMachine(IMachine inner) : IMachine
     {
     }
 
+    // Nor does it turn System Protection on.
+    public void TurnOnSystemProtection(string drive)
+    {
+    }
+
     private void Record(MachineLocation location, MachineValue? value)
     {
         var index = _changes.FindIndex(change => change.Location == location);

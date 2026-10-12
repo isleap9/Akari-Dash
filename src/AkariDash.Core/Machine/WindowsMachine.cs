@@ -266,7 +266,7 @@ public sealed class WindowsMachine : IMachine
 
             if (result == Native.ErrorServiceDisabled)
             {
-                throw new InvalidOperationException("System Restore is turned off on this PC (System Protection is off for its drives).");
+                throw new SystemProtectionOffException();
             }
 
             if (result != 0)
@@ -278,6 +278,33 @@ public sealed class WindowsMachine : IMachine
             {
                 throw new InvalidOperationException(
                     "Windows created no new restore point; by default it allows only one a day, and one was made in the last 24 hours.");
+            }
+        }
+        finally
+        {
+            foreach (var comObject in new object?[] { restore, services, locator })
+            {
+                if (comObject is not null)
+                {
+                    Marshal.FinalReleaseComObject(comObject);
+                }
+            }
+        }
+    }
+
+    public void TurnOnSystemProtection(string drive)
+    {
+        dynamic locator = Activator.CreateInstance(Type.GetTypeFromProgID("WbemScripting.SWbemLocator", throwOnError: true)!)!;
+        dynamic? services = null;
+        dynamic? restore = null;
+        try
+        {
+            services = locator.ConnectServer(".", @"root\default");
+            restore = services.Get("SystemRestore");
+            var result = (int)restore.Enable(drive);
+            if (result != 0)
+            {
+                throw new Win32Exception(result);
             }
         }
         finally

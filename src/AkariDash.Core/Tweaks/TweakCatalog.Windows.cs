@@ -53,6 +53,8 @@ public static partial class TweakCatalog
 
         ColorMode(),
 
+        AltTabTabs(),
+
         OnOff("windows.tips-notifications", "Tips and suggestions", "Shows notifications with tips and suggestions as you use Windows.",
             "Notifications", ContentDelivery, "SubscribedContent-338389Enabled", absent: 1),
         OnOff("windows.welcome-experience", "Welcome experience after updates", "Shows a full-screen page about what is new after a Windows update, and sometimes after signing in.",
@@ -139,6 +141,25 @@ public static partial class TweakCatalog
             "Taskbar", policy,
             [Option(policy, "off", "Off", RegistryValue.DWord(0)), Option(policy, "not-blocked", "Not blocked", null)],
             Activation.AfterSignOut);
+    }
+
+    private static DeclaredTweak AltTabTabs()
+    {
+        // MultiTaskingAltTabFilter, the Settings > Multitasking choice (NinjaOne, ElevenForum): 0 the 20
+        // most recent tabs, 1 five, 2 three (Windows' default, also when missing), 3 no tabs.
+        var filter = new TweakTarget(
+            new RegistryLocation(RegistryHive.CurrentUser, ExplorerAdvanced, "MultiTaskingAltTabFilter"),
+            AbsentMeans: RegistryValue.DWord(2));
+
+        return WindowsTweak("windows.alt-tab-tabs", "Tabs in Alt+Tab", "Whether Alt+Tab and Snap show the open tabs of apps such as Edge, next to their windows.",
+            "Multitasking", filter,
+            [
+                DWordOption(filter, "none", "Windows only, no tabs", 3),
+                DWordOption(filter, "three", "3 most recent tabs (Windows default)", 2),
+                DWordOption(filter, "five", "5 most recent tabs", 1),
+                DWordOption(filter, "twenty", "20 most recent tabs", 0),
+            ],
+            Activation.Immediately);
     }
 
     private static DeclaredTweak ColorMode()

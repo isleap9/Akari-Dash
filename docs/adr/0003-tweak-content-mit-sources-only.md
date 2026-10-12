@@ -5,3 +5,5 @@ Tweaks are written from the Akari-OS / FR33THY scripts (MIT), public Windows doc
 Winhance has the largest list of settings, so it is the main starting point for which Tweaks to add and the values they write. Its code is never copied 1:1: every Tweak is rewritten as an Akari-Dash Declared Tweak with its own id, title, description, Options, Recommended Option and Group, and a value is dropped when it cannot be undone (as with Recall's AllowRecallEnablement). The MIT notices are kept in `THIRD-PARTY-NOTICES.md`.
 
 _Amended 2026-10-12. This ADR first said Winhance could only be read as an index of ideas, before the MIT snapshot was found._
+
+_Amended again 2026-10-12: newer, PolyForm Shield versions of Winhance may be read for one purpose only, to list which settings exist (their names). Nothing else is taken from them: every value comes from Microsoft's documentation, Akari-OS / AkariOS-Ultimate or Windows itself, and a setting without such a source is left out._

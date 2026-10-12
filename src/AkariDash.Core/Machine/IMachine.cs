@@ -31,4 +31,8 @@ public interface IMachine
     /// <summary>Creates a Windows restore point named <paramref name="description"/>.</summary>
     /// <exception cref="Exception">No restore point was created (for example, System Restore is off); the type depends on the machine.</exception>
     void CreateRestorePoint(string description);
+
+    /// <summary>Turns System Protection (System Restore) on for <paramref name="drive"/>, such as <c>C:\</c>.</summary>
+    /// <exception cref="Exception">Windows did not turn it on; the type depends on the machine.</exception>
+    void TurnOnSystemProtection(string drive) => throw new NotSupportedException("This machine cannot turn on System Protection.");
 }

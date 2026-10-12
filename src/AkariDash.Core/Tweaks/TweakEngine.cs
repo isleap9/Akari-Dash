@@ -202,6 +202,29 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
         }
     }
 
+    /// <summary>
+    /// Creates a restore point now, when the user asks for one (Akari-Dash offers it on first launch).
+    /// It counts as the session's restore point, so the first apply does not ask for another.
+    /// </summary>
+    /// <exception cref="SystemProtectionOffException">System Protection is off; <see cref="TurnOnSystemProtection"/> turns it on.</exception>
+    public void CreateRestorePointNow()
+    {
+        lock (_writing)
+        {
+            _writes.CreateRestorePoint(RestorePointDescription);
+            _restorePointRequested = true;
+        }
+    }
+
+    /// <summary>Turns System Protection on for the Windows drive, so restore points can be made.</summary>
+    public void TurnOnSystemProtection()
+    {
+        lock (_writing)
+        {
+            _writes.TurnOnSystemProtection(Path.GetPathRoot(Environment.SystemDirectory) ?? @"C:\");
+        }
+    }
+
     /// <summary>Whether the next apply will first wait for a restore point (never for a Dry Run).</summary>
     public bool RestorePointDue => !_restorePointRequested && _writes is not DryRunMachine;
 

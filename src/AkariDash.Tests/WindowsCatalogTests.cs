@@ -17,7 +17,7 @@ public class WindowsCatalogTests
         Assert.InRange(Windows.Count, 18, 25);
         Assert.All(Windows, tweak => Assert.StartsWith("windows.", tweak.Id));
         Assert.Equal(
-            ["Appearance", "File Explorer", "Notifications", "Start", "System", "Taskbar"],
+            ["Appearance", "File Explorer", "Multitasking", "Notifications", "Start", "System", "Taskbar"],
             Windows.Select(tweak => tweak.Group).Distinct().Order());
     }
 

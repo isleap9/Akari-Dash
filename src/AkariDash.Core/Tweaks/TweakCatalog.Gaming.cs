@@ -30,6 +30,8 @@ public static partial class TweakCatalog
         GamesGpuPriority(),
         WindowedGameOptimizations(),
         VrrOptimizations(),
+        AutoHdr(),
+        .. AutoColorManagement(),
         FullscreenOptimizations(),
         MultiplaneOverlay(),
         OverlayMinimumFrameRate(),
@@ -48,6 +50,7 @@ public static partial class TweakCatalog
         SearchWebView2(),
         .. VisualEffectsTweaks(),
         MouseAcceleration(),
+        MouseHoverTime(),
     ];
 
     // Listed after the Scheduled tasks (TweakCatalog.cs), so Accessibility is the last section on the
@@ -407,6 +410,73 @@ public static partial class TweakCatalog
         "gaming.vrr-optimizations", "Variable refresh rate optimizations",
         "Lets older DirectX 10 and 11 games use variable refresh rate (G-SYNC, FreeSync) on displays that support it. Turn it off if a game stutters or flickers with VRR.",
         "VRROptimizeEnable");
+
+    private static DeclaredTweak AutoHdr() => DirectXSetting(
+        // Windows keeps Auto HDR as the AutoHDREnable entry of DirectXUserGlobalSettings, next to the
+        // windowed-games and VRR entries (Winhance lists it).
+        "gaming.auto-hdr", "Auto HDR",
+        "Turns DirectX 11 and 12 games made for normal (SDR) displays into HDR on an HDR display. It costs a little GPU time.",
+        "AutoHDREnable");
+
+    // Automatically manage color for apps (ElevenForum): AutoColorManagementEnabled, 1 on and 0 off,
+    // in each display's MonitorDataStore subkey. Windows decides when it is missing. Edited outside
+    // Settings, it applies after a restart. No Tweak when Windows has no display data.
+    private static IEnumerable<DeclaredTweak> AutoColorManagement()
+    {
+        var displays = Displays.Known();
+        if (displays.Count == 0)
+        {
+            return [];
+        }
+
+        TweakTarget[] targets =
+        [
+            .. displays.Select(display => new TweakTarget(
+                new RegistryLocation(RegistryHive.LocalMachine, $@"{Displays.MonitorDataStore}\{display}", "AutoColorManagementEnabled"))),
+        ];
+
+        return
+        [
+            new DeclaredTweak(
+                Id: "gaming.auto-color-management",
+                Title: "Automatically manage color for apps",
+                Description: "Windows corrects the colours of apps that are not colour managed, so they look right on wide-gamut and HDR displays. It can make colours look different in some games.",
+                Category: Category.Gaming,
+                Group: "Graphics",
+                Targets: targets,
+                Options:
+                [
+                    DWordOption(targets, "on", "On", 1),
+                    DWordOption(targets, "off", "Off", 0),
+                    Option(targets, "windows-decides", "Let Windows decide", null),
+                ],
+                Activation: Activation.AfterRestart),
+        ];
+    }
+
+    private static DeclaredTweak MouseHoverTime()
+    {
+        // Microsoft documents MouseHoverTime (SPI_SETMOUSEHOVERTIME): milliseconds the pointer must rest
+        // before hover effects and tooltips start; 400 by default, also when missing.
+        var hover = new TweakTarget(
+            new RegistryLocation(RegistryHive.CurrentUser, @"Control Panel\Mouse", "MouseHoverTime"),
+            AbsentMeans: RegistryValue.String("400"));
+
+        return new DeclaredTweak(
+            Id: "gaming.mouse-hover-time",
+            Title: "Mouse hover time",
+            Description: "How long the pointer must rest on something before its tooltip or hover effect appears.",
+            Category: Category.Gaming,
+            Group: "Input",
+            Targets: [hover],
+            Options:
+            [
+                Option(hover, "windows-default", "Windows default (400 ms)", RegistryValue.String("400")),
+                Option(hover, "faster", "Faster (200 ms)", RegistryValue.String("200")),
+                Option(hover, "fastest", "Fastest (100 ms)", RegistryValue.String("100")),
+            ],
+            Activation: Activation.AfterSignOut);
+    }
 
     /// <summary>An On/Off/Let-Windows-decide Tweak over one entry of DirectXUserGlobalSettings.</summary>
     private static DeclaredTweak DirectXSetting(string id, string title, string description, string entry)
