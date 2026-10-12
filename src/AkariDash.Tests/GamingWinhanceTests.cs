@@ -143,6 +143,20 @@ public class GamingWinhanceTests
     }
 
     [Fact]
+    public void Find_my_files_is_classic_by_default_and_enhanced_writes_one()
+    {
+        var tweak = Find("gaming.find-my-files");
+        var target = Assert.Single(tweak.Targets);
+
+        Assert.Equal("Background activity", tweak.Group);
+        Assert.Equal("EnableFindMyFiles", ((RegistryLocation)target.Location).Name);
+        Assert.Equal(RegistryValue.DWord(0), target.AbsentMeans);
+        Assert.Equal(["classic", "enhanced"], tweak.Options.Select(option => option.Id));
+        Assert.Equal(RegistryValue.DWord(1), tweak.Options[1].Values[target]);
+        Assert.Null(tweak.Recommended);
+    }
+
+    [Fact]
     public void Settings_that_do_nothing_are_left_out_and_the_mask_is_never_written_whole()
     {
         var names = TweakCatalog.All.SelectMany(tweak => tweak.Targets).Select(target => target.Location).OfType<RegistryLocation>().Select(location => location.Name);

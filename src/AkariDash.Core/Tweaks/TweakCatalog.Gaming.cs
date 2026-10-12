@@ -48,6 +48,7 @@ public static partial class TweakCatalog
         StartupDelay(),
         Prefetch(),
         SearchWebView2(),
+        FindMyFiles(),
         .. VisualEffectsTweaks(),
         MouseAcceleration(),
         MouseHoverTime(),
@@ -872,6 +873,31 @@ public static partial class TweakCatalog
             Group: "Graphics",
             Targets: [priority],
             Options: [DWordOption(priority, "high", "High (Windows default)", 8), DWordOption(priority, "low", "Low", 2)],
+            Activation: Activation.AfterRestart);
+    }
+
+    private static DeclaredTweak FindMyFiles()
+    {
+        // Settings > Privacy & security > Searching Windows > Find my files: EnableFindMyFiles 1 is
+        // Enhanced (the whole PC), 0 Classic (libraries and desktop), which is also what a missing
+        // value means. Only Windows Search may change this key, so WindowsMachine writes it with the
+        // restore privilege; the search service reads it when it starts.
+        var findMyFiles = new TweakTarget(
+            new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\Microsoft\Windows Search\Gather\Windows\SystemIndex", "EnableFindMyFiles"),
+            AbsentMeans: RegistryValue.DWord(0));
+
+        return new DeclaredTweak(
+            Id: "gaming.find-my-files",
+            Title: "Search entire file system",
+            Description: "Enhanced makes Windows Search index the whole PC instead of only your libraries and desktop. Search finds more, but the indexer uses more CPU and disk, most of all while it catches up.",
+            Category: Category.Gaming,
+            Group: "Background activity",
+            Targets: [findMyFiles],
+            Options:
+            [
+                DWordOption(findMyFiles, "classic", "Classic (Windows default)", 0),
+                DWordOption(findMyFiles, "enhanced", "Enhanced", 1),
+            ],
             Activation: Activation.AfterRestart);
     }
 

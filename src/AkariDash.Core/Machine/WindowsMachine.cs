@@ -387,6 +387,12 @@ public sealed class WindowsMachine : IMachine
 
     private static void WriteRegistryValue(RegistryLocation location, RegistryValue value)
     {
+        if (IsServiceOwned(location))
+        {
+            WithRestorePrivilege(location, key => key.SetValue(location.Name, value.Data, value.Kind));
+            return;
+        }
+
         using var baseKey = RegistryKey.OpenBaseKey(location.Hive, RegistryView.Registry64);
         using var key = baseKey.CreateSubKey(location.Key, writable: true);
         key.SetValue(location.Name, value.Data, value.Kind);
@@ -394,9 +400,90 @@ public sealed class WindowsMachine : IMachine
 
     private static void DeleteRegistryValue(RegistryLocation location)
     {
+        if (IsServiceOwned(location))
+        {
+            WithRestorePrivilege(location, key => key.DeleteValue(location.Name, throwOnMissingValue: false));
+            return;
+        }
+
         using var baseKey = RegistryKey.OpenBaseKey(location.Hive, RegistryView.Registry64);
         using var key = baseKey.OpenSubKey(location.Key, writable: true);
         key?.DeleteValue(location.Name, throwOnMissingValue: false);
+    }
+
+    // Keys that belong to a Windows service: Administrators may only read them, and Settings changes
+    // them through the service. Akari-Dash writes these values, and only these, with the restore
+    // privilege every administrator has (as backup tools do); the key's permissions stay as they are.
+    private static readonly string[] ServiceOwnedKeys =
+    [
+        // Windows Search: Find my files (Classic or Enhanced).
+        @"SOFTWARE\Microsoft\Windows Search\Gather\Windows\SystemIndex",
+    ];
+
+    private static bool IsServiceOwned(RegistryLocation location) =>
+        location.Hive == RegistryHive.LocalMachine
+        && ServiceOwnedKeys.Contains(location.Key, StringComparer.OrdinalIgnoreCase);
+
+    // Turns SeRestorePrivilege on for this process only while the key is open, and opens the key with
+    // REG_OPTION_BACKUP_RESTORE, which grants write access through that privilege.
+    private static void WithRestorePrivilege(RegistryLocation location, Action<RegistryKey> write)
+    {
+        SetPrivilege(Native.SeRestorePrivilege, enable: true);
+        try
+        {
+            var result = Native.RegCreateKeyExW(
+                Native.HkeyLocalMachine, location.Key, 0, null, Native.RegOptionBackupRestore,
+                Native.KeySetValue | Native.KeyQueryValue | Native.KeyWow6464Key, IntPtr.Zero, out var handle, out _);
+            if (result != 0)
+            {
+                throw new UnauthorizedAccessException(
+                    $@"Windows did not let Akari-Dash change HKLM\{location.Key}: {new Win32Exception(result).Message}");
+            }
+
+            using var key = RegistryKey.FromHandle(handle, RegistryView.Registry64);
+            write(key);
+        }
+        finally
+        {
+            SetPrivilege(Native.SeRestorePrivilege, enable: false);
+        }
+    }
+
+    private static void SetPrivilege(string privilege, bool enable)
+    {
+        if (!Native.OpenProcessToken(Native.GetCurrentProcess(), Native.TokenAdjustPrivileges | Native.TokenQuery, out var token))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        }
+
+        try
+        {
+            if (!Native.LookupPrivilegeValueW(null, privilege, out var luid))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+
+            var state = new Native.TokenPrivileges
+            {
+                PrivilegeCount = 1,
+                Luid = luid,
+                Attributes = enable ? Native.SePrivilegeEnabled : 0,
+            };
+            if (!Native.AdjustTokenPrivileges(token, false, ref state, 0, IntPtr.Zero, IntPtr.Zero))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+
+            // AdjustTokenPrivileges succeeds even when the token lacks the privilege (not elevated).
+            if (enable && Marshal.GetLastWin32Error() == Native.ErrorNotAllAssigned)
+            {
+                throw new UnauthorizedAccessException($"Akari-Dash needs to run as administrator to change this setting ({privilege} is missing).");
+            }
+        }
+        finally
+        {
+            Native.CloseHandle(token);
+        }
     }
 
     // The Service Control Manager keeps each service's configuration under its Services key, so
@@ -600,6 +687,57 @@ public sealed class WindowsMachine : IMachine
         public const int BeginSystemChange = 100;
         public const int WtsUserName = 5;
         public const int WtsDomainName = 7;
+        public const string SeRestorePrivilege = "SeRestorePrivilege";
+        public const uint SePrivilegeEnabled = 0x2;
+        public const int ErrorNotAllAssigned = 1300;
+        public const uint TokenAdjustPrivileges = 0x20;
+        public const uint TokenQuery = 0x8;
+        public const uint RegOptionBackupRestore = 0x4;
+        public const int KeyQueryValue = 0x1;
+        public const int KeySetValue = 0x2;
+        public const int KeyWow6464Key = 0x100;
+        public static readonly IntPtr HkeyLocalMachine = unchecked((IntPtr)(int)0x80000002);
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct Luid
+        {
+            public uint LowPart;
+            public int HighPart;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct TokenPrivileges
+        {
+            public uint PrivilegeCount;
+            public Luid Luid;
+            public uint Attributes;
+        }
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool OpenProcessToken(IntPtr process, uint desiredAccess, out IntPtr token);
+
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool LookupPrivilegeValueW(string? systemName, string name, out Luid luid);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool AdjustTokenPrivileges(
+            IntPtr token, [MarshalAs(UnmanagedType.Bool)] bool disableAll, ref TokenPrivileges newState,
+            uint bufferLength, IntPtr previousState, IntPtr returnLength);
+
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode)]
+        public static extern int RegCreateKeyExW(
+            IntPtr key, string subKey, int reserved, string? className, uint options, int desired,
+            IntPtr securityAttributes, out Microsoft.Win32.SafeHandles.SafeRegistryHandle result, out int disposition);
+
+        [DllImport("kernel32.dll")]
+        public static extern IntPtr GetCurrentProcess();
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool CloseHandle(IntPtr handle);
 
         [StructLayout(LayoutKind.Sequential)]
         public struct ServiceDelayedAutoStartInfo
