@@ -13,6 +13,30 @@
 
             <views:CategoryView ViewModel="{x:Bind ViewModel}" />
 
+            <TextBlock Text="More tools" Style="{StaticResource SubtitleTextBlockStyle}" />
+            <Grid
+                Padding="16"
+                ColumnSpacing="16"
+                CornerRadius="8"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="AkariOS-Ultimate" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock
+                        TextWrapping="Wrap"
+                        Opacity="0.8"
+                        Text="The script toolkit Akari-Dash grew out of, with more options for advanced users. Opens its page in your browser." />
+                </StackPanel>
+                <HyperlinkButton
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    Content="Open AkariOS-Ultimate"
+                    NavigateUri="https://github.com/isleap9/AkariOS-Ultimate" />
+            </Grid>
+
         </StackPanel>
     </ScrollViewer>
 </Page>
