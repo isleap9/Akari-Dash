@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using Microsoft.Win32;
@@ -143,9 +144,9 @@ public sealed class WindowsMachine : IMachine
             services = locator.ConnectServer(".", @"root\cimv2");
             foreach (var adapter in services.ExecQuery("SELECT Name, PNPDeviceID FROM Win32_VideoController"))
             {
-                if (adapter.PNPDeviceID is string deviceId &&
+                if (WmiProperty(adapter, "PNPDeviceID") is string deviceId &&
                     deviceId.StartsWith(@"PCI\", StringComparison.OrdinalIgnoreCase) &&
-                    adapter.Name is string name)
+                    WmiProperty(adapter, "Name") is string name)
                 {
                     names.Add(name);
                 }
@@ -281,10 +282,12 @@ public sealed class WindowsMachine : IMachine
                 throw new Win32Exception(result);
             }
 
-            if (NewestRestorePoint(services) <= newestBefore)
+            if (WaitForNewRestorePoint(services, newestBefore) is { } newestAfter)
             {
                 throw new InvalidOperationException(
-                    "Windows created no new restore point; by default it allows only one a day, and one was made in the last 24 hours.");
+                    $"Windows reported success but no new restore point appeared within {Native.RestorePointAppearsSeconds} "
+                        + $"seconds (the newest was {newestBefore} before the request and {newestAfter} after); by default "
+                        + "Windows allows only one a day, and one was made in the last 24 hours.");
             }
         }
         finally
@@ -340,16 +343,47 @@ public sealed class WindowsMachine : IMachine
         }
     }
 
+    // A created restore point can take a few seconds to turn up in the store after Windows has
+    // already answered the request: on this PC the point was stamped 20:06:26 and the request came
+    // back at 20:06:32, and a read right then still did not list it. So the answer is waited for,
+    // and only a wait that runs out means Windows really skipped the request. Answers the newest
+    // sequence number still seen when it ran out, or null once the new restore point appeared.
+    private static uint? WaitForNewRestorePoint(dynamic services, uint newestBefore)
+    {
+        uint newest;
+        for (var attempt = 0; ; attempt++)
+        {
+            newest = NewestRestorePoint(services);
+            if (newest > newestBefore)
+            {
+                return null;
+            }
+
+            if (attempt >= Native.RestorePointAppearsSeconds)
+            {
+                return newest;
+            }
+
+            Thread.Sleep(TimeSpan.FromSeconds(1));
+        }
+    }
+
     private static uint NewestRestorePoint(dynamic services)
     {
         uint newest = 0;
         foreach (var point in services.ExecQuery("SELECT SequenceNumber FROM SystemRestore"))
         {
-            newest = Math.Max(newest, (uint)point.SequenceNumber);
+            newest = Math.Max(newest, Convert.ToUInt32(WmiProperty(point, "SequenceNumber"), CultureInfo.InvariantCulture));
         }
 
         return newest;
     }
+
+    // A WMI object's own properties are reachable only through SWbemObject's Properties_ collection.
+    // Asking for one by name directly (point.SequenceNumber) answers E_FAIL, which a late-bound get
+    // throws as COMException 0x80004005 and which PowerShell quietly reports as an empty value, so
+    // reading the newest restore point killed the restore point itself on real hardware.
+    private static object? WmiProperty(dynamic wmiObject, string name) => wmiObject.Properties_.Item(name).Value;
 
     // Rewrites the whole string with only this entry changed; removing the last entry deletes the value.
     private static void WriteRegistryEntry(RegistryEntryLocation entry, string? text)
@@ -685,6 +719,7 @@ public sealed class WindowsMachine : IMachine
         public const int ErrorServiceDisabledHResult = unchecked((int)0x80070422);
         public const int ModifySettings = 12;
         public const int BeginSystemChange = 100;
+        public const int RestorePointAppearsSeconds = 20;
         public const int WtsUserName = 5;
         public const int WtsDomainName = 7;
         public const string SeRestorePrivilege = "SeRestorePrivilege";
