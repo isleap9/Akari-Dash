@@ -24,6 +24,7 @@ public sealed class WindowsMachine : IMachine
         ScheduledTaskLocation task => ReadTaskEnabled(task),
         RegistryBitLocation bit => bit.ReadFrom(ReadRegistryValue(bit.Value)),
         BootSettingLocation boot => ReadBootSetting(boot),
+        RegistryEntryLocation entry => entry.ReadFrom(ReadRegistryValue(entry.Value)),
         _ => throw Unsupported(location),
     };
 
@@ -43,6 +44,9 @@ public sealed class WindowsMachine : IMachine
             case (RegistryBitLocation bit, BitValue set):
                 WriteRegistryValue(bit.Value, bit.WriteInto(ReadRegistryValue(bit.Value), set.IsSet));
                 break;
+            case (RegistryEntryLocation entry, EntryValue text):
+                WriteRegistryEntry(entry, text.Text);
+                break;
             case (BootSettingLocation boot, BootSettingValue setting):
                 RunBcdedit("/set", "{current}", boot.Name, setting.Text);
                 break;
@@ -56,6 +60,10 @@ public sealed class WindowsMachine : IMachine
         if (location is RegistryLocation registry)
         {
             DeleteRegistryValue(registry);
+        }
+        else if (location is RegistryEntryLocation entry)
+        {
+            WriteRegistryEntry(entry, null);
         }
         else if (location is BootSettingLocation boot)
         {
@@ -293,6 +301,19 @@ public sealed class WindowsMachine : IMachine
         }
 
         return newest;
+    }
+
+    // Rewrites the whole string with only this entry changed; removing the last entry deletes the value.
+    private static void WriteRegistryEntry(RegistryEntryLocation entry, string? text)
+    {
+        if (entry.WriteInto(ReadRegistryValue(entry.Value), text) is { } whole)
+        {
+            WriteRegistryValue(entry.Value, whole);
+        }
+        else
+        {
+            DeleteRegistryValue(entry.Value);
+        }
     }
 
     // Some keys (such as SmartScreen's WTDS\Components) let only SYSTEM or TrustedInstaller read

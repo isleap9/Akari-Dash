@@ -10,9 +10,9 @@ namespace AkariDash.Core.Tweaks;
 // (Winhance's newer "Other" section lists both, but nothing is taken from that version) and Microsoft's
 // documentation of the Multimedia Class Scheduler and the Storage Sense policy.
 //
-// Left out from Winhance's Gaming page: its VRR switch writes a VRROptimizeEnable DWORD, but Windows
-// keeps that setting inside DirectXUserGlobalSettings (see WindowedGameOptimizations). Desktop
-// composition cannot be turned off since Windows 8, so CompositionPolicy does nothing.
+// Left out from Winhance's Gaming page: desktop composition cannot be turned off since Windows 8, so
+// CompositionPolicy does nothing. (Its VRR switch wrote a separate VRROptimizeEnable DWORD; here VRR is
+// the entry Windows actually reads, in DirectXUserGlobalSettings.)
 // ServicesPipeTimeout's "faster" 30 seconds is already Windows' default. Nagle's algorithm is set per
 // network adapter, with DNS, in TweakCatalog.Network.cs. The UserPreferencesMask
 // effects are single bits (RegistryBitLocation), so changing or undoing one leaves the others alone.
@@ -27,14 +27,17 @@ public static partial class TweakCatalog
         GameBarTips(),
         HardwareGpuScheduling(),
         NvidiaSharpening(),
+        GamesGpuPriority(),
         WindowedGameOptimizations(),
+        VrrOptimizations(),
         FullscreenOptimizations(),
+        MultiplaneOverlay(),
+        OverlayMinimumFrameRate(),
         ProcessorScheduling(),
         SvcHostSplit(),
         PowerThrottling(),
         SystemResponsiveness(),
         GamesPriority(),
-        GamesGpuPriority(),
         NetworkThrottling(),
         .. NetworkTweaks(),
         BackgroundApps(),
@@ -390,29 +393,75 @@ public static partial class TweakCatalog
             Activation: Activation.AfterSignOut);
     }
 
-    private static DeclaredTweak WindowedGameOptimizations()
+    private static DeclaredTweak WindowedGameOptimizations() => DirectXSetting(
+        // Akari-OS sets SwapEffectUpgradeEnable=1. It is one entry of DirectXUserGlobalSettings, which
+        // also holds VRR and Auto HDR, so only this entry is changed. What a missing entry means varies
+        // by Windows version, so "Let Windows decide" removes it.
+        "gaming.windowed-game-optimizations", "Optimizations for windowed games",
+        "Lets older games in a window or borderless window use the faster flip presentation model, which lowers latency much like exclusive fullscreen.",
+        "SwapEffectUpgradeEnable");
+
+    private static DeclaredTweak VrrOptimizations() => DirectXSetting(
+        // Winhance lists VRR optimizations; Windows keeps the switch as the VRROptimizeEnable entry of
+        // DirectXUserGlobalSettings (AkariOS-Ultimate writes VRROptimizeEnable=0 there).
+        "gaming.vrr-optimizations", "Variable refresh rate optimizations",
+        "Lets older DirectX 10 and 11 games use variable refresh rate (G-SYNC, FreeSync) on displays that support it. Turn it off if a game stutters or flickers with VRR.",
+        "VRROptimizeEnable");
+
+    /// <summary>An On/Off/Let-Windows-decide Tweak over one entry of DirectXUserGlobalSettings.</summary>
+    private static DeclaredTweak DirectXSetting(string id, string title, string description, string entry)
     {
-        // Akari-OS sets SwapEffectUpgradeEnable=1. The value is one string holding every per-user
-        // DirectX graphics setting (Auto HDR too), so an Option writes the whole string and Undo puts
-        // back what it held. Akari-OS also writes VRROptimizeEnable=0; that is left out so "On" changes
-        // only what it says. What a missing value means varies by Windows version, so "Let Windows
-        // decide" deletes it. No Recommended Option, because of that shared string.
-        var settings = new TweakTarget(
-            new RegistryLocation(RegistryHive.CurrentUser, @"Software\Microsoft\DirectX\UserGpuPreferences", "DirectXUserGlobalSettings"));
+        var setting = new TweakTarget(new RegistryEntryLocation(
+            RegistryHive.CurrentUser, @"Software\Microsoft\DirectX\UserGpuPreferences", "DirectXUserGlobalSettings", entry));
 
         return new DeclaredTweak(
-            Id: "gaming.windowed-game-optimizations",
-            Title: "Optimizations for windowed games",
-            Description: "Lets older games in a window or borderless window use the faster flip presentation model, which lowers latency much like exclusive fullscreen. Windows keeps this and Auto HDR in one setting, so choosing here also sets Auto HDR back to its default while this is applied.",
+            Id: id,
+            Title: title,
+            Description: description,
             Category: Category.Gaming,
             Group: "Graphics",
-            Targets: [settings],
+            Targets: [setting],
             Options:
             [
-                Option(settings, "on", "On", RegistryValue.String("SwapEffectUpgradeEnable=1;")),
-                Option(settings, "off", "Off", RegistryValue.String("SwapEffectUpgradeEnable=0;")),
-                Option(settings, "windows-decides", "Let Windows decide", null),
+                Option(setting, "on", "On", new EntryValue("1")),
+                Option(setting, "off", "Off", new EntryValue("0")),
+                Option(setting, "windows-decides", "Let Windows decide", null),
             ]);
+    }
+
+    private static DeclaredTweak MultiplaneOverlay()
+    {
+        // AkariOS-Ultimate's 'Multiplane overlay': OverlayTestMode = 5 turns MPO off; deleting it (its
+        // revert) is Windows' default, MPO on.
+        var testMode = new TweakTarget(new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\Dwm", "OverlayTestMode"));
+
+        return new DeclaredTweak(
+            Id: "gaming.mpo",
+            Title: "Multi-Plane Overlay (MPO)",
+            Description: "Lets the graphics card show games and videos on their own hardware layer, which saves work for Windows. Off can fix flickering, black screens or stutter on some drivers and multi-monitor setups.",
+            Category: Category.Gaming,
+            Group: "Graphics",
+            Targets: [testMode],
+            Options: [Option(testMode, "off", "Off", RegistryValue.DWord(5)), Option(testMode, "on", "On (Windows default)", null)],
+            Activation: Activation.AfterRestart);
+    }
+
+    private static DeclaredTweak OverlayMinimumFrameRate()
+    {
+        // Microsoft's DWM registry values: OverlayMinFPS = 0 removes DWM's minimum frame rate for putting a
+        // swap chain on an overlay plane (Windows 11; Microsoft may change or remove it). Missing is
+        // Windows' default.
+        var minFps = new TweakTarget(new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\Dwm", "OverlayMinFPS"));
+
+        return new DeclaredTweak(
+            Id: "gaming.mpo-min-fps",
+            Title: "MPO minimum frame rate requirement",
+            Description: "Windows only puts a game on an overlay plane while it runs fast enough. Off lets low frame rate games and videos use overlays too, which some players use against stutter and freezes on Windows 11 24H2.",
+            Category: Category.Gaming,
+            Group: "Graphics",
+            Targets: [minFps],
+            Options: [Option(minFps, "off", "Off", RegistryValue.DWord(0)), Option(minFps, "on", "On (Windows default)", null)],
+            Activation: Activation.AfterRestart);
     }
 
     private static DeclaredTweak FullscreenOptimizations()
@@ -750,7 +799,7 @@ public static partial class TweakCatalog
             Title: "GPU priority for games",
             Description: "How strongly the Multimedia Class Scheduler favours games that ask for it on the graphics card. Windows already sets it high; Low gives other apps more of the GPU.",
             Category: Category.Gaming,
-            Group: "Multimedia scheduler",
+            Group: "Graphics",
             Targets: [priority],
             Options: [DWordOption(priority, "high", "High (Windows default)", 8), DWordOption(priority, "low", "Low", 2)],
             Activation: Activation.AfterRestart);

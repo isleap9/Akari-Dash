@@ -109,6 +109,38 @@ public class GamingWinhanceTests
     }
 
     [Fact]
+    public void Graphics_has_winhances_settings_plus_mpo_in_order()
+    {
+        Assert.Equal(
+            ["gaming.hardware-gpu-scheduling", "gaming.nvidia-sharpening", "gaming.games-gpu-priority", "gaming.windowed-game-optimizations",
+             "gaming.vrr-optimizations", "gaming.fullscreen-optimizations", "gaming.mpo", "gaming.mpo-min-fps"],
+            TweakCatalog.All.Where(tweak => tweak is { Category: Category.Gaming, Group: "Graphics" }).Select(tweak => tweak.Id));
+    }
+
+    [Theory]
+    [InlineData("gaming.windowed-game-optimizations", "SwapEffectUpgradeEnable")]
+    [InlineData("gaming.vrr-optimizations", "VRROptimizeEnable")]
+    public void DirectX_settings_change_only_their_own_entry(string id, string entry)
+    {
+        var location = Assert.IsType<RegistryEntryLocation>(Assert.Single(Find(id).Targets).Location);
+
+        Assert.Equal(("DirectXUserGlobalSettings", entry), (location.Name, location.Entry));
+    }
+
+    [Theory]
+    [InlineData("gaming.mpo", "OverlayTestMode", 5)]
+    [InlineData("gaming.mpo-min-fps", "OverlayMinFPS", 0)]
+    public void Mpo_settings_write_their_dwm_value_and_delete_it_for_windows_default(string id, string name, int off)
+    {
+        var tweak = Find(id);
+        var target = Assert.Single(tweak.Targets);
+
+        Assert.Equal(name, ((RegistryLocation)target.Location).Name);
+        Assert.Equal(RegistryValue.DWord(off), tweak.Options.Single(option => option.Id == "off").Values[target]);
+        Assert.Null(tweak.Options.Single(option => option.Id == "on").Values[target]);
+    }
+
+    [Fact]
     public void Settings_that_do_nothing_are_left_out_and_the_mask_is_never_written_whole()
     {
         var names = TweakCatalog.All.SelectMany(tweak => tweak.Targets).Select(target => target.Location).OfType<RegistryLocation>().Select(location => location.Name);

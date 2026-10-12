@@ -75,14 +75,23 @@ public sealed class InMemoryMachine : IMachine
 
     public MachineValue? Read(MachineLocation location) => _unreadable.Contains(location)
         ? throw new UnauthorizedAccessException($"Windows does not let Akari-Dash read {location}.")
-        : location is RegistryBitLocation bit
-            ? bit.ReadFrom(_values.GetValueOrDefault(bit.Value))
-            : _values.GetValueOrDefault(location);
+        : location switch
+        {
+            RegistryBitLocation bit => bit.ReadFrom(_values.GetValueOrDefault(bit.Value)),
+            RegistryEntryLocation entry => entry.ReadFrom(_values.GetValueOrDefault(entry.Value)),
+            _ => _values.GetValueOrDefault(location),
+        };
 
     // Like the real machine, services and scheduled tasks can only be changed, never created or deleted.
     public void Write(MachineLocation location, MachineValue value)
     {
         ThrowIfFailing(location);
+        if (location is RegistryEntryLocation entry)
+        {
+            SetEntry(entry, ((EntryValue)value).Text);
+            return;
+        }
+
         if (location is RegistryBitLocation bit)
         {
             _values[bit.Value] = bit.WriteInto(_values.GetValueOrDefault(bit.Value), ((BitValue)value).IsSet);
@@ -100,12 +109,30 @@ public sealed class InMemoryMachine : IMachine
     public void Delete(MachineLocation location)
     {
         ThrowIfFailing(location);
+        if (location is RegistryEntryLocation entry)
+        {
+            SetEntry(entry, null);
+            return;
+        }
+
         if (location is not (RegistryLocation or BootSettingLocation) && Read(location) is not null)
         {
             throw new NotSupportedException($"{location} cannot be deleted.");
         }
 
         _values.Remove(location);
+    }
+
+    private void SetEntry(RegistryEntryLocation entry, string? text)
+    {
+        if (entry.WriteInto(_values.GetValueOrDefault(entry.Value), text) is { } whole)
+        {
+            _values[entry.Value] = whole;
+        }
+        else
+        {
+            _values.Remove(entry.Value);
+        }
     }
 
     private void ThrowIfFailing(MachineLocation location)
