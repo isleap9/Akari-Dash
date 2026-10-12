@@ -245,6 +245,13 @@ public sealed class WindowsMachine : IMachine
     // so success counts only when a new restore point actually appears.
     public void CreateRestorePoint(string description)
     {
+        // Windows answers a restore point request on an unprotected drive inconsistently (1058, or a
+        // bare E_FAIL), so check System Protection first.
+        if (!IsSystemProtectionOn(Path.GetPathRoot(Environment.SystemDirectory) ?? @"C:\"))
+        {
+            throw new SystemProtectionOffException();
+        }
+
         dynamic locator = Activator.CreateInstance(Type.GetTypeFromProgID("WbemScripting.SWbemLocator", throwOnError: true)!)!;
         dynamic? services = null;
         dynamic? restore = null;
@@ -290,6 +297,20 @@ public sealed class WindowsMachine : IMachine
                 }
             }
         }
+    }
+
+    // System Restore lists every protected drive in SPP\Clients, as entries such as
+    // "\\?\Volume{...}\:(C%3A)"; a drive missing from it has System Protection off.
+    private static bool IsSystemProtectionOn(string drive)
+    {
+        using var baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+        using var clients = baseKey.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\SPP\Clients");
+        var marker = $"({drive.TrimEnd('\\', ':')}%3A)";
+        return clients?.GetValueNames()
+            .Select(name => clients.GetValue(name))
+            .OfType<string[]>()
+            .SelectMany(entries => entries)
+            .Any(entry => entry.Contains(marker, StringComparison.OrdinalIgnoreCase)) ?? false;
     }
 
     public void TurnOnSystemProtection(string drive)
