@@ -208,6 +208,27 @@ public class TweakCatalogTests
     }
 
     [Fact]
+    public void Copilot_and_ai_tweaks_are_policies_that_can_be_removed_again()
+    {
+        var ai = TweakCatalog.All.Where(tweak => tweak.Group == "Copilot & AI").ToList();
+
+        Assert.True(ai.Count >= 4);
+        Assert.All(ai, tweak => Assert.Contains(tweak.Options, option => option.Values.Values.All(value => value is null)));
+    }
+
+    [Fact]
+    public void Recall_only_stops_snapshots_because_removing_recall_cannot_be_undone()
+    {
+        // AllowRecallEnablement = 0 removes Recall from the PC; Undo could not put it back.
+        Assert.DoesNotContain(
+            TweakCatalog.All.SelectMany(tweak => tweak.Targets),
+            target => target.Location is RegistryLocation { Name: "AllowRecallEnablement" });
+        Assert.Contains(
+            Find("privacy.recall-snapshots").Targets,
+            target => target.Location is RegistryLocation { Name: "DisableAIDataAnalysis" });
+    }
+
+    [Fact]
     public void Feedback_frequency_automatically_deletes_both_values_so_windows_decides_again()
     {
         var tweak = Find("privacy.feedback-frequency");
@@ -221,6 +242,9 @@ public class TweakCatalogTests
     [InlineData("privacy.diagnostic-data")]
     [InlineData("privacy.activity-history")]
     [InlineData("privacy.web-search-in-start")]
+    [InlineData("privacy.recall-snapshots")]
+    [InlineData("privacy.click-to-do")]
+    [InlineData("privacy.ai-in-notepad")]
     public void Policy_tweaks_can_remove_the_policy_again(string id)
     {
         var tweak = Find(id);
