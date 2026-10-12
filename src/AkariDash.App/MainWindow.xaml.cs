@@ -82,6 +82,7 @@ public sealed partial class MainWindow : Window
         new("Gaming", "\uE7FC", typeof(GamingPage)),
         new("Privacy", "\uE72E", typeof(PrivacyPage)),
         new("Services", "\uE9F5", typeof(ServicesPage)),
+        new("Windows", "\uE771", typeof(WindowsPage)),
     ];
 
     /// <summary>Navigation items pinned to the bottom of the pane (footer).</summary>
