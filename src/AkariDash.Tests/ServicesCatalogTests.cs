@@ -29,7 +29,7 @@ public class ServicesCatalogTests
     {
         var services = Services.SelectMany(tweak => tweak.Targets).Select(target => target.Location).OfType<ServiceLocation>().Select(location => location.ServiceName);
 
-        Assert.Equal(41, services.Distinct().Count());
+        Assert.Equal(42, services.Distinct().Count());
     }
 
     [Theory]

@@ -21,6 +21,11 @@ public static partial class TweakCatalog
             "Preloads the apps you use most into memory so they open faster. On an SSD the gain is small, and its background disk and memory work can cause stutter while you play.",
             "Performance", [("SysMain", Automatic)], recommendOff: true),
 
+        // Downloads (Winhance lists it; Windows' own value, delayed start, seen in the VM on build 26300)
+        ServiceTweak("services.bits", "Background downloads (BITS)",
+            "Downloads Windows updates, Microsoft Store apps and some app updates in the background. Turned off, Windows Update and the Store cannot download anything.",
+            "Downloads", [("BITS", Delayed)]),
+
         // Printing and fax
         ServiceTweak("services.print-spooler", "Print Spooler",
             "Sends documents to printers. Turned off, nothing can print, including Microsoft Print to PDF.",

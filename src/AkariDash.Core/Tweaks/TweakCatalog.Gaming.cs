@@ -4,8 +4,16 @@ using Microsoft.Win32;
 namespace AkariDash.Core.Tweaks;
 
 // Gaming Tweaks, written from Akari-OS (MIT), AkariOS-Ultimate (MIT; processor scheduling, exclusive
-// fullscreen and the Windows defaults it restores) and Microsoft's documentation of the Multimedia
-// Class Scheduler and the Storage Sense policy.
+// fullscreen and the Windows defaults it restores), Winhance as of its last MIT commit (4dc441a0; GPU
+// priority, NVIDIA sharpening, Game Bar tips, prefetch, the extra visual effects and accessibility
+// shortcuts) and Microsoft's documentation of the Multimedia Class Scheduler and the Storage Sense policy.
+//
+// Left out from Winhance's Gaming page: its VRR switch writes a VRROptimizeEnable DWORD, but Windows
+// keeps that setting inside DirectXUserGlobalSettings (see WindowedGameOptimizations). Desktop
+// composition cannot be turned off since Windows 8, so CompositionPolicy does nothing.
+// ServicesPipeTimeout's "faster" 30 seconds is already Windows' default. Nagle's algorithm is set per
+// network adapter, so it waits for the per-adapter work that DNS needs. The UserPreferencesMask
+// effects need a way to change one bit of a value.
 public static partial class TweakCatalog
 {
     private static IEnumerable<DeclaredTweak> GamingTweaks() =>
@@ -14,26 +22,40 @@ public static partial class TweakCatalog
         GameCaptures(),
         BackgroundRecording(),
         GameBarControllerButton(),
+        GameBarTips(),
         HardwareGpuScheduling(),
+        NvidiaSharpening(),
         WindowedGameOptimizations(),
         FullscreenOptimizations(),
         ProcessorScheduling(),
         PowerThrottling(),
         SystemResponsiveness(),
         GamesPriority(),
+        GamesGpuPriority(),
         NetworkThrottling(),
         BackgroundApps(),
         AutomaticMaintenance(),
         StorageSense(),
         StartupDelay(),
+        Prefetch(),
         MenuShowDelay(),
         WindowAnimations(),
         TaskbarAnimations(),
         Peek(),
         Transparency(),
         DragFullWindows(),
+        ThumbnailsInsteadOfIcons(),
+        TranslucentSelection(),
+        IconLabelShadows(),
+        SaveTaskbarThumbnails(),
+        FontSmoothing(),
         MouseAcceleration(),
         StickyKeysShortcut(),
+        AccessibilityShortcut("gaming.filter-keys-shortcut", "Filter Keys shortcut", "Holding the right Shift key for eight seconds turns on Filter Keys, which ignores quick or repeated key presses.", "Keyboard Response", "126", "2"),
+        AccessibilityShortcut("gaming.toggle-keys-shortcut", "Toggle Keys shortcut", "Holding Num Lock for five seconds turns on Toggle Keys, which beeps whenever Caps Lock, Num Lock or Scroll Lock is pressed.", "ToggleKeys", "62", "34"),
+        AccessibilityShortcut("gaming.mouse-keys-shortcut", "Mouse Keys shortcut", "Left Alt + left Shift + Num Lock turns on Mouse Keys, which moves the pointer with the number pad.", "MouseKeys", "62", "130"),
+        AccessibilityShortcut("gaming.high-contrast-shortcut", "High Contrast shortcut", "Left Alt + left Shift + Print Screen switches the screen to high contrast colours.", "HighContrast", "126", "4194"),
+        NarratorShortcut(),
     ];
 
     private static DeclaredTweak GameMode()
@@ -558,6 +580,141 @@ public static partial class TweakCatalog
             Options: [Option(drag, "off", "Off", RegistryValue.String("0")), Option(drag, "on", "On", RegistryValue.String("1"))],
             Activation: Activation.AfterSignOut);
     }
+
+    /// <summary>An On/Off Tweak over one current-user DWORD, with Windows' value when it is missing.</summary>
+    private static DeclaredTweak GamingOnOff(
+        string id, string title, string description, string group, string key, string name,
+        int onValue, int offValue, int absent, Activation activation = Activation.Immediately)
+    {
+        var target = new TweakTarget(new RegistryLocation(RegistryHive.CurrentUser, key, name), AbsentMeans: RegistryValue.DWord(absent));
+
+        return new DeclaredTweak(id, title, description, Category.Gaming, group, [target],
+            [DWordOption(target, "off", "Off", offValue), DWordOption(target, "on", "On", onValue)],
+            Activation: activation);
+    }
+
+    private static DeclaredTweak GameBarTips() =>
+        // Winhance turns ShowStartupPanel off. Windows shows the panel when the value is missing.
+        GamingOnOff("gaming.game-bar-tips", "Game Bar tips on startup",
+            "Shows a panel of tips the first times you open Game Bar, over the top of your game.",
+            "Game Bar", @"Software\Microsoft\GameBar", "ShowStartupPanel", onValue: 1, offValue: 0, absent: 1);
+
+    private static DeclaredTweak NvidiaSharpening()
+    {
+        // Winhance: EnableGR535 = 0 turns the legacy image sharpening on, 1 (also when missing) off.
+        // Only older NVIDIA drivers read it; newer ones have Image Scaling in the NVIDIA app instead.
+        var gr535 = new TweakTarget(
+            new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\NVIDIA Corporation\Global\FTS", "EnableGR535"),
+            AbsentMeans: RegistryValue.DWord(1));
+
+        return new DeclaredTweak(
+            Id: "gaming.nvidia-sharpening",
+            Title: "Legacy NVIDIA image sharpening",
+            Description: "Turns on the image sharpening filter of older NVIDIA drivers. Current drivers ignore it and use Image Scaling in the NVIDIA app instead.",
+            Category: Category.Gaming,
+            Group: "Graphics",
+            Targets: [gr535],
+            Options: [DWordOption(gr535, "off", "Off", 1), DWordOption(gr535, "on", "On", 0)],
+            RequiresGpu: GpuVendor.Nvidia,
+            Activation: Activation.AfterRestart);
+    }
+
+    private static DeclaredTweak GamesGpuPriority()
+    {
+        // Winhance switches GPU Priority between 8 and 2. 8 is already Windows' value (read on build
+        // 26300), so the choice here is whether to lower it.
+        var priority = new TweakTarget(
+            new RegistryLocation(RegistryHive.LocalMachine, MultimediaSystemProfile + @"\Tasks\Games", "GPU Priority"),
+            AbsentMeans: RegistryValue.DWord(8));
+
+        return new DeclaredTweak(
+            Id: "gaming.games-gpu-priority",
+            Title: "GPU priority for games",
+            Description: "How strongly the Multimedia Class Scheduler favours games that ask for it on the graphics card. Windows already sets it high; Low gives other apps more of the GPU.",
+            Category: Category.Gaming,
+            Group: "Multimedia scheduler",
+            Targets: [priority],
+            Options: [DWordOption(priority, "high", "High (Windows default)", 8), DWordOption(priority, "low", "Low", 2)],
+            Activation: Activation.AfterRestart);
+    }
+
+    private static DeclaredTweak Prefetch()
+    {
+        // Winhance switches EnablePrefetcher between 3 (apps and startup; Windows' value) and 0.
+        var prefetcher = new TweakTarget(
+            new RegistryLocation(RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters", "EnablePrefetcher"),
+            AbsentMeans: RegistryValue.DWord(3));
+
+        return new DeclaredTweak(
+            Id: "gaming.prefetch",
+            Title: "Prefetch",
+            Description: "Windows records which files apps and startup read, and loads them ahead of time next time. It helps most on hard drives; on an SSD the gain is small.",
+            Category: Category.Gaming,
+            Group: "Background activity",
+            Targets: [prefetcher],
+            Options: [DWordOption(prefetcher, "off", "Off", 0), DWordOption(prefetcher, "on", "On", 3)],
+            Activation: Activation.AfterRestart);
+    }
+
+    private static DeclaredTweak ThumbnailsInsteadOfIcons() =>
+        // Akari-OS and Winhance: IconsOnly 0 shows thumbnails, which is also Windows' value when missing.
+        GamingOnOff("gaming.thumbnails", "Thumbnails instead of icons",
+            "File Explorer shows a small preview of pictures and videos. Turned off, it shows only file icons, which is quicker in big folders.",
+            "Visual effects", ExplorerAdvanced, "IconsOnly", onValue: 0, offValue: 1, absent: 0, Activation.AfterSignOut);
+
+    private static DeclaredTweak TranslucentSelection() =>
+        // Akari-OS turns ListviewAlphaSelect off; Windows treats a missing value as on.
+        GamingOnOff("gaming.translucent-selection", "Translucent selection rectangle",
+            "Dragging to select files draws a see-through blue box. Turned off, it draws a plain dotted outline.",
+            "Visual effects", ExplorerAdvanced, "ListviewAlphaSelect", onValue: 1, offValue: 0, absent: 1, Activation.AfterSignOut);
+
+    private static DeclaredTweak IconLabelShadows() =>
+        // Akari-OS turns ListviewShadow off; Windows treats a missing value as on.
+        GamingOnOff("gaming.icon-label-shadows", "Shadows under desktop icon labels",
+            "Draws a shadow under the names of desktop icons so they stay readable on any wallpaper.",
+            "Visual effects", ExplorerAdvanced, "ListviewShadow", onValue: 1, offValue: 0, absent: 1, Activation.AfterSignOut);
+
+    private static DeclaredTweak SaveTaskbarThumbnails() =>
+        // Akari-OS keeps AlwaysHibernateThumbnails off (0, also Windows' value when missing).
+        GamingOnOff("gaming.save-taskbar-thumbnails", "Save taskbar thumbnail previews",
+            "Keeps the previews you see when pointing at a taskbar button in memory, even for minimized windows.",
+            "Visual effects", @"Software\Microsoft\Windows\DWM", "AlwaysHibernateThumbnails", onValue: 1, offValue: 0, absent: 0, Activation.AfterSignOut);
+
+    private static DeclaredTweak FontSmoothing()
+    {
+        // Akari-OS and Winhance: FontSmoothing "2" smooths font edges (Windows' value), "0" turns it off.
+        var smoothing = new TweakTarget(
+            new RegistryLocation(RegistryHive.CurrentUser, @"Control Panel\Desktop", "FontSmoothing"),
+            AbsentMeans: RegistryValue.String("2"));
+
+        return new DeclaredTweak(
+            Id: "gaming.font-smoothing",
+            Title: "Smooth edges of screen fonts",
+            Description: "Softens the jagged edges of text on screen. Turned off, text looks rougher; almost everyone wants this on.",
+            Category: Category.Gaming,
+            Group: "Visual effects",
+            Targets: [smoothing],
+            Options: [Option(smoothing, "off", "Off", RegistryValue.String("0")), Option(smoothing, "on", "On", RegistryValue.String("2"))],
+            Activation: Activation.AfterSignOut);
+    }
+
+    private static DeclaredTweak AccessibilityShortcut(string id, string title, string description, string key, string onFlags, string offFlags)
+    {
+        // Akari-OS and Winhance write these Flags strings, as for Sticky Keys; the on value is Windows' own.
+        var flags = new TweakTarget(
+            new RegistryLocation(RegistryHive.CurrentUser, $@"Control Panel\Accessibility\{key}", "Flags"),
+            AbsentMeans: RegistryValue.String(onFlags));
+
+        return new DeclaredTweak(id, title, description, Category.Gaming, "Input", [flags],
+            [Option(flags, "off", "Off", RegistryValue.String(offFlags)), Option(flags, "on", "On", RegistryValue.String(onFlags))],
+            Activation: Activation.AfterSignOut);
+    }
+
+    private static DeclaredTweak NarratorShortcut() =>
+        // Winhance turns WinEnterLaunchEnabled off; Windows treats a missing value as on.
+        GamingOnOff("gaming.narrator-shortcut", "Narrator shortcut",
+            "Windows + Ctrl + Enter starts Narrator, the screen reader, which then reads everything aloud.",
+            "Input", @"Software\Microsoft\Narrator\NoRoam", "WinEnterLaunchEnabled", onValue: 1, offValue: 0, absent: 1);
 
     private const string MultimediaSystemProfile = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile";
 }
