@@ -6,7 +6,8 @@ namespace AkariDash.Core.Tweaks;
 // see TweakCatalog.ScheduledTasks.cs). Each service's
 // "off" (Disabled) and Windows default start type are AkariOS-Ultimate's (MIT) services-off and
 // services-default lists; which ones use delayed start is confirmed on
-// Windows itself in the VM. Anything that breaks a feature people rely on has no Recommended
+// Windows itself in the VM. Every Tweak also offers the other start types the Services snap-in has,
+// Manual above all, so a service can be kept out of the way without being disabled. Anything that breaks a feature people rely on has no Recommended
 // Option; only SysMain and background telemetry with nothing visible behind it recommend Off.
 public static partial class TweakCatalog
 {
@@ -152,7 +153,24 @@ public static partial class TweakCatalog
         var on = new TweakOption("on", "On (Windows default)", targets.Zip(services)
             .ToDictionary(pair => pair.First, pair => (MachineValue?)new ServiceStartValue(pair.Second.WindowsDefault)));
 
-        return new DeclaredTweak(id, title, description, Category.Services, group, targets, [off, on],
+        // Off and On are not the only answers: Manual leaves a service there for whatever needs it
+        // without starting it at boot, which is the gentler way to keep one out of the way. Each
+        // start type the Services snap-in offers is its own Option, in the snap-in's order, except
+        // one that every service here already starts as: On stands for that, so offering it twice
+        // would leave two Options matching the same machine.
+        List<TweakOption> options = [off];
+        options.AddRange(
+            from start in new[]
+            {
+                (Type: ServiceStartType.Manual, Id: "manual", Label: "Manual"),
+                (Type: ServiceStartType.Automatic, Id: "automatic", Label: "Automatic"),
+                (Type: ServiceStartType.AutomaticDelayed, Id: "delayed", Label: "Automatic (delayed start)"),
+            }
+            where services.Any(service => service.WindowsDefault != start.Type)
+            select Option(targets, start.Id, start.Label, new ServiceStartValue(start.Type)));
+        options.Add(on);
+
+        return new DeclaredTweak(id, title, description, Category.Services, group, targets, options,
             Recommended: recommendOff ? off : null,
             Activation: Activation.AfterRestart);
     }

@@ -68,6 +68,63 @@ public class ServicesCatalogTests
     }
 
     [Theory]
+    [MemberData(nameof(ServiceTweakIds))]
+    public void Every_service_tweak_offers_the_start_types_the_services_snap_in_does(string id)
+    {
+        var tweak = Find(id);
+
+        // Off and On are always there; a start type every service already starts as is left out,
+        // because On is that same machine state and two Options may not describe one state.
+        Assert.Equal("off", tweak.Options[0].Id);
+        Assert.Equal("on", tweak.Options[^1].Id);
+        Assert.All(tweak.Options, option => Assert.All(tweak.Targets, target => Assert.IsType<ServiceStartValue>(option.Values[target])));
+
+        var starts = new Dictionary<string, ServiceStartType>
+        {
+            ["manual"] = ServiceStartType.Manual,
+            ["automatic"] = ServiceStartType.Automatic,
+            ["delayed"] = ServiceStartType.AutomaticDelayed,
+        };
+        foreach (var (optionId, start) in starts)
+        {
+            var defaults = tweak.Targets.Select(target => ((ServiceStartValue)tweak.Options[^1].Values[target]!).StartType);
+            var option = tweak.Options.SingleOrDefault(option => option.Id == optionId);
+            if (defaults.All(windowsDefault => windowsDefault == start))
+            {
+                Assert.Null(option);
+                continue;
+            }
+
+            Assert.All(tweak.Targets, target => Assert.Equal(new ServiceStartValue(start), option?.Values[target]));
+        }
+    }
+
+    [Fact]
+    public void Manual_is_offered_where_windows_starts_the_service_by_itself()
+    {
+        // SysMain starts Automatic, so Manual is a real third answer: there, but not at boot.
+        var sysmain = Find("services.sysmain");
+
+        Assert.Equal(["off", "manual", "delayed", "on"], sysmain.Options.Select(option => option.Id));
+        Assert.Equal("Manual", sysmain.Options[1].Label);
+        Assert.Equal("Automatic (delayed start)", sysmain.Options[2].Label);
+    }
+
+    [Fact]
+    public void A_service_that_already_starts_manual_does_not_offer_manual_twice()
+    {
+        // Every Remote Desktop service starts Manual, which is what On puts back.
+        Assert.Equal(["off", "automatic", "delayed", "on"], Find("services.remote-desktop").Options.Select(option => option.Id));
+    }
+
+    [Fact]
+    public void A_tweak_whose_services_start_differently_offers_all_of_them()
+    {
+        // CDPSvc starts delayed and CDPUserSvc automatic, so no single start type is the default.
+        Assert.Equal(["off", "manual", "automatic", "delayed", "on"], Find("services.connected-devices").Options.Select(option => option.Id));
+    }
+
+    [Theory]
     [InlineData("services.windows-search", "WSearch", ServiceStartType.AutomaticDelayed)]
     [InlineData("services.print-spooler", "Spooler", ServiceStartType.Automatic)]
     [InlineData("services.fax", "Fax", ServiceStartType.Manual)]
