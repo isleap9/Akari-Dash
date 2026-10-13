@@ -89,6 +89,7 @@ public sealed partial class MainWindow : Window
         [
             new("Start menu", "\uE8FC", typeof(StartMenuPage)),
             new("Taskbar", "\uE7F4", typeof(TaskbarPage)),
+            new("File Explorer", "\uEC50", typeof(ExplorerPage)),
         ]),
         new("Windows", "\uE771", typeof(WindowsPage)),
         new("Windows Update", "\uE777", typeof(UpdatePage)),
@@ -104,6 +105,7 @@ public sealed partial class MainWindow : Window
         [Category.Notifications] = typeof(NotificationsPage),
         [Category.StartMenu] = typeof(StartMenuPage),
         [Category.Taskbar] = typeof(TaskbarPage),
+        [Category.Explorer] = typeof(ExplorerPage),
         [Category.Windows] = typeof(WindowsPage),
         [Category.Update] = typeof(UpdatePage),
         [Category.Security] = typeof(SecurityPage),

@@ -6,8 +6,8 @@ namespace AkariDash.Core.Tweaks;
 /// Every Tweak Akari-Dash ships, one file per Category: TweakCatalog.Gaming.cs,
 /// TweakCatalog.Network.cs and TweakCatalog.ScheduledTasks.cs (both on the Gaming page),
 /// TweakCatalog.Privacy.cs, TweakCatalog.Services.cs, TweakCatalog.Security.cs,
-/// TweakCatalog.Windows.cs, TweakCatalog.Notifications.cs, TweakCatalog.Update.cs, and
-/// TweakCatalog.StartMenu.cs with TweakCatalog.Taskbar.cs (two of the three Customize pages).
+/// TweakCatalog.Windows.cs, TweakCatalog.Notifications.cs, TweakCatalog.Update.cs, and the three
+/// Customize pages: TweakCatalog.StartMenu.cs, TweakCatalog.Taskbar.cs and TweakCatalog.Explorer.cs.
 /// This file holds the list and the helpers they share.
 /// </summary>
 public static partial class TweakCatalog
@@ -25,6 +25,7 @@ public static partial class TweakCatalog
         .. UpdateTweaks(),
         .. StartMenuTweaks(),
         .. TaskbarTweaks(),
+        .. ExplorerTweaks(),
     ];
 
     private static TweakOption Option(TweakTarget target, string id, string label, MachineValue? value) =>

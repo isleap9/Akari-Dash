@@ -29,6 +29,14 @@ public static class RenamedTweaks
         ["windows.task-view-button"] = "taskbar.task-view",
         ["windows.widgets"] = "taskbar.widgets",
         ["windows.end-task"] = "taskbar.end-task",
+
+        // #32: the Windows page's File Explorer Group became the File Explorer Category.
+        ["windows.file-extensions"] = "explorer.file-extensions",
+        ["windows.hidden-files"] = "explorer.hidden-files",
+        ["windows.open-explorer-to"] = "explorer.open-to",
+        ["windows.full-path"] = "explorer.full-path",
+        ["windows.frequent-folders"] = "explorer.frequent-folders",
+        ["windows.recent-files"] = "explorer.recent-files",
     };
 
     /// <summary>

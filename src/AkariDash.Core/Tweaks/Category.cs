@@ -10,6 +10,7 @@ public enum Category
     Security,
     StartMenu,
     Taskbar,
+    Explorer,
     Windows,
     Update,
 }

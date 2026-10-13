@@ -10,13 +10,13 @@ public class WindowsCatalogTests
         TweakCatalog.All.Where(tweak => tweak.Category == Category.Windows).ToList();
 
     [Fact]
-    public void Windows_page_has_about_ten_tweaks_in_its_groups()
+    public void Windows_page_keeps_the_four_rows_that_are_not_customize()
     {
-        Assert.InRange(Windows.Count, 8, 15);
+        Assert.Equal(4, Windows.Count);
         Assert.All(Windows, tweak => Assert.StartsWith("windows.", tweak.Id));
-        // Notifications, Start and Taskbar used to be Groups here; all three are Categories now.
+        // Notifications, Start, Taskbar and File Explorer used to be Groups here; all are Categories now.
         Assert.Equal(
-            ["Appearance", "File Explorer", "Multitasking", "System"],
+            ["Appearance", "Multitasking", "System"],
             Windows.Select(tweak => tweak.Group).Distinct().Order());
     }
 
