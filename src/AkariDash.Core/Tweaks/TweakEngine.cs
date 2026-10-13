@@ -121,12 +121,24 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
         var applied = _store.Get(tweak.Id);
         var isFirstApply = applied is null;
 
-        if (isFirstApply)
+        // An Original Value belongs to a target, not to the Tweak, and is saved just before
+        // Akari-Dash first writes that target. So a target the Tweak has gained since it was applied
+        // gets its own Original Value read now: without it the apply below would write the target
+        // with nothing recorded for it, and Undo would leave that value behind for good.
+        List<OriginalValue> originals = [.. applied?.OriginalValues ?? []];
+        var newTargets = tweak.Targets
+            .Where(target => originals.All(original => original.Location != target.Location))
+            .Select(target => new OriginalValue(target.Location, _writes.Read(target.Location)))
+            .ToList();
+
+        if (newTargets.Count > 0)
         {
+            originals.AddRange(newTargets);
+
             // Saved before anything is written, so a crash mid-apply still leaves a way back.
-            applied = new AppliedTweak(
-                option.Id,
-                tweak.Targets.Select(target => new OriginalValue(target.Location, _writes.Read(target.Location))).ToList());
+            applied = applied is null
+                ? new AppliedTweak(option.Id, originals)
+                : applied with { OriginalValues = originals };
             _store.Save(tweak.Id, applied);
         }
 

@@ -51,6 +51,53 @@ public class TweakEngineApplyTests
         Assert.Same(Zero, engine.AppliedOption(Tweak));
     }
 
+    // A Tweak can gain a target in a later version of Akari-Dash, as privacy.activity-history gained
+    // the user copy of its policy. Re-applying then writes that target, so its Original Value has to
+    // be read and kept too, or Undo would leave the new value on the machine for good. The VM found
+    // this: both copies of PublishUserActivities read 0 while only the machine one was recorded.
+    [Fact]
+    public void A_target_added_after_the_first_apply_gets_its_own_original_value()
+    {
+        var before = new DeclaredTweak(
+            "test", "Test", "A test Tweak.", Category.Gaming, "Test Group",
+            [FirstTarget, SecondTarget], [Option("zero", 0), Option("one", 1)]);
+        var engine = Engine();
+
+        engine.Apply(before, before.Options[0]);
+
+        // The same Tweak, now also writing Third, which the machine has at 20.
+        engine.Apply(Tweak, Zero);
+        Assert.Equal(RegistryValue.DWord(0), _machine.Read(Third));
+
+        engine.Undo(Tweak);
+
+        Assert.Equal(RegistryValue.DWord(10), _machine.Read(First));
+        Assert.Null(_machine.Read(Second));
+        Assert.Equal(RegistryValue.DWord(20), _machine.Read(Third));
+    }
+
+    // Topping up must not disturb what was already recorded: First keeps the 10 it held before the
+    // first apply, not the value the Tweak itself wrote.
+    [Fact]
+    public void Adding_a_target_keeps_the_original_values_already_saved()
+    {
+        var before = new DeclaredTweak(
+            "test", "Test", "A test Tweak.", Category.Gaming, "Test Group",
+            [FirstTarget], [Option("zero", 0), Option("one", 1)]);
+        var engine = Engine();
+
+        engine.Apply(before, before.Options[0]);
+        engine.Apply(Tweak, One);
+
+        var saved = _store.Get("test");
+
+        Assert.NotNull(saved);
+        Assert.Equal("one", saved.LastAppliedOptionId);
+        Assert.Equal(RegistryValue.DWord(10), saved.OriginalValues.Single(original => original.Location == First).Value);
+        Assert.Null(saved.OriginalValues.Single(original => original.Location == Second).Value);
+        Assert.Equal(RegistryValue.DWord(20), saved.OriginalValues.Single(original => original.Location == Third).Value);
+    }
+
     [Fact]
     public void Tweak_never_applied_has_no_applied_option()
     {
