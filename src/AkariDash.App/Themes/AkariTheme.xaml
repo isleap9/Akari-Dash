@@ -1,0 +1,55 @@
+<!--
+  The Akari theme: Akari's black-and-white brand on Vain Toolbox's dark palette. A near-black window,
+  cards a step lighter, faint grey borders, and white where Windows would put its accent colour.
+
+  Loaded on top of the app's resources only while the Akari theme is picked, with the window held in
+  Dark (MainWindow.ApplyTheme). Dark, Light and System never load it, so they stay as Windows draws
+  them. Every accent brush is set explicitly: left to derive from SystemAccentColor, Windows would
+  put its own blue back in places.
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Default">
+            <!-- Vain Toolbox's surfaces. -->
+            <SolidColorBrush x:Key="AkariWindowBackgroundBrush" Color="#FF0A0A0A" />
+            <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="#FF0F0F0F" />
+            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#FF151515" />
+            <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="#FF121212" />
+            <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#FF262626" />
+            <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="#FF262626" />
+
+            <!-- White in place of the accent. -->
+            <Color x:Key="SystemAccentColor">#FFFFFFFF</Color>
+            <Color x:Key="SystemAccentColorLight1">#FFFFFFFF</Color>
+            <Color x:Key="SystemAccentColorLight2">#FFFFFFFF</Color>
+            <Color x:Key="SystemAccentColorLight3">#FFFFFFFF</Color>
+            <Color x:Key="SystemAccentColorDark1">#FFE6E6E6</Color>
+            <Color x:Key="SystemAccentColorDark2">#FFCCCCCC</Color>
+            <Color x:Key="SystemAccentColorDark3">#FFB3B3B3</Color>
+
+            <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#E6FFFFFF" />
+            <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#CCFFFFFF" />
+            <SolidColorBrush x:Key="AccentFillColorDisabledBrush" Color="#28FFFFFF" />
+            <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#FFE0E0E0" />
+            <SolidColorBrush x:Key="AccentTextFillColorTertiaryBrush" Color="#FFC8C8C8" />
+            <SolidColorBrush x:Key="AccentFillColorSelectedTextBackgroundBrush" Color="#40FFFFFF" />
+
+            <!-- Black on the white accent, so an accent button or a switch knob still reads. -->
+            <SolidColorBrush x:Key="TextOnAccentFillColorPrimaryBrush" Color="#FF000000" />
+            <SolidColorBrush x:Key="TextOnAccentFillColorSecondaryBrush" Color="#B3000000" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#FF000000" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#FF000000" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#FF000000" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#FFE6E6E6" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#FFCCCCCC" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="NavigationViewSelectionIndicatorForeground" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#FFFFFFFF" />
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

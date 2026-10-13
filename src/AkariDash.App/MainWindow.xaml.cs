@@ -179,12 +179,31 @@ public sealed partial class MainWindow : Window
     /// <summary>Applies an application theme to this window's content and title bar.</summary>
     public void ApplyTheme(AppTheme theme)
     {
-        RootElement.RequestedTheme = theme switch
+        // The Akari theme is Dark with Themes/AkariTheme.xaml merged on top; every other theme goes
+        // without it, so Dark stays Windows' own dark.
+        var merged = Application.Current.Resources.MergedDictionaries;
+        var akari = merged.FirstOrDefault(dictionary =>
+            dictionary.Source?.OriginalString.EndsWith("/Themes/AkariTheme.xaml", StringComparison.OrdinalIgnoreCase) == true);
+        if (theme == AppTheme.Akari && akari is null)
+        {
+            merged.Add(new ResourceDictionary { Source = new Uri("ms-appx:///Themes/AkariTheme.xaml") });
+        }
+        else if (theme != AppTheme.Akari && akari is not null)
+        {
+            merged.Remove(akari);
+        }
+
+        var target = theme switch
         {
             AppTheme.Light => ElementTheme.Light,
-            AppTheme.Dark => ElementTheme.Dark,
+            AppTheme.Dark or AppTheme.Akari => ElementTheme.Dark,
             _ => ElementTheme.Default,
         };
+
+        // {ThemeResource} brushes re-resolve only when the theme changes, so going between Dark and
+        // Akari (both Dark underneath) passes through Light to make them pick up the dictionary.
+        RootElement.RequestedTheme = target == ElementTheme.Light ? ElementTheme.Dark : ElementTheme.Light;
+        RootElement.RequestedTheme = target;
 
         ApplyTitleBarColors(theme);
     }
@@ -291,7 +310,7 @@ public sealed partial class MainWindow : Window
 
         var isDark = theme switch
         {
-            AppTheme.Dark => true,
+            AppTheme.Dark or AppTheme.Akari => true,
             AppTheme.Light => false,
             _ => RootElement.ActualTheme == ElementTheme.Dark,
         };

@@ -1,0 +1,10 @@
+<!--
+  What the Akari theme replaces, at its value for Dark, Light and System: the window background is
+  transparent there, so Mica shows through as before. A merged dictionary, not App.xaml's own keys,
+  so AkariTheme.xaml, merged after it, can override it.
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <SolidColorBrush x:Key="AkariWindowBackgroundBrush" Color="Transparent" />
+</ResourceDictionary>

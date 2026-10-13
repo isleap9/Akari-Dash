@@ -7,7 +7,7 @@
     <!-- The shell, after the old Akari Tool's: a wordmark title bar, a page header with a large icon,
          title, subtitle and the search on the right, the page on a rounded bordered surface (the
          borders Vain Toolbox draws), and a status bar. The labelled sidebar is Akari-Dash's own. -->
-    <Grid x:Name="RootElement" Background="Transparent">
+    <Grid x:Name="RootElement" Background="{ThemeResource AkariWindowBackgroundBrush}">
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="F" Modifiers="Control" Invoked="OnFindInvoked" />
         </Grid.KeyboardAccelerators>

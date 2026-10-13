@@ -8,6 +8,8 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+                <ResourceDictionary Source="ms-appx:///Themes/BaseTheme.xaml" />
+                <!-- MainWindow.ApplyTheme adds Themes/AkariTheme.xaml after these while the Akari theme is on. -->
             </ResourceDictionary.MergedDictionaries>
 
             <conv:EnumToStringConverter x:Key="EnumToStringConverter" />

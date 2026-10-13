@@ -16,6 +16,10 @@ public enum AppTheme
 
     [Description("System default")]
     System = 2,
+
+    /// <summary>Akari's black-and-white theme on a near-black dark palette. The default.</summary>
+    [Description("Akari (black and white)")]
+    Akari = 3,
 }
 
 /// <summary>
@@ -47,11 +51,11 @@ public sealed class ThemeService : IThemeService
         _messenger = messenger;
     }
 
-    public AppTheme CurrentTheme { get; private set; } = AppTheme.System;
+    public AppTheme CurrentTheme { get; private set; } = AppTheme.Akari;
 
     public async Task InitializeAsync()
     {
-        CurrentTheme = await _settings.GetAsync(SettingsKey, AppTheme.System);
+        CurrentTheme = await _settings.GetAsync(SettingsKey, AppTheme.Akari);
     }
 
     public async Task SetThemeAsync(AppTheme theme)

@@ -26,7 +26,8 @@ public class ServicesTests
 
         await service.InitializeAsync();
 
-        Assert.Equal(AppTheme.System, service.CurrentTheme);
+        // Akari's black-and-white theme is what a fresh install opens in.
+        Assert.Equal(AppTheme.Akari, service.CurrentTheme);
     }
 
     [Fact]

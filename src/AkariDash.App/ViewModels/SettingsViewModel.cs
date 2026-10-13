@@ -9,7 +9,7 @@ public partial class SettingsViewModel : ViewModelBase
 {
     private readonly IThemeService _theme;
 
-    private AppTheme _selectedTheme = AppTheme.System;
+    private AppTheme _selectedTheme = AppTheme.Akari;
 
     public SettingsViewModel(IThemeService theme)
     {
@@ -17,7 +17,7 @@ public partial class SettingsViewModel : ViewModelBase
         Title = "Settings";
     }
 
-    public IReadOnlyList<AppTheme> Themes { get; } = [AppTheme.System, AppTheme.Light, AppTheme.Dark];
+    public IReadOnlyList<AppTheme> Themes { get; } = [AppTheme.Akari, AppTheme.System, AppTheme.Light, AppTheme.Dark];
 
     /// <summary>Theme picked in the UI; applies immediately through the theme service.</summary>
     public AppTheme SelectedTheme
