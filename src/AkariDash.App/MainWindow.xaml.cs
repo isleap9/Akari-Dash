@@ -94,7 +94,7 @@ public sealed partial class MainWindow : Window
         new("Windows", "\uE771", typeof(WindowsPage)),
         new("Windows Update", "\uE777", typeof(UpdatePage)),
         new("Security", "\uEA18", typeof(SecurityPage)),
-        new("Uninstaller", "\uE74D", typeof(UninstallerPage)),
+        new("UWP Apps", "\uE74D", typeof(UwpAppsPage)),
     ];
 
     /// <summary>The page each Category's Tweaks live on, so a search result knows where to go.</summary>

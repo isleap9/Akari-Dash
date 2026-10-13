@@ -11,6 +11,8 @@ public enum InstalledAppKind
 /// One uninstallable app: a Store package or a Win32 program from the Uninstall registry keys.
 /// <paramref name="IconPath"/> is the file its icon comes from — a Store package's logo image, or the
 /// program file a Win32 entry's DisplayIcon names — or <see langword="null"/> when it has none.
+/// <paramref name="PackageFamilyName"/> is a Store package's family name, which is what keeps it from
+/// coming back (see <see cref="AppxDeprovisioning"/>).
 /// </summary>
 public sealed record InstalledApp(
     string Id,
@@ -21,4 +23,5 @@ public sealed record InstalledApp(
     string? PackageFullName = null,
     string? UninstallString = null,
     string? QuietUninstallString = null,
-    string? IconPath = null);
+    string? IconPath = null,
+    string? PackageFamilyName = null);

@@ -77,7 +77,8 @@ public sealed class WindowsInstalledAppService : IInstalledAppService
                     Version: version,
                     Kind: InstalledAppKind.Appx,
                     PackageFullName: id.FullName,
-                    IconPath: LogoPath(package)));
+                    IconPath: LogoPath(package),
+                    PackageFamilyName: id.FamilyName));
             }
             catch
             {
@@ -217,29 +218,8 @@ public sealed class WindowsInstalledAppService : IInstalledAppService
             throw new InvalidOperationException($"\"{app.Name}\" has no package identity to remove.");
         }
 
-        var manager = new PackageManager();
-        Exception? firstFailure = null;
-
-        // Prefer removing for every user (we run elevated); fall back to the current user.
-        foreach (var forAllUsers in new[] { true, false })
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                var operation = forAllUsers
-                    ? manager.RemovePackageAsync(app.PackageFullName, RemovalOptions.RemoveForAllUsers)
-                    : manager.RemovePackageAsync(app.PackageFullName);
-                await operation.AsTask(cancellationToken);
-                return;
-            }
-            catch (Exception ex)
-            {
-                firstFailure = ex;
-            }
-        }
-
-        throw new InvalidOperationException(
-            $"Could not uninstall \"{app.Name}\": {firstFailure?.Message}", firstFailure);
+        // The Store apps tab's removal, so a package removed from here stays removed as well.
+        await WindowsStoreAppService.RemoveForEveryoneAsync(app.PackageFullName, app.PackageFamilyName, app.Name, cancellationToken);
     }
 
     private static async Task UninstallWin32Async(InstalledApp app, CancellationToken cancellationToken)
