@@ -27,6 +27,8 @@ public sealed class WindowsMachine : IMachine
         BootSettingLocation boot => ReadBootSetting(boot),
         RegistryEntryLocation entry => entry.ReadFrom(ReadRegistryValue(entry.Value)),
         RegistryKeyLocation key => ReadRegistryKey(key),
+        BlackImageLocation image => BlackImages.ReadFile(image),
+        AccountPicturesLocation => BlackImages.ReadAccountPictures(),
         _ => throw Unsupported(location),
     };
 
@@ -55,6 +57,12 @@ public sealed class WindowsMachine : IMachine
             case (RegistryKeyLocation key, KeyPresence):
                 CreateRegistryKey(key);
                 break;
+            case (BlackImageLocation image, BlackImage):
+                BlackImages.WriteFile(image);
+                break;
+            case (AccountPicturesLocation, BlackImage):
+                BlackImages.PaintAccountPictures();
+                break;
             default:
                 throw new ArgumentException($"{location} cannot hold {value.GetType().Name}.", nameof(value));
         }
@@ -73,6 +81,14 @@ public sealed class WindowsMachine : IMachine
         else if (location is RegistryKeyLocation key)
         {
             DeleteRegistryKey(key);
+        }
+        else if (location is BlackImageLocation image)
+        {
+            BlackImages.DeleteFile(image);
+        }
+        else if (location is AccountPicturesLocation)
+        {
+            BlackImages.RestoreAccountPictures();
         }
         else if (location is BootSettingLocation boot)
         {

@@ -25,6 +25,8 @@ public static partial class TweakCatalog
     [
         ColorMode(),
         BlackTheme(),
+        BlackSignOutWallpaper(),
+        BlackAccountPictures(),
 
         AltTabTabs(),
 
@@ -67,6 +69,64 @@ public static partial class TweakCatalog
         return new DeclaredTweak("windows.color-mode", "Color mode", "Light or dark colours for Windows and for apps that follow it.",
             Category.Windows, "Appearance", targets,
             [DWordOption(targets, "light", "Light", 1), DWordOption(targets, "dark", "Dark", 0)]);
+    }
+
+    private static DeclaredTweak BlackSignOutWallpaper()
+    {
+        // AkariOS-Ultimate's "Signout lockscreen wallpaper" (MIT, Tweaks/Windows.ps1): a black image the
+        // size of the screen at C:\Windows\Black.jpg, set as the lock screen through PersonalizationCSP
+        // and as the desktop wallpaper, with the blur behind the sign-in box turned off. Windows default
+        // is the source's revert; Undo puts back the wallpaper the PC actually had.
+        const string blackJpg = @"C:\Windows\Black.jpg";
+        const string csp = @"SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP";
+
+        TweakTarget image = new(new BlackImageLocation(blackJpg));
+        TweakTarget lockPath = new(new RegistryLocation(RegistryHive.LocalMachine, csp, "LockScreenImagePath"));
+        TweakTarget lockStatus = new(new RegistryLocation(RegistryHive.LocalMachine, csp, "LockScreenImageStatus"));
+        TweakTarget wallpaper = new(new RegistryLocation(RegistryHive.CurrentUser, @"Control Panel\Desktop", "Wallpaper"));
+        TweakTarget acrylic = new(new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\System", "DisableAcrylicBackgroundOnLogon"));
+
+        return new DeclaredTweak(
+            "windows.black-sign-out-wallpaper",
+            "Black lock screen and wallpaper (AkariOS-Ultimate)",
+            "Plain black behind the lock screen, the sign-in and sign-out screens and the desktop, with the blur behind the sign-in box off. The lock screen picture is set as a policy, so Settings shows it as managed by your organization. Windows default puts back Windows' own wallpaper; Undo puts back the one this PC had.",
+            Category.Windows, "Appearance", [image, lockPath, lockStatus, wallpaper, acrylic],
+            [
+                new TweakOption("default", "Windows default", new Dictionary<TweakTarget, MachineValue?>
+                {
+                    [image] = null,
+                    [lockPath] = null,
+                    [lockStatus] = null,
+                    [wallpaper] = RegistryValue.String(@"C:\Windows\Web\Wallpaper\Windows\img0.jpg"),
+                    [acrylic] = null,
+                }),
+                new TweakOption("black", "Black", new Dictionary<TweakTarget, MachineValue?>
+                {
+                    [image] = BlackImage.Black,
+                    [lockPath] = RegistryValue.String(blackJpg),
+                    [lockStatus] = RegistryValue.DWord(1),
+                    [wallpaper] = RegistryValue.String(blackJpg),
+                    [acrylic] = RegistryValue.DWord(1),
+                }),
+            ],
+            Activation: Activation.AfterSignOut);
+    }
+
+    private static DeclaredTweak BlackAccountPictures()
+    {
+        // AkariOS-Ultimate's "User account pictures" (MIT, Tweaks/Windows.ps1): the default account
+        // pictures in ProgramData\Microsoft\User Account Pictures painted black, after a backup to
+        // ProgramData\User Account Pictures that its revert copies back. A picture someone chose for
+        // their account is not one of these and keeps its own.
+        TweakTarget pictures = new(AccountPicturesLocation.Default);
+
+        return new DeclaredTweak(
+            "windows.black-account-pictures",
+            "Black account pictures (AkariOS-Ultimate)",
+            "Turns Windows' default account picture, the grey silhouette on the sign-in screen and in Start, into plain black. An account with a picture of its own keeps it. The originals are backed up first, and Windows default puts them back.",
+            Category.Windows, "Appearance", [pictures],
+            [Option(pictures, "default", "Windows default", null), Option(pictures, "black", "Black", BlackImage.Black)],
+            Activation: Activation.AfterSignOut);
     }
 
     private static DeclaredTweak BlackTheme()

@@ -10,9 +10,10 @@ public class WindowsCatalogTests
         TweakCatalog.All.Where(tweak => tweak.Category == Category.Windows).ToList();
 
     [Fact]
-    public void Windows_page_keeps_the_five_rows_that_are_not_customize()
+    public void Windows_page_keeps_its_seven_rows()
     {
-        Assert.Equal(5, Windows.Count);
+        // The five that are not Customize, and AkariOS-Ultimate's black wallpaper and account pictures.
+        Assert.Equal(7, Windows.Count);
         Assert.All(Windows, tweak => Assert.StartsWith("windows.", tweak.Id));
         // Notifications, Start, Taskbar and File Explorer used to be Groups here; all are Categories now.
         Assert.Equal(
@@ -30,9 +31,11 @@ public class WindowsCatalogTests
     public void Missing_values_count_as_one_of_the_options()
     {
         // A fresh Windows has most of these values missing; it should still read as an Option, not Custom.
-        // The black theme is the exception: its accent values always exist, so it reads from them.
-        Assert.All(Windows.Where(tweak => tweak.Id != "windows.black-theme"), tweak =>
+        // The black theme and the black wallpaper are the exceptions: the accent values and the desktop
+        // wallpaper always exist, so those rows read from them. A target with no AbsentMeans counts when
+        // the Option deletes it.
+        Assert.All(Windows.Where(tweak => tweak.Id is not ("windows.black-theme" or "windows.black-sign-out-wallpaper")), tweak =>
             Assert.Contains(tweak.Options, option =>
-                tweak.Targets.All(target => target.AbsentMeans is { } absent && Equals(option.Values[target], absent))));
+                tweak.Targets.All(target => Equals(option.Values[target], target.AbsentMeans))));
     }
 }

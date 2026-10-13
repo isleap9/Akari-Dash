@@ -126,6 +126,8 @@ public static class TweakSearch
             ServiceLocation service => service.ServiceName,
             ScheduledTaskLocation task => task.Path,
             BootSettingLocation boot => boot.Name,
+            BlackImageLocation image => Path.GetFileName(image.Path),
+            AccountPicturesLocation => "User Account Pictures",
             var other => other.ToString() ?? string.Empty,
         });
 

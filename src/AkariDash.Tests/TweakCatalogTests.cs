@@ -238,7 +238,8 @@ public class TweakCatalogTests
         Assert.All(tweak.Options, option => Assert.All(option.Values, pair => Assert.True(
             pair.Value is null || (pair.Key.Location, pair.Value) is
                 (RegistryLocation, RegistryValue) or (RegistryBitLocation, BitValue) or (RegistryEntryLocation, EntryValue) or (RegistryKeyLocation, KeyPresence) or (BootSettingLocation, BootSettingValue)
-                    or (ServiceLocation, ServiceStartValue) or (ScheduledTaskLocation, TaskEnabledValue),
+                    or (ServiceLocation, ServiceStartValue) or (ScheduledTaskLocation, TaskEnabledValue)
+                    or (BlackImageLocation, BlackImage) or (AccountPicturesLocation, BlackImage),
             $"{option.Id}: {pair.Key.Location} cannot hold {pair.Value}")));
     }
 

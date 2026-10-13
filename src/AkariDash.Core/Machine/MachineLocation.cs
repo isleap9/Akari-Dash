@@ -6,6 +6,7 @@ namespace AkariDash.Core.Machine;
 /// one <c>name=value;</c> entry of a registry string (<see cref="RegistryEntryLocation"/>),
 /// whether a registry key exists at all (<see cref="RegistryKeyLocation"/>),
 /// a service's start type (<see cref="ServiceLocation"/>), a scheduled task's enabled state
-/// (<see cref="ScheduledTaskLocation"/>) or a boot setting (<see cref="BootSettingLocation"/>).
+/// (<see cref="ScheduledTaskLocation"/>), a boot setting (<see cref="BootSettingLocation"/>), or one of
+/// AkariOS-Ultimate's black images (<see cref="BlackImageLocation"/>, <see cref="AccountPicturesLocation"/>).
 /// </summary>
 public abstract record MachineLocation;

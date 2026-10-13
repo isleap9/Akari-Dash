@@ -19,6 +19,8 @@ public sealed class FileOriginalValuesStore(string folder) : IOriginalValuesStor
     private const string BootType = "boot";
     private const string EntryType = "entry";
     private const string KeyType = "key";
+    private const string ImageType = "black-image";
+    private const string PicturesType = "account-pictures";
 
     private readonly string _filePath = Path.Combine(folder, "original-values.json");
     private readonly object _lock = new();
@@ -121,6 +123,10 @@ public sealed class FileOriginalValuesStore(string folder) : IOriginalValuesStor
             BootType, null, null, boot.Name, null, JsonSerializer.SerializeToElement(setting.Text)),
         (RegistryKeyLocation key, null) => new ValueRecord(KeyType, key.Hive, key.Key, string.Empty, null, null),
         (RegistryKeyLocation key, KeyPresence) => new ValueRecord(KeyType, key.Hive, key.Key, string.Empty, null, JsonSerializer.SerializeToElement(true)),
+        (BlackImageLocation image, null) => new ValueRecord(ImageType, null, null, image.Path, null, null),
+        (BlackImageLocation image, BlackImage) => new ValueRecord(ImageType, null, null, image.Path, null, JsonSerializer.SerializeToElement(true)),
+        (AccountPicturesLocation, null) => new ValueRecord(PicturesType, null, null, string.Empty, null, null),
+        (AccountPicturesLocation, BlackImage) => new ValueRecord(PicturesType, null, null, string.Empty, null, JsonSerializer.SerializeToElement(true)),
         (RegistryBitLocation bit, BitValue set) => new ValueRecord(
             BitType, bit.Hive, bit.Key, bit.Name, null, JsonSerializer.SerializeToElement(set.IsSet), bit.ByteIndex, bit.Mask),
         _ => throw new ArgumentException($"{location} cannot hold {value}.", nameof(value)),
@@ -150,6 +156,8 @@ public sealed class FileOriginalValuesStore(string folder) : IOriginalValuesStor
         KeyType => new OriginalValue(
             new RegistryKeyLocation(value.Hive!.Value, value.Key!),
             value.Data is not null ? KeyPresence.Present : null),
+        ImageType => new OriginalValue(new BlackImageLocation(value.Name), value.Data is not null ? BlackImage.Black : null),
+        PicturesType => new OriginalValue(AccountPicturesLocation.Default, value.Data is not null ? BlackImage.Black : null),
         BitType => new OriginalValue(
             new RegistryBitLocation(value.Hive!.Value, value.Key!, value.Name, value.Byte!.Value, value.Mask!.Value),
             value.Data is { } data ? new BitValue(data.GetBoolean()) : null),

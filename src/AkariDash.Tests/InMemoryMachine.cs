@@ -100,7 +100,7 @@ public sealed class InMemoryMachine : IMachine
             return;
         }
 
-        if (location is not (RegistryLocation or RegistryKeyLocation or BootSettingLocation) && !_values.ContainsKey(location))
+        if (location is not (RegistryLocation or RegistryKeyLocation or BootSettingLocation or BlackImageLocation or AccountPicturesLocation) && !_values.ContainsKey(location))
         {
             throw new InvalidOperationException($"{location} does not exist.");
         }
@@ -128,7 +128,7 @@ public sealed class InMemoryMachine : IMachine
             return;
         }
 
-        if (location is not (RegistryLocation or BootSettingLocation) && Read(location) is not null)
+        if (location is not (RegistryLocation or BootSettingLocation or BlackImageLocation or AccountPicturesLocation) && Read(location) is not null)
         {
             throw new NotSupportedException($"{location} cannot be deleted.");
         }

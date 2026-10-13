@@ -494,7 +494,7 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
 
         var missing = tweak.Targets
             .Select(target => target.Location)
-            .FirstOrDefault(location => location is not (RegistryLocation or RegistryEntryLocation or RegistryKeyLocation or BootSettingLocation) && machine.Read(location) is null);
+            .FirstOrDefault(location => location is not (RegistryLocation or RegistryEntryLocation or RegistryKeyLocation or BootSettingLocation or BlackImageLocation or AccountPicturesLocation) && machine.Read(location) is null);
 
         return missing switch
         {
