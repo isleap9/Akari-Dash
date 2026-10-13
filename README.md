@@ -14,11 +14,28 @@
 
 ---
 
-## What it does
+## What is Akari Dash?
 
-Akari Dash is a Windows desktop app that optimizes a PC for gaming. Every Tweak shows the exact
-registry values, services or scheduled tasks it will change before you apply it, and every change
-can be undone.
+Akari Dash is a gaming dashboard and Windows optimizer for Windows 10 and 11. It
+puts a PC's gaming, privacy and Windows settings in one place, and also handles the work around
+them: removing the apps Windows ships with, and in time installing software and graphics drivers.
+
+## The goal
+
+Most Windows tweak tools run a script and hope. You can't see what changed, you can't tell what state
+the PC is in now, and you can't take it back. Akari Dash is built the other way round:
+
+- **Every change is a Tweak you can read and reverse.** A Tweak is declared as data, never run as a
+  script. Akari Dash reads the PC's live state to show which Option each Tweak is in, or Custom when
+  it's in none of them. Undo restores the exact values that were there before.
+- **Nothing is hidden.** Before you apply anything, you see every registry value, service and
+  scheduled task it will touch, and when it takes effect: right away, after sign-out, or after restart.
+- **Curated, not copied.** A Tweak ships because it's a decision worth offering on a gaming PC, not
+  because another tool happens to have the value.
+- **Honest about what can't be undone.** Removing an app or installing a driver is an Action, not a
+  Tweak. Akari Dash says so plainly before it starts, and shows progress and a log while it runs.
+
+## What it does
 
 - **Gaming**: latency, GPU scheduling, and the visual effects games pay for
 - **Services**: background services and scheduled tasks
