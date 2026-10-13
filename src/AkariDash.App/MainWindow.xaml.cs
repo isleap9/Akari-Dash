@@ -86,6 +86,7 @@ public sealed partial class MainWindow : Window
         new("Services", "\uE9F5", typeof(ServicesPage)),
         new("Notifications", "\uEA8F", typeof(NotificationsPage)),
         new("Windows", "\uE771", typeof(WindowsPage)),
+        new("Windows Update", "\uE777", typeof(UpdatePage)),
         new("Security", "\uEA18", typeof(SecurityPage)),
     ];
 
@@ -97,6 +98,7 @@ public sealed partial class MainWindow : Window
         [Category.Services] = typeof(ServicesPage),
         [Category.Notifications] = typeof(NotificationsPage),
         [Category.Windows] = typeof(WindowsPage),
+        [Category.Update] = typeof(UpdatePage),
         [Category.Security] = typeof(SecurityPage),
     };
 

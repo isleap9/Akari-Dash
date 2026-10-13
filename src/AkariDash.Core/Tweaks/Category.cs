@@ -9,4 +9,5 @@ public enum Category
     Notifications,
     Security,
     Windows,
+    Update,
 }
