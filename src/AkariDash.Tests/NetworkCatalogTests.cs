@@ -1,3 +1,4 @@
+using System.Net.NetworkInformation;
 using AkariDash.Core.Machine;
 using AkariDash.Core.Tweaks;
 using Xunit;
@@ -85,5 +86,97 @@ public class NetworkCatalogTests
     {
         Assert.DoesNotContain(NetworkAdapters.Physical(), adapter =>
             adapter.Description.Contains("Virtual", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static readonly byte[] CardMac = [0x00, 0x15, 0x5D, 0x01, 0x02, 0x03];
+
+    private static NetworkAdapters.Interface Interface(string id, string name, byte[] mac,
+        NetworkInterfaceType type = NetworkInterfaceType.Ethernet, string description = "Microsoft Hyper-V Network Adapter") =>
+        new(id, name, description, type, mac);
+
+    [Fact]
+    public void A_cards_filter_drivers_are_not_adapters_of_their_own()
+    {
+        // The VM's own list, 2026-10-13: one wired card, and Windows reporting each filter bound to it
+        // as another Ethernet interface with the same hardware address. DNS servers and Nagle wrote
+        // to all four; Windows deleted the three filter GUIDs' values at restart and both rows read
+        // Drift, while the card itself still held 1.1.1.1.
+        var adapters = NetworkAdapters.Choose(
+        [
+            Interface("{081CD06E-C706-11F1-83B2-806E6F6E6963}", "Ethernet", CardMac),
+            Interface("{081CD06F-C706-11F1-83B2-806E6F6E6963}", "Ethernet-QoS Packet Scheduler-0000", CardMac),
+            Interface("{081CD070-C706-11F1-83B2-806E6F6E6963}", "Ethernet-WFP 802.3 MAC Layer LightWeight Filter-0000", CardMac),
+            Interface("{081CD071-C706-11F1-83B2-806E6F6E6963}", "Ethernet-WFP Native MAC Layer LightWeight Filter-0000", CardMac),
+        ]);
+
+        var card = Assert.Single(adapters);
+        Assert.Equal("Ethernet", card.Name);
+        Assert.Equal("{081CD06E-C706-11F1-83B2-806E6F6E6963}", card.Id);
+    }
+
+    [Fact]
+    public void Two_real_cards_both_stay_and_each_loses_only_its_own_filters()
+    {
+        byte[] wifiMac = [0xA4, 0xB1, 0xC1, 0x11, 0x22, 0x33];
+
+        var adapters = NetworkAdapters.Choose(
+        [
+            Interface("{E}", "Ethernet", CardMac),
+            Interface("{EQ}", "Ethernet-QoS Packet Scheduler-0000", CardMac),
+            Interface("{W}", "Wi-Fi", wifiMac, NetworkInterfaceType.Wireless80211, "Intel Wi-Fi 6E AX211"),
+            Interface("{WQ}", "Wi-Fi-QoS Packet Scheduler-0000", wifiMac, NetworkInterfaceType.Wireless80211, "Intel Wi-Fi 6E AX211"),
+        ]);
+
+        Assert.Equal(["Ethernet", "Wi-Fi"], adapters.Select(adapter => adapter.Name));
+    }
+
+    [Fact]
+    public void The_existing_rules_still_hold_after_the_filter_rule()
+    {
+        var adapters = NetworkAdapters.Choose(
+        [
+            Interface("{V}", "vEthernet (Default Switch)", [0x00, 0x15, 0x5D, 0xAA, 0xBB, 0xCC], description: "Hyper-V Virtual Ethernet Adapter"),
+            Interface("{Z}", "Local Area Connection* 1", [0, 0, 0, 0, 0, 0]),
+            Interface("{L}", "Loopback Pseudo-Interface 1", [], NetworkInterfaceType.Loopback),
+        ]);
+
+        Assert.Empty(adapters);
+    }
+
+    [Fact]
+    public void A_pc_that_applied_before_the_fix_reads_its_option_again_and_undo_cleans_up_the_filter_entries()
+    {
+        // The record from the old build holds Original Values for the card and its three filters.
+        // After the fix the row only targets the card, which still holds Akari-Dash's write, so it
+        // reads Cloudflare with Undo kept - and Undo still walks the whole record, deleting nothing
+        // that exists on the filters, because Windows already took those values away.
+        NetworkAdapter card = new("{CARD}", "Ethernet", "Microsoft Hyper-V Network Adapter");
+        NetworkAdapter[] withFilters =
+        [
+            card,
+            new("{QOS}", "Ethernet-QoS Packet Scheduler-0000", card.Description),
+        ];
+
+        var machine = new InMemoryMachine();
+        var store = new InMemoryOriginalValuesStore();
+        var oldBuild = TweakCatalog.DnsServers(withFilters);
+        var cloudflare = oldBuild.Options.Single(option => option.Id == "cloudflare");
+        new TweakEngine(machine, store).Apply(oldBuild, cloudflare);
+
+        // Restart: Windows drops the filter's values.
+        foreach (var target in oldBuild.Targets.Where(target => target.Location.ToString().Contains("{QOS}")))
+        {
+            machine.Delete(target.Location);
+        }
+
+        var engine = new TweakEngine(machine, store);
+        var fixedRow = TweakCatalog.DnsServers([card]);
+
+        var state = Assert.IsType<LiveState.InOption>(engine.ReadLiveState(fixedRow, [fixedRow]));
+        Assert.Equal("cloudflare", state.Option.Id);
+        Assert.True(engine.IsApplied(fixedRow));
+
+        engine.Undo(fixedRow);
+        Assert.All(oldBuild.Targets, target => Assert.Null(machine.Read(target.Location)));
     }
 }
