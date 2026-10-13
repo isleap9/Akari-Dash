@@ -16,9 +16,10 @@
 
 ## What is Akari Dash?
 
-Akari Dash is a gaming dashboard and Windows optimizer for Windows 10 and 11. It
-puts a PC's gaming, privacy and Windows settings in one place, and also handles the work around
-them: removing the apps Windows ships with, and in time installing software and graphics drivers.
+Akari Dash is a gaming dashboard and Windows optimizer, part of the Akari family alongside AkariOS.
+It doesn't need AkariOS: it runs on any 64-bit Windows 10 or 11 PC. It puts the PC's gaming,
+privacy and Windows settings in one place, and also handles the work around them: removing the apps
+Windows ships with, and in time installing software and graphics drivers.
 
 ## The goal
 
