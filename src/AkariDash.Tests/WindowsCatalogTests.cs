@@ -10,9 +10,9 @@ public class WindowsCatalogTests
         TweakCatalog.All.Where(tweak => tweak.Category == Category.Windows).ToList();
 
     [Fact]
-    public void Windows_page_keeps_the_four_rows_that_are_not_customize()
+    public void Windows_page_keeps_the_five_rows_that_are_not_customize()
     {
-        Assert.Equal(4, Windows.Count);
+        Assert.Equal(5, Windows.Count);
         Assert.All(Windows, tweak => Assert.StartsWith("windows.", tweak.Id));
         // Notifications, Start, Taskbar and File Explorer used to be Groups here; all are Categories now.
         Assert.Equal(
@@ -30,7 +30,8 @@ public class WindowsCatalogTests
     public void Missing_values_count_as_one_of_the_options()
     {
         // A fresh Windows has most of these values missing; it should still read as an Option, not Custom.
-        Assert.All(Windows, tweak =>
+        // The black theme is the exception: its accent values always exist, so it reads from them.
+        Assert.All(Windows.Where(tweak => tweak.Id != "windows.black-theme"), tweak =>
             Assert.Contains(tweak.Options, option =>
                 tweak.Targets.All(target => target.AbsentMeans is { } absent && Equals(option.Values[target], absent))));
     }

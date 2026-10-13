@@ -24,6 +24,7 @@ public static partial class TweakCatalog
     private static IEnumerable<DeclaredTweak> WindowsTweaks() =>
     [
         ColorMode(),
+        BlackTheme(),
 
         AltTabTabs(),
 
@@ -66,6 +67,85 @@ public static partial class TweakCatalog
         return new DeclaredTweak("windows.color-mode", "Color mode", "Light or dark colours for Windows and for apps that follow it.",
             Category.Windows, "Appearance", targets,
             [DWordOption(targets, "light", "Light", 1), DWordOption(targets, "dark", "Dark", 0)]);
+    }
+
+    private static DeclaredTweak BlackTheme()
+    {
+        // AkariOS-Ultimate's "Theme black" (MIT, Tweaks/Windows.ps1), with its own revert as the other
+        // Option: dark mode, transparency off, and the accent that Start, the taskbar and title bars
+        // are painted with set to near-black #191919 instead of a colour. Undo still restores what the
+        // PC actually had; "Windows default" is the source's revert, which is Windows' stock blue.
+        //
+        // A row of its own rather than a third Option on Color mode: that row's two values are the
+        // first two here, so they share them (and the engine reads one applied over the other as
+        // Custom, not Drift), while growing Color mode to thirteen targets would turn every PC that
+        // already applied "Dark" into Drift.
+        //
+        // Left out of the port: Control Panel\Colors\Background. AkariOS writes "0 0 0" in both
+        // directions, so it is not part of the choice, and a PC with any other desktop colour would
+        // read Custom on both Options for no reason.
+        const string personalize = @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
+        const string accent = @"Software\Microsoft\Windows\CurrentVersion\Explorer\Accent";
+        const string dwm = @"Software\Microsoft\Windows\DWM";
+
+        TweakTarget User(string key, string name, int? absent = null) => new(
+            new RegistryLocation(RegistryHive.CurrentUser, key, name),
+            AbsentMeans: absent is { } value ? RegistryValue.DWord(value) : null);
+
+        // The first two are exactly Color mode's targets, so the two rows share them.
+        TweakTarget[] targets =
+        [
+            User(personalize, "AppsUseLightTheme", 1),
+            User(personalize, "SystemUsesLightTheme", 1),
+            User(personalize, "ColorPrevalence", 0),
+            User(personalize, "EnableTransparency", 1),
+            new(new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme")),
+            User(accent, "AccentPalette"),
+            User(accent, "StartColorMenu"),
+            User(accent, "AccentColorMenu"),
+            User(dwm, "EnableWindowColorization", 0),
+            User(dwm, "AccentColor"),
+            User(dwm, "ColorizationColor"),
+            User(dwm, "ColorizationAfterglow"),
+        ];
+
+        return new DeclaredTweak(
+            "windows.black-theme",
+            "Black theme (AkariOS-Ultimate)",
+            "Dark mode with Start, the taskbar and window title bars painted near-black instead of in an accent colour, and transparency off. On an OLED monitor darker is less power and less wear on the taskbar, which never moves; it is not true black, because Windows draws its dark surfaces a shade above it. Windows default puts back the light theme and Windows' stock blue accent.",
+            Category.Windows, "Appearance", targets,
+            [
+                Theme("default", "Windows default", appsLight: 1, prevalence: 0, transparency: 1, machineAppsLight: null,
+                    palette: [0x99, 0xeb, 0xff, 0x00, 0x4c, 0xc2, 0xff, 0x00, 0x00, 0x91, 0xf8, 0x00, 0x00, 0x78, 0xd4, 0x00,
+                              0x00, 0x67, 0xc0, 0x00, 0x00, 0x3e, 0x92, 0x00, 0x00, 0x1a, 0x68, 0x00, 0xf7, 0x63, 0x0c, 0x00],
+                    startMenu: unchecked((int)0xffc06700), accentMenu: unchecked((int)0xffd47800), colorization: 0,
+                    accentColor: unchecked((int)0xffd47800), dwmColor: unchecked((int)0xc40078d4)),
+                Theme("black", "Black", appsLight: 0, prevalence: 1, transparency: 0, machineAppsLight: 0,
+                    palette: [0x64, 0x64, 0x64, 0x00, 0x6b, 0x6b, 0x6b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                              0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+                    startMenu: 0, accentMenu: 0, colorization: 1,
+                    accentColor: unchecked((int)0xff191919), dwmColor: unchecked((int)0xc4191919)),
+            ],
+            Activation: Activation.AfterSignOut);
+
+        TweakOption Theme(
+            string id, string label, int appsLight, int prevalence, int transparency, int? machineAppsLight, byte[] palette,
+            int startMenu, int accentMenu, int colorization, int accentColor, int dwmColor) =>
+            new(id, label, new Dictionary<TweakTarget, MachineValue?>
+            {
+                [targets[0]] = RegistryValue.DWord(appsLight),
+                [targets[1]] = RegistryValue.DWord(appsLight),
+                [targets[2]] = RegistryValue.DWord(prevalence),
+                [targets[3]] = RegistryValue.DWord(transparency),
+                [targets[4]] = machineAppsLight is { } machine ? RegistryValue.DWord(machine) : null,
+                [targets[5]] = new RegistryValue(RegistryValueKind.Binary, palette),
+                [targets[6]] = RegistryValue.DWord(startMenu),
+                [targets[7]] = RegistryValue.DWord(accentMenu),
+                [targets[8]] = RegistryValue.DWord(colorization),
+                [targets[9]] = RegistryValue.DWord(accentColor),
+                [targets[10]] = RegistryValue.DWord(dwmColor),
+                [targets[11]] = RegistryValue.DWord(dwmColor),
+            });
     }
 
     private static DeclaredTweak LongPaths()
