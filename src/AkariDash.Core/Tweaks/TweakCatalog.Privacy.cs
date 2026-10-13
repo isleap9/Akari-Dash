@@ -83,6 +83,9 @@ public static partial class TweakCatalog
         AppAccess("account-info", "Account info", "Lets apps read your name, picture and other details of the account you are signed in with.", "userAccountInformation"),
         AppAccess("app-diagnostics", "App diagnostics", "Lets apps read diagnostic details about the other apps running on this PC, such as their name, user name and memory use.", "appDiagnostics"),
         Copilot(),
+        CopilotBrowsing(),
+        CopilotCoworkActions(),
+        BingChatEligibility(),
         RecallSnapshots(),
         ClickToDo(),
         AIInPaint(),
@@ -784,6 +787,36 @@ public static partial class TweakCatalog
         }
     }
 
+    // The Copilot & AI Group, and what #34 asked for that is not in it.
+    //
+    // ADR-0003 allows Winhance as a source of values only at the MIT snapshot 4dc441a0. Everything
+    // #34 listed came from the Shield-era tree, which may be read to learn that a setting exists but
+    // never for its key, value name or data. So every value below had to be found again somewhere
+    // else, and most of them could not be:
+    //
+    //   Not documented by Microsoft as a registry policy at all, and in no MIT source either, so
+    //   there is nothing to write that we could stand behind: Copilot Runtime, Copilot Availability,
+    //   Copilot Nudges, Copilot Microphone Access, Generative AI Access, System AI Models Access,
+    //   AI Consumer Content, Input Insights, AI Agent Workspaces, Remote AI Agent Connectors, and
+    //   Paint's generative erase and remove background. Microsoft's Paint policies are the three
+    //   AIInPaint already writes; there is no fourth or fifth.
+    //
+    //   Documented, but dead on the editions Akari-Dash is for. The WindowsAI CSP marks
+    //   DisableSettingsAgent (the AI settings agent), ConfigureAgentConnectors, AgentConsentDuration,
+    //   AgentConnectorAccessPolicy, DisableRecallDataProviders, AllowRecallExport and
+    //   OnDeviceRegistryLoggingLevel as Windows Insider Preview, and all but the first as Enterprise,
+    //   Education and IoT only. DisableSettingsAgent is explicitly not Pro. Writing them on a Home or
+    //   Pro PC changes nothing, and a row that does nothing is worse than no row.
+    //
+    //   Not a Tweak, because it cannot be undone: RemoveMicrosoftCopilotApp uninstalls the Copilot
+    //   app, the same reason AllowRecallEnablement stays out (see RecallSnapshots).
+    //
+    //   Not ours to hold: SetDenyAppListForRecall, SetDenyUriListForRecall and the two Recall storage
+    //   limits are Enterprise and Education only; SetCopilotHardwareKey picks which app the Copilot
+    //   key opens, which is a choice of app rather than an on or off.
+    //
+    //   Somebody else's page: ShowCopilotButton hides the taskbar button, and the taskbar belongs to
+    //   #32's Customize pages. Putting it here would only mean moving it later.
     private static DeclaredTweak Copilot() =>
         // Akari-OS sets TurnOffWindowsCopilot for the user and the machine. Microsoft documents it
         // as deprecated: it turns off the older Copilot pane, not the newer Copilot app.
@@ -797,6 +830,45 @@ public static partial class TweakCatalog
                 new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot", "TurnOffWindowsCopilot"),
             ],
             activation: Activation.AfterSignOut);
+
+    /// <summary>
+    /// The Copilot app's own policies, which Microsoft documents under SOFTWARE\Policies\Microsoft\Copilot
+    /// in "Configure Microsoft Copilot policies" — a different key from the Windows Copilot pane that
+    /// <see cref="Copilot"/> turns off, and the only part of #34's Copilot list with a published
+    /// registry value. Both are Enabled policies, so Off is 0 rather than 1.
+    /// </summary>
+    private static DeclaredTweak CopilotPolicy(string id, string title, string description, string name) =>
+        OffByPolicy(id, title, description, "Copilot & AI",
+            [new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Copilot", name)],
+            offValue: 0, handBackLabel: "As Copilot decides");
+
+    private static DeclaredTweak CopilotBrowsing() =>
+        CopilotPolicy(
+            "privacy.copilot-browsing",
+            "Browsing inside Copilot",
+            "Stops the Copilot app browsing the web from inside itself, so a page it would have opened in its own window opens in your browser instead, where your extensions and blockers apply. Copilot still answers from the web. The app reads this when it next starts.",
+            "BrowsingEnabled");
+
+    private static DeclaredTweak CopilotCoworkActions() =>
+        CopilotPolicy(
+            "privacy.copilot-cowork-actions",
+            "Let Copilot act on your behalf",
+            "Whether Copilot's Cowork may take actions for you rather than only answering — opening and changing things itself. Off also greys the switch out in Copilot's own settings, so nothing can turn it back on there. The app reads this when it next starts.",
+            "CopilotCoworkToolActionsEnabled");
+
+    private static DeclaredTweak BingChatEligibility() =>
+        // Akari-OS's reg.reg (MIT) sets IsUserEligible to 0. Microsoft does not document this one, so
+        // it is a shell flag rather than a policy: Windows may well write it itself from the account's
+        // region, in which case it reads as Drift after an apply and belongs in the list above instead.
+        // The VM pass for #34 is what decides that.
+        OffByPolicy(
+            "privacy.bing-chat-eligibility",
+            "Bing Chat in Copilot",
+            "Marks this PC as not eligible for the Bing Chat experience Windows offers through Copilot. Not a policy Microsoft publishes, so Windows may set it back itself; if it does, the row says so rather than pretending it held.",
+            "Copilot & AI",
+            [new RegistryLocation(RegistryHive.LocalMachine, @"Software\Microsoft\Windows\Shell\Copilot\BingChat", "IsUserEligible")],
+            offValue: 0,
+            handBackLabel: "As Windows decides");
 
     private static DeclaredTweak RecallSnapshots() =>
         // Akari-OS also sets AllowRecallEnablement to 0, but Microsoft documents that it removes
