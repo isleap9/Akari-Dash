@@ -5,5 +5,7 @@
     xmlns:views="using:AkariDash.App.Views">
 
     <!-- A placeholder: nothing behind it yet. -->
-    <views:WorkInProgressView Glyph="&#xE7F8;" Description="GPU settings for NVIDIA, AMD and Intel cards, driver installs and a clean driver reset with DDU will live here." />
+    <views:WorkInProgressView
+        Glyph="&#xE950;"
+        Description="For tuning by hand: the graphics card's details, every NVIDIA driver profile setting, and display tools. What gets a card ready to play lives on Drivers." />
 </Page>

@@ -59,22 +59,32 @@
                 <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent" />
             </NavigationView.Resources>
 
-            <!-- One template for every level: a leaf has no Children, so it gets no chevron, and a
-                 parent has no page, so picking it only opens the branch. A branch starts closed;
-                 RefreshShellState opens it when the user lands on one of its pages another way. -->
-            <NavigationView.MenuItemTemplate>
-                <DataTemplate x:DataType="local:NavigationItem">
-                    <NavigationViewItem
-                        Content="{x:Bind Label}"
-                        Tag="{x:Bind PageType}"
-                        MenuItemsSource="{x:Bind Children}"
-                        SelectsOnInvoked="{x:Bind IsPage}">
-                        <NavigationViewItem.Icon>
-                            <FontIcon Glyph="{x:Bind Glyph}" />
-                        </NavigationViewItem.Icon>
-                    </NavigationViewItem>
-                </DataTemplate>
-            </NavigationView.MenuItemTemplate>
+            <!-- Section headings (Performance, Windows, Apps, Advanced) draw as headers. Every other
+                 item: a leaf has no Children, so it gets no chevron, and a parent has no page, so
+                 picking it only opens the branch. A branch starts closed; RefreshShellState opens it
+                 when the user lands on one of its pages another way. -->
+            <NavigationView.MenuItemTemplateSelector>
+                <local:NavItemTemplateSelector>
+                    <local:NavItemTemplateSelector.HeaderTemplate>
+                        <DataTemplate x:DataType="local:NavigationItem">
+                            <NavigationViewItemHeader Content="{x:Bind Label}" />
+                        </DataTemplate>
+                    </local:NavItemTemplateSelector.HeaderTemplate>
+                    <local:NavItemTemplateSelector.ItemTemplate>
+                        <DataTemplate x:DataType="local:NavigationItem">
+                            <NavigationViewItem
+                                Content="{x:Bind Label}"
+                                Tag="{x:Bind PageType}"
+                                MenuItemsSource="{x:Bind Children}"
+                                SelectsOnInvoked="{x:Bind IsPage}">
+                                <NavigationViewItem.Icon>
+                                    <FontIcon Glyph="{x:Bind Glyph}" />
+                                </NavigationViewItem.Icon>
+                            </NavigationViewItem>
+                        </DataTemplate>
+                    </local:NavItemTemplateSelector.ItemTemplate>
+                </local:NavItemTemplateSelector>
+            </NavigationView.MenuItemTemplateSelector>
 
             <Grid>
                 <Grid.RowDefinitions>

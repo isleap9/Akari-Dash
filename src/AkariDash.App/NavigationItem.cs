@@ -17,6 +17,12 @@ public sealed record NavigationItem(
     public static NavigationItem Parent(string label, string glyph, IReadOnlyList<NavigationItem> children) =>
         new(label, glyph, null, children);
 
+    /// <summary>A section heading in the pane (Performance, Windows, Apps, Advanced): no page, no icon.</summary>
+    public static NavigationItem Header(string label) => new(label, string.Empty, null) { IsHeader = true };
+
+    /// <summary>Whether this is a section heading rather than an item.</summary>
+    public bool IsHeader { get; private init; }
+
     /// <summary>Whether picking this item navigates. False for a parent, which only expands.</summary>
     public bool IsPage => PageType is not null;
 
