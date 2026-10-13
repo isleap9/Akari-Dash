@@ -56,7 +56,7 @@ public class UpdateCatalogTests
     [InlineData("update.restart-notification", "nothing is said")]
     [InlineData("update.drivers", "generic driver")]
     [InlineData("update.store-app-updates", "security fixes included")]
-    [InlineData("update.policy", "arrive late")]
+    [InlineData("update.policy", "without security fixes")]
     public void A_row_that_holds_an_update_back_says_so_in_its_own_description(string id, string cost)
     {
         // The rule for this page, from the ticket: a user who defers an update or blocks a driver
@@ -77,10 +77,11 @@ public class UpdateCatalogTests
     }
 
     [Fact]
-    public void The_preset_is_the_only_row_that_shares_a_value_with_another_row_on_this_page()
+    public void The_policy_row_is_the_only_one_that_shares_a_value_with_another_row_on_this_page()
     {
-        // Two owners of one value fight: each reads the other's apply as drift of its own. The preset
-        // is the one place the catalog allows it, because covering the rows below is its whole job.
+        // Two owners of one value fight: each reads the other's apply as drift of its own. The modes
+        // of update.policy are the one place the catalog allows it, because covering the rows below is
+        // half of what that row is for.
         var rows = Updates.Where(tweak => tweak.Id != "update.policy").ToList();
 
         Assert.Equal(
@@ -89,25 +90,117 @@ public class UpdateCatalogTests
     }
 
     [Fact]
-    public void The_preset_covers_exactly_the_three_update_policy_rows_it_names()
+    public void The_policy_row_offers_winhances_four_modes_with_akarios_pause_among_them()
     {
-        var preset = Find("update.policy");
-        string[] covered = ["update.automatic-updates", "update.feature-updates", "update.quality-updates"];
-
         Assert.Equal(
-            covered.SelectMany(id => Locations(Find(id))).ToHashSet(),
-            Locations(preset).ToHashSet());
+            ["normal", "security-only", "akari-pause", "paused", "off"],
+            Find("update.policy").Options.Select(option => option.Id));
+    }
 
-        // Each Option writes what the covered row's own Option of the same mind writes, value for value.
-        foreach (var (presetOption, rowOption) in new[] { ("settings-decides", 0), ("hold-back", 1) })
+    [Fact]
+    public void Security_updates_only_sets_the_three_rows_below_it_to_their_own_held_back_options()
+    {
+        // The preset relationship, as privacy.suggestions-preset has it: after this Option is applied,
+        // each covered row reads its own state back correctly instead of reading Custom.
+        var mode = OptionOf("update.policy", "security-only");
+        (string Id, int Option)[] covered =
+        [
+            ("update.automatic-updates", 1), ("update.feature-updates", 1), ("update.quality-updates", 1),
+        ];
+
+        foreach (var (id, index) in covered)
         {
-            foreach (var id in covered)
-            {
-                var row = Find(id);
-                var option = row.Options[rowOption];
-                Assert.All(row.Targets, target =>
-                    Assert.Equal(option.Values[target], OptionOf("update.policy", presetOption).Values[target]));
-            }
+            var row = Find(id);
+            var option = row.Options[index];
+            Assert.All(row.Targets, target => Assert.Equal(option.Values[target], mode.Values[target]));
+        }
+
+        // And it writes nothing those three do not: no pause, no WSUS, no shutdown option.
+        var theirs = covered.SelectMany(pair => Locations(Find(pair.Id))).ToHashSet();
+        Assert.All(
+            Find("update.policy").Targets.Where(target => !theirs.Contains((RegistryLocation)target.Location)),
+            target => Assert.Null(mode.Values[target]));
+    }
+
+    [Fact]
+    public void Pausing_for_a_long_time_also_hides_update_and_shut_down()
+    {
+        // The one other row Winhance's paused mode reaches into, so it must read itself back too.
+        var shutdown = Find("update.shutdown-option");
+        var hide = OptionOf("update.shutdown-option", "hide");
+        var mode = OptionOf("update.policy", "paused");
+
+        Assert.All(shutdown.Targets, target => Assert.Equal(hide.Values[target], mode.Values[target]));
+    }
+
+    [Fact]
+    public void Akarios_pause_writes_the_six_values_settings_writes_and_nothing_else()
+    {
+        // AkariOS-Ultimate pauses with the Settings page's own six values; Winhance's mode writes
+        // those plus the paused-status pair, FlightSettingsMaxPauseDays and the AU policies. So the
+        // Windows Update page still works under the AkariOS Option and still reads Paused.
+        var policy = Find("update.policy");
+        var akari = OptionOf("update.policy", "akari-pause");
+        string[] six =
+        [
+            "PauseUpdatesStartTime", "PauseFeatureUpdatesStartTime", "PauseQualityUpdatesStartTime",
+            "PauseUpdatesExpiryTime", "PauseFeatureUpdatesEndTime", "PauseQualityUpdatesEndTime",
+        ];
+
+        var written = policy.Targets
+            .Where(target => akari.Values[target] is not null)
+            .Select(target => ((RegistryLocation)target.Location).Name)
+            .ToList();
+        Assert.Equal(six.Order(), written.Order());
+
+        // Fixed dates, so the row reads back as an Option rather than for ever as Custom. The start
+        // must be in the past and the end far enough out that the pause does not expire on its own.
+        foreach (var target in policy.Targets.Where(target => akari.Values[target] is not null))
+        {
+            var written_ = Assert.IsType<RegistryValue>(akari.Values[target]);
+            var when = DateTimeOffset.Parse((string)written_.Data);
+            var isStart = ((RegistryLocation)target.Location).Name.Contains("Start");
+            Assert.True(isStart ? when < DateTimeOffset.UtcNow : when > DateTimeOffset.UtcNow.AddYears(20), target.Location.ToString());
+        }
+    }
+
+    [Fact]
+    public void The_two_paused_modes_cannot_be_mistaken_for_one_another()
+    {
+        var policy = Find("update.policy");
+        var akari = OptionOf("update.policy", "akari-pause");
+        var winhance = OptionOf("update.policy", "paused");
+
+        Assert.NotEqual(
+            policy.Targets.Select(target => akari.Values[target]),
+            policy.Targets.Select(target => winhance.Values[target]));
+
+        // Winhance's is the superset: everything AkariOS writes, at the same value, plus its own.
+        Assert.All(
+            policy.Targets.Where(target => akari.Values[target] is not null),
+            target => Assert.Equal(akari.Values[target], winhance.Values[target]));
+    }
+
+    [Fact]
+    public void The_policy_row_is_the_only_owner_of_the_pause_window_and_the_wsus_values()
+    {
+        // They were left out as rows of their own: nobody picks AutoInstallMinorUpdates on purpose.
+        string[] itsAlone =
+        [
+            "UseWUServer", "AutoInstallMinorUpdates", "AlwaysAutoRebootAtScheduledTime",
+            "PauseUpdatesStartTime", "PauseUpdatesExpiryTime", "PauseFeatureUpdatesStartTime",
+            "PauseFeatureUpdatesEndTime", "PauseQualityUpdatesStartTime", "PauseQualityUpdatesEndTime",
+            "PausedFeatureDate", "PausedQualityDate", "PausedFeatureStatus", "PausedQualityStatus",
+            "FlightSettingsMaxPauseDays",
+        ];
+
+        foreach (var name in itsAlone)
+        {
+            var owners = TweakCatalog.All
+                .Where(tweak => tweak.Targets.Any(target => target.Location is RegistryLocation location && location.Name == name))
+                .Select(tweak => tweak.Id);
+
+            Assert.Equal("update.policy", Assert.Single(owners));
         }
     }
 
@@ -117,7 +210,7 @@ public class UpdateCatalogTests
         // Deleting a policy value is what hands the choice back to the Windows Update page.
         var handsBack = Updates
             .SelectMany(tweak => tweak.Options.Select(option => (tweak, option)))
-            .Where(pair => pair.option.Id is "settings-decides" or "windows-default" or "show" or "include")
+            .Where(pair => pair.option.Id is "settings-decides" or "windows-default" or "normal" or "show" or "include")
             .ToList();
 
         Assert.Equal(9, handsBack.Count);
@@ -280,22 +373,4 @@ public class UpdateCatalogTests
         Assert.All(Updates, tweak => Assert.Equal(Activation.Immediately, tweak.Activation));
     }
 
-    [Fact]
-    public void Winhances_wsus_and_paused_mode_values_are_left_alone()
-    {
-        // Documented in TweakCatalog.Update.cs: UseWUServer is not this page's decision, and the
-        // paused mode writes a pause window with dates baked into the build.
-        string[] untouched =
-        [
-            "UseWUServer", "AutoInstallMinorUpdates", "AlwaysAutoRebootAtScheduledTime",
-            "PauseUpdatesStartTime", "PauseUpdatesExpiryTime", "PauseFeatureUpdatesStartTime",
-            "PauseFeatureUpdatesEndTime", "PauseQualityUpdatesStartTime", "PauseQualityUpdatesEndTime",
-            "PausedFeatureDate", "PausedQualityDate", "PausedFeatureStatus", "PausedQualityStatus",
-            "FlightSettingsMaxPauseDays",
-        ];
-
-        Assert.DoesNotContain(
-            TweakCatalog.All.SelectMany(tweak => tweak.Targets).Select(target => target.Location).OfType<RegistryLocation>(),
-            location => untouched.Contains(location.Name));
-    }
 }
