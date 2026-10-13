@@ -130,6 +130,18 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
+                <!-- The Options a card has no chip for; picking one asks to apply it, as a row's
+                     selector does, rather than waiting for Apply like the chips. -->
+                <ComboBox
+                    Visibility="{x:Bind IsOtherOptionsVisible}"
+                    MinWidth="280"
+                    HorizontalAlignment="Left"
+                    Header="Every combination"
+                    PlaceholderText="Custom"
+                    ItemsSource="{x:Bind Options}"
+                    DisplayMemberPath="Label"
+                    SelectedItem="{x:Bind SelectedOption, Mode=TwoWay}" />
+
                 <Grid ColumnSpacing="16">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />

@@ -103,9 +103,11 @@ public class GamingWinhanceTests
     }
 
     [Fact]
-    public void Only_the_svchost_split_is_drawn_as_a_tuner()
+    public void Only_the_two_processor_tuners_are_drawn_as_tuners()
     {
-        Assert.Equal(["gaming.svchost-split"], TweakCatalog.All.Where(tweak => tweak.Tuner is not null).Select(tweak => tweak.Id));
+        Assert.Equal(
+            ["gaming.processor-scheduling", "gaming.svchost-split"],
+            TweakCatalog.All.Where(tweak => tweak.Tuner is not null).Select(tweak => tweak.Id));
     }
 
     [Fact]

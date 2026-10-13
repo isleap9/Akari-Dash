@@ -302,15 +302,34 @@ public static partial class TweakCatalog
             select DWordOption(separation, $"0x{value:X2}", $"{lengths[length]} · {types[type]} · {boosts[boost]} (0x{value:X2})", value))
             .ToList();
 
+        // Drawn as a tuner card next to the SvcHost split, with a chip for each of the three values
+        // a PC is normally in: Windows' own Performance Options writes 0x26 for "Programs" and 0x18
+        // for "Background services", and a fresh install has 0x02. The other 24 combinations stay in
+        // the card's list, so nothing the matrix could reach is lost.
+        var windowsDefault = options.Single(option => option.Id == "0x02");
+        var programs = options.Single(option => option.Id == "0x26");
+        var backgroundServices = options.Single(option => option.Id == "0x18");
+
         return new DeclaredTweak(
             Id: "gaming.processor-scheduling",
             Title: "Processor scheduling",
-            Description: "How long each app gets the CPU at a time, and how much the window in front, such as your game, is favoured over everything in the background.",
+            Description: "How long each app gets the CPU at a time, and how much the window in front, such as your game, is favoured over everything in the background. Programs and Background services are the two presets in Windows' own Performance Options; the list holds every combination.",
             Category: Category.Gaming,
             Group: "Processor",
             Targets: [separation],
             Options: options,
-            Recommended: options.Single(option => option.Id == "0x26"));
+            Recommended: programs,
+            Tuner: new TunerLayout(
+                windowsDefault,
+                Unit: string.Empty,
+                Detail: "Windows default: 0x02",
+                Chips:
+                [
+                    new TunerChip(windowsDefault, "Windows default"),
+                    new TunerChip(programs, "Programs"),
+                    new TunerChip(backgroundServices, "Background services"),
+                ],
+                Hex: true));
     }
 
     private static DeclaredTweak PowerThrottling()

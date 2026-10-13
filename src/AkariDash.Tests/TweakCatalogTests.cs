@@ -163,6 +163,37 @@ public class TweakCatalogTests
     }
 
     [Fact]
+    public void Processor_scheduling_chips_the_three_values_a_pc_is_normally_in()
+    {
+        var tuner = Find("gaming.processor-scheduling").Tuner;
+
+        // Windows' own Performance Options presets, plus what a fresh install has, under its names.
+        Assert.Equal(["Windows default", "Programs", "Background services"], tuner?.Chips?.Select(chip => chip.Label));
+        Assert.Equal(["0x02", "0x26", "0x18"], tuner?.Chips?.Select(chip => chip.Option.Id));
+        Assert.Equal("0x02", tuner?.DefaultOption.Id);
+        Assert.Equal("Windows default: 0x02", tuner?.Detail);
+        Assert.True(tuner?.Hex);
+    }
+
+    [Fact]
+    public void Processor_schedulings_other_combinations_stay_reachable_beside_the_chips()
+    {
+        var tweak = Find("gaming.processor-scheduling");
+
+        // The card chips three of the 27; the rest are the Options the card's own list holds.
+        Assert.Equal(3, tweak.Tuner?.Chips?.Count);
+        Assert.Equal(27, tweak.Options.Count);
+        Assert.All(tweak.Tuner!.Chips!, chip => Assert.Contains(chip.Option, tweak.Options));
+    }
+
+    [Fact]
+    public void A_tuner_without_its_own_chips_draws_every_option()
+    {
+        // The SvcHost split names its Options for the card, so it needs no separate chip labels.
+        Assert.Null(Find("gaming.svchost-split").Tuner?.Chips);
+    }
+
+    [Fact]
     public void Services_live_only_on_the_services_page_and_tasks_only_in_gamings_scheduled_tasks()
     {
         foreach (var tweak in TweakCatalog.All)

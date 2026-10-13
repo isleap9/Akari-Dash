@@ -82,14 +82,20 @@ public sealed partial class TweakViewModel : ViewModelBase
 
         if (tweak.Tuner is { } tuner)
         {
-            Chips = tweak.Options.Select(option => new TunerChipViewModel(option, option == _selectedOption, Pick)).ToList();
+            Chips = tuner.Chips is { } chips
+                ? chips.Select(chip => new TunerChipViewModel(chip.Option, chip.Label, chip.Option == _selectedOption, Pick)).ToList()
+                : tweak.Options.Select(option => new TunerChipViewModel(option, option.Label, option == _selectedOption, Pick)).ToList();
+
+            // A card that chips only some of its Options keeps the rest in a list beside them.
+            HasOtherOptions = Chips.Count < tweak.Options.Count;
+
             var current = actual switch
             {
                 LiveState.InOption inOption => inOption.Option.Values[tweak.Targets[0]],
                 LiveState.Custom customValue => customValue.Values[0].Value,
                 _ => null,
             };
-            TunerCurrent = $"Current: {DescribeNumber(current, tuner.Unit)}" + (tuner.Detail is { } detail ? $"   |   {detail}" : string.Empty);
+            TunerCurrent = $"Current: {DescribeNumber(current, tuner)}" + (tuner.Detail is { } detail ? $"   |   {detail}" : string.Empty);
         }
     }
 
@@ -101,6 +107,12 @@ public sealed partial class TweakViewModel : ViewModelBase
 
     /// <summary>A tuner card's "Current: ..." line, with its detail (such as this PC's RAM).</summary>
     public string? TunerCurrent { get; }
+
+    /// <summary>The tuner card chips only some of its Options, so the rest need a list of their own.</summary>
+    public bool HasOtherOptions { get; }
+
+    /// <summary>That list is hidden on an Unavailable Tweak, like every other way of changing it.</summary>
+    public bool IsOtherOptionsVisible => HasOtherOptions && !IsUnavailable;
 
     /// <summary>Re-reads the live value, like AkariOS-Ultimate's Read current.</summary>
     [RelayCommand]
@@ -134,12 +146,14 @@ public sealed partial class TweakViewModel : ViewModelBase
         }
     }
 
-    // A DWORD shown as AkariOS-Ultimate shows it: unsigned, with thousands separators.
-    private static string DescribeNumber(MachineValue? value, string unit) => value switch
+    // A DWORD shown as AkariOS-Ultimate shows it: unsigned, with thousands separators, or as hex
+    // with its decimal in brackets for a value that is normally written that way.
+    private static string DescribeNumber(MachineValue? value, TunerLayout tuner) => value switch
     {
-        RegistryValue { Data: int number } => $"{unchecked((uint)number):N0} {unit}",
+        RegistryValue { Data: int number } when tuner.Hex => $"0x{unchecked((uint)number):X2} ({unchecked((uint)number)})",
+        RegistryValue { Data: int number } => $"{unchecked((uint)number):N0} {tuner.Unit}",
         null => "not set",
-        _ => $"{MachineValue.Describe(value)} {unit}",
+        _ => $"{MachineValue.Describe(value)} {tuner.Unit}".TrimEnd(),
     };
 
     public string Description { get; }
