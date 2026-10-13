@@ -16,8 +16,9 @@ public class WindowsCatalogTests
     {
         Assert.InRange(Windows.Count, 18, 25);
         Assert.All(Windows, tweak => Assert.StartsWith("windows.", tweak.Id));
+        // Notifications used to be a Group here; it is a Category of its own now.
         Assert.Equal(
-            ["Appearance", "File Explorer", "Multitasking", "Notifications", "Start", "System", "Taskbar"],
+            ["Appearance", "File Explorer", "Multitasking", "Start", "System", "Taskbar"],
             Windows.Select(tweak => tweak.Group).Distinct().Order());
     }
 

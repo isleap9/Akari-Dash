@@ -84,6 +84,7 @@ public sealed partial class MainWindow : Window
         new("Gaming", "\uE7FC", typeof(GamingPage)),
         new("Privacy", "\uE72E", typeof(PrivacyPage)),
         new("Services", "\uE9F5", typeof(ServicesPage)),
+        new("Notifications", "\uEA8F", typeof(NotificationsPage)),
         new("Windows", "\uE771", typeof(WindowsPage)),
         new("Security", "\uEA18", typeof(SecurityPage)),
     ];
@@ -94,6 +95,7 @@ public sealed partial class MainWindow : Window
         [Category.Gaming] = typeof(GamingPage),
         [Category.Privacy] = typeof(PrivacyPage),
         [Category.Services] = typeof(ServicesPage),
+        [Category.Notifications] = typeof(NotificationsPage),
         [Category.Windows] = typeof(WindowsPage),
         [Category.Security] = typeof(SecurityPage),
     };

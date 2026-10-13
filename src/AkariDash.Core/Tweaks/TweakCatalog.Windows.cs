@@ -12,7 +12,8 @@ namespace AkariDash.Core.Tweaks;
 // section needs the device to pretend to be a school PC (IsEducationEnvironment), which changes more
 // than Start. The Copilot taskbar button is gone in current Windows; privacy.copilot covers Copilot.
 // EnableAutoTray (show all notification area icons), which Akari-OS sets, made no visible difference
-// in the VM on build 26300, so it is left out too.
+// in the VM on build 26300, so it is left out too. The Notifications Group that used to be here
+// is a Category of its own now; see TweakCatalog.Notifications.cs.
 public static partial class TweakCatalog
 {
     private const string ExplorerKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer";
@@ -54,13 +55,6 @@ public static partial class TweakCatalog
         ColorMode(),
 
         AltTabTabs(),
-
-        OnOff("windows.tips-notifications", "Tips and suggestions", "Shows notifications with tips and suggestions as you use Windows.",
-            "Notifications", ContentDelivery, "SubscribedContent-338389Enabled", absent: 1),
-        OnOff("windows.welcome-experience", "Welcome experience after updates", "Shows a full-screen page about what is new after a Windows update, and sometimes after signing in.",
-            "Notifications", ContentDelivery, "SubscribedContent-310093Enabled", absent: 1),
-        OnOff("windows.finish-setup", "Finish setting up this PC", "Shows reminders to finish setting up Windows, such as signing in to OneDrive or Microsoft 365.",
-            "Notifications", @"Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement", "ScoobeSystemSettingEnabled", absent: 1),
 
         LongPaths(),
         DetailedBlueScreen(),
