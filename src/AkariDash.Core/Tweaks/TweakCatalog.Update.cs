@@ -20,9 +20,12 @@ namespace AkariDash.Core.Tweaks;
 //
 // Left out of Winhance's own update page:
 //
-//   UseWUServer, AutoInstallMinorUpdates and AlwaysAutoRebootAtScheduledTime as rows of their own.
-//   They are not decisions anybody makes one at a time; they are part of what Winhance's paused and
-//   disabled modes do, and update.policy writes them there.
+//   AutoInstallMinorUpdates and AlwaysAutoRebootAtScheduledTime, which Winhance writes only inside
+//   its own paused mode, and that mode is not here (see UpdatePolicy). Restart behaviour is one
+//   decision on this page, update.restart-while-signed-in.
+//
+//   UseWUServer as a row of its own: nobody picks it one at a time. update.policy writes it to 0
+//   inside Disabled, which is where Winhance writes it too.
 public static partial class TweakCatalog
 {
     private const string AutoUpdatePolicies = @"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU";
@@ -70,16 +73,21 @@ public static partial class TweakCatalog
         ];
 
     /// <summary>
-    /// Winhance's own update policy switch (its updates-policy-mode, over the same 28 values), with
-    /// AkariOS-Ultimate's pause as a fifth Option. One decision — how this PC updates — in the modes
-    /// a person actually picks between, rather than one row per registry value.
+    /// Winhance's own update policy switch (its updates-policy-mode), with AkariOS-Ultimate's pause
+    /// in place of Winhance's. One decision — how this PC updates — in the modes a person actually
+    /// picks between, rather than one row per registry value.
     ///
-    /// It covers the rows below it the way privacy.suggestions-preset covers its Group: Security
-    /// updates only writes exactly what update.automatic-updates, update.feature-updates and
-    /// update.quality-updates write for their own held-back Options, and Paused for a long time also
-    /// writes update.shutdown-option's value, so each of those rows reads its own state back
-    /// correctly afterwards. The pause window, the paused-status values, UseWUServer,
-    /// AutoInstallMinorUpdates and AlwaysAutoRebootAtScheduledTime are this row's alone.
+    /// Winhance's "Paused for a long time" is not here. AkariOS-Ultimate pauses with the six values
+    /// Settings' own Pause updates page writes; Winhance writes those plus PausedFeatureDate and
+    /// PausedQualityDate, the paused-status pair, the undocumented FlightSettingsMaxPauseDays, and
+    /// NoAUShutdownOption, AlwaysAutoRebootAtScheduledTime, AutoInstallMinorUpdates and UseWUServer
+    /// on top — a pause wearing most of Disabled, over values three other rows here already own.
+    /// One pause, the smaller one, and the Windows Update page keeps working under it.
+    ///
+    /// What is left still covers the rows below it, the way privacy.suggestions-preset covers its
+    /// Group: Security updates only writes exactly what update.automatic-updates,
+    /// update.feature-updates and update.quality-updates write for their own held-back Options, so
+    /// each reads its own state back afterwards. The pause window and UseWUServer are this row's alone.
     /// </summary>
     private static DeclaredTweak UpdatePolicy()
     {
@@ -93,9 +101,6 @@ public static partial class TweakCatalog
 
         TweakTarget[] noAutoUpdate = [.. AutoUpdatePolicy("NoAutoUpdate")];
         TweakTarget[] auOptions = [.. AutoUpdatePolicy("AUOptions")];
-        TweakTarget[] shutdownOption = [.. AutoUpdatePolicy("NoAUShutdownOption")];
-        TweakTarget[] rebootAtScheduledTime = [.. AutoUpdatePolicy("AlwaysAutoRebootAtScheduledTime")];
-        TweakTarget[] minorUpdates = [.. AutoUpdatePolicy("AutoInstallMinorUpdates")];
         TweakTarget[] wsus = [.. AutoUpdatePolicy("UseWUServer")];
 
         TweakTarget[] deferral =
@@ -108,24 +113,12 @@ public static partial class TweakCatalog
         // The six values Settings' own Pause updates page writes, which is all AkariOS-Ultimate touches.
         TweakTarget[] pauseStarts = [Ux("PauseUpdatesStartTime"), Ux("PauseFeatureUpdatesStartTime"), Ux("PauseQualityUpdatesStartTime")];
         TweakTarget[] pauseEnds = [Ux("PauseUpdatesExpiryTime"), Ux("PauseFeatureUpdatesEndTime"), Ux("PauseQualityUpdatesEndTime")];
-        // What Winhance writes on top: the paused-status pair Windows Update keeps for itself, and
-        // FlightSettingsMaxPauseDays, which is undocumented and is what lets the pause run past the
-        // five weeks Settings allows.
-        TweakTarget[] pausedDates = [Ux("PausedFeatureDate"), Ux("PausedQualityDate")];
-        TweakTarget[] pausedStatus = [Ux("PausedFeatureStatus"), Ux("PausedQualityStatus")];
-        TweakTarget[] maxPauseDays = [Ux("FlightSettingsMaxPauseDays")];
-
-        TweakTarget[] targets =
-        [
-            .. noAutoUpdate, .. auOptions, .. deferral,
-            .. pauseStarts, .. pauseEnds, .. pausedDates, .. pausedStatus, .. maxPauseDays,
-            .. shutdownOption, .. rebootAtScheduledTime, .. minorUpdates, .. wsus,
-        ];
+        TweakTarget[] targets = [.. noAutoUpdate, .. auOptions, .. deferral, .. pauseStarts, .. pauseEnds, .. wsus];
 
         return new DeclaredTweak(
             Id: "update.policy",
             Title: "Windows Update policy",
-            Description: "How this PC updates, as one choice, and it sets the rows below it to match. Security updates only makes Windows ask before downloading anything and holds the next Windows version back a year and each month's fixes back a week. Both paused modes stop updates outright until you undo this or unpause in Settings: AkariOS pauses with the six values Settings' own Pause updates page writes and nothing else, so that page still works and still says Paused, while Winhance's also switches automatic updates off, hides Update and shut down, and writes the paused-status values that make it stick. Disabled is the bluntest of them. Everything but Normal leaves this PC without security fixes for as long as it is set, and a PC that misses a month of them is a PC with known holes in it.",
+            Description: "How this PC updates, as one choice, and it sets the rows below it to match. Security updates only makes Windows ask before downloading anything and holds the next Windows version back a year and each month's fixes back a week. Paused stops updates outright until you undo this or press Resume in Settings, written the way AkariOS-Ultimate writes it — the six values Settings' own Pause updates page uses and nothing else, so that page keeps working and reads Paused. Disabled is the bluntest of the three: Windows stops looking for updates at all. Everything but Normal leaves this PC without security fixes for as long as it is set, and a PC that misses a month of them is a PC with known holes in it.",
             Category: Category.Update,
             Group: "Update policy",
             Targets: targets,
@@ -144,20 +137,6 @@ public static partial class TweakCatalog
                 {
                     Set(values, pauseStarts, RegistryValue.String(PausedFrom));
                     Set(values, pauseEnds, RegistryValue.String(PausedUntil));
-                }),
-                Mode("paused", "Paused for a long time (Winhance)", values =>
-                {
-                    Set(values, noAutoUpdate, RegistryValue.DWord(1));
-                    Set(values, auOptions, RegistryValue.DWord(1));
-                    Set(values, pauseStarts, RegistryValue.String(PausedFrom));
-                    Set(values, pauseEnds, RegistryValue.String(PausedUntil));
-                    Set(values, pausedDates, RegistryValue.String(PausedFrom));
-                    Set(values, pausedStatus, RegistryValue.DWord(1));
-                    Set(values, maxPauseDays, RegistryValue.DWord(10023));
-                    Set(values, shutdownOption, RegistryValue.DWord(1));
-                    Set(values, rebootAtScheduledTime, RegistryValue.DWord(0));
-                    Set(values, minorUpdates, RegistryValue.DWord(0));
-                    Set(values, wsus, RegistryValue.DWord(0));
                 }),
                 Mode("off", "Disabled", values =>
                 {

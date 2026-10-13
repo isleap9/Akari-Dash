@@ -90,10 +90,13 @@ public class UpdateCatalogTests
     }
 
     [Fact]
-    public void The_policy_row_offers_winhances_four_modes_with_akarios_pause_among_them()
+    public void The_policy_row_offers_winhances_modes_with_akarios_pause_in_place_of_winhances()
     {
+        // Winhance's own "Paused for a long time" is not among them: it is a pause wearing most of
+        // Disabled, over values three other rows on this page already own. AkariOS-Ultimate's pause
+        // writes the six values Settings writes and stops there.
         Assert.Equal(
-            ["normal", "security-only", "akari-pause", "paused", "off"],
+            ["normal", "security-only", "akari-pause", "off"],
             Find("update.policy").Options.Select(option => option.Id));
     }
 
@@ -123,22 +126,10 @@ public class UpdateCatalogTests
     }
 
     [Fact]
-    public void Pausing_for_a_long_time_also_hides_update_and_shut_down()
-    {
-        // The one other row Winhance's paused mode reaches into, so it must read itself back too.
-        var shutdown = Find("update.shutdown-option");
-        var hide = OptionOf("update.shutdown-option", "hide");
-        var mode = OptionOf("update.policy", "paused");
-
-        Assert.All(shutdown.Targets, target => Assert.Equal(hide.Values[target], mode.Values[target]));
-    }
-
-    [Fact]
     public void Akarios_pause_writes_the_six_values_settings_writes_and_nothing_else()
     {
-        // AkariOS-Ultimate pauses with the Settings page's own six values; Winhance's mode writes
-        // those plus the paused-status pair, FlightSettingsMaxPauseDays and the AU policies. So the
-        // Windows Update page still works under the AkariOS Option and still reads Paused.
+        // The Settings page's own six values and nothing else, so the Windows Update page keeps
+        // working under this Option and still reads Paused, with a Resume button.
         var policy = Find("update.policy");
         var akari = OptionOf("update.policy", "akari-pause");
         string[] six =
@@ -165,44 +156,41 @@ public class UpdateCatalogTests
     }
 
     [Fact]
-    public void The_two_paused_modes_cannot_be_mistaken_for_one_another()
+    public void The_policy_row_is_the_only_owner_of_the_pause_window_and_the_wsus_value()
     {
-        var policy = Find("update.policy");
-        var akari = OptionOf("update.policy", "akari-pause");
-        var winhance = OptionOf("update.policy", "paused");
-
-        Assert.NotEqual(
-            policy.Targets.Select(target => akari.Values[target]),
-            policy.Targets.Select(target => winhance.Values[target]));
-
-        // Winhance's is the superset: everything AkariOS writes, at the same value, plus its own.
-        Assert.All(
-            policy.Targets.Where(target => akari.Values[target] is not null),
-            target => Assert.Equal(akari.Values[target], winhance.Values[target]));
-    }
-
-    [Fact]
-    public void The_policy_row_is_the_only_owner_of_the_pause_window_and_the_wsus_values()
-    {
-        // They were left out as rows of their own: nobody picks AutoInstallMinorUpdates on purpose.
+        // UseWUServer was left out as a row of its own: nobody picks it one at a time.
         string[] itsAlone =
         [
-            "UseWUServer", "AutoInstallMinorUpdates", "AlwaysAutoRebootAtScheduledTime",
+            "UseWUServer",
             "PauseUpdatesStartTime", "PauseUpdatesExpiryTime", "PauseFeatureUpdatesStartTime",
             "PauseFeatureUpdatesEndTime", "PauseQualityUpdatesStartTime", "PauseQualityUpdatesEndTime",
-            "PausedFeatureDate", "PausedQualityDate", "PausedFeatureStatus", "PausedQualityStatus",
-            "FlightSettingsMaxPauseDays",
         ];
 
         foreach (var name in itsAlone)
         {
-            var owners = TweakCatalog.All
-                .Where(tweak => tweak.Targets.Any(target => target.Location is RegistryLocation location && location.Name == name))
-                .Select(tweak => tweak.Id);
-
-            Assert.Equal("update.policy", Assert.Single(owners));
+            Assert.Equal("update.policy", Assert.Single(Owners(name)));
         }
     }
+
+    [Fact]
+    public void Nothing_writes_what_only_winhances_paused_mode_wrote()
+    {
+        // Dropped with that mode. AutoInstallMinorUpdates and AlwaysAutoRebootAtScheduledTime are
+        // not decisions anyone makes one at a time, and the rest are Windows Update's own bookkeeping
+        // about a pause, which the six dates above are enough to ask for.
+        string[] gone =
+        [
+            "AutoInstallMinorUpdates", "AlwaysAutoRebootAtScheduledTime",
+            "PausedFeatureDate", "PausedQualityDate", "PausedFeatureStatus", "PausedQualityStatus",
+            "FlightSettingsMaxPauseDays",
+        ];
+
+        Assert.All(gone, name => Assert.Empty(Owners(name)));
+    }
+
+    private static IEnumerable<string> Owners(string valueName) => TweakCatalog.All
+        .Where(tweak => tweak.Targets.Any(target => target.Location is RegistryLocation location && location.Name == valueName))
+        .Select(tweak => tweak.Id);
 
     [Fact]
     public void As_set_in_settings_writes_nothing_anywhere_it_is_offered()
@@ -395,7 +383,7 @@ public class UpdateCatalogTests
 
         // The pause is still there and still the policy row's to undo.
         Assert.True(engine.IsApplied(policy));
-        Assert.Equal(28, engine.ReadLiveState(policy, TweakCatalog.All) is LiveState.Custom custom ? custom.Values.Count : 0);
+        Assert.Equal(17, engine.ReadLiveState(policy, TweakCatalog.All) is LiveState.Custom custom ? custom.Values.Count : 0);
     }
 
     [Fact]
@@ -422,7 +410,8 @@ public class UpdateCatalogTests
         // update.policy saved NoAutoUpdate = 1, AUOptions = 1, BranchReadinessLevel = 20 and the rest
         // as its "Original Values" -- Akari-Dash's own writes, recorded as if Windows had put them
         // there. An Original Value belongs to the location and is the machine's own value, so the
-        // mode must inherit what the rows already recorded.
+        // mode must inherit what the rows already recorded. (update.shutdown-option no longer shares
+        // a value with the mode, so it is here only to prove the inheritance ignores what it does not.)
         var machine = new InMemoryMachine();
         var store = new InMemoryOriginalValuesStore();
         var engine = new TweakEngine(machine, store);
