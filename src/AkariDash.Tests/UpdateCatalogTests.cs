@@ -56,6 +56,7 @@ public class UpdateCatalogTests
     [InlineData("update.restart-notification", "nothing is said")]
     [InlineData("update.drivers", "generic driver")]
     [InlineData("update.store-app-updates", "security fixes included")]
+    [InlineData("update.delivery-optimization", "leaves it that way after an Undo")]
     [InlineData("update.policy", "without security fixes")]
     public void A_row_that_holds_an_update_back_says_so_in_its_own_description(string id, string cost)
     {

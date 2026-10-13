@@ -332,6 +332,11 @@ public static partial class TweakCatalog
 
     private static DeclaredTweak DeliveryOptimization()
     {
+        // VM, 2026-10-13: with DODownloadMode = 99, Windows demoted the Delivery Optimization service
+        // itself from start 2 (Automatic) to start 3 (Manual) the first time Windows Update ran, and
+        // it was still Manual after this Tweak was undone and the PC restarted. No Tweak owns DoSvc,
+        // so nothing reads it as Drift, and the service still starts when something needs it — but it
+        // is a change this Tweak causes and Undo does not take back, so the description says so.
         TweakTarget[] targets =
         [
             new(new RegistryLocation(RegistryHive.LocalMachine, DeliveryOptimizationPolicies, "DODownloadMode")),
@@ -342,7 +347,7 @@ public static partial class TweakCatalog
         return new DeclaredTweak(
             Id: "update.delivery-optimization",
             Title: "Delivery Optimization",
-            Description: "Whether this PC swaps update and Store downloads with other PCs instead of taking everything from Microsoft. Off means every download comes straight from Microsoft and nothing is uploaded to anyone, which keeps the upload clear while you play; on a network with several Windows PCs on it, downloads can take longer. Nothing here changes which updates arrive.",
+            Description: "Whether this PC swaps update and Store downloads with other PCs instead of taking everything from Microsoft. Off means every download comes straight from Microsoft and nothing is uploaded to anyone, which keeps the upload clear while you play; on a network with several Windows PCs on it, downloads can take longer. Nothing here changes which updates arrive. Windows also drops the Delivery Optimization service to a manual start while this is Off, and leaves it that way after an Undo; the service still starts when something needs it.",
             Category: Category.Update,
             Group: "Delivery & Store",
             Targets: targets,
