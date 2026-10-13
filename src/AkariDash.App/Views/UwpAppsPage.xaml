@@ -172,7 +172,8 @@
             </StackPanel>
         </Grid>
 
-        <!-- Restoration: FSOS-X's cards, for every curated app that is not installed. -->
+        <!-- Restoration: FSOS-X's cards, for every curated app that is not installed. Every card is
+             as tall as the first one measured, so the height leaves room for a three-line description. -->
         <Grid x:Name="RestorationTab" Grid.Row="2" RowSpacing="12" Visibility="Collapsed">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -193,7 +194,7 @@
                     <ItemsRepeater.Layout>
                         <UniformGridLayout
                             MinItemWidth="300"
-                            MinItemHeight="150"
+                            MinItemHeight="186"
                             MinRowSpacing="8"
                             MinColumnSpacing="8"
                             MaximumRowsOrColumns="3"
@@ -220,7 +221,7 @@
                                         <TextBlock Text="{x:Bind Status}" Opacity="0.6" Style="{StaticResource CaptionTextBlockStyle}" />
                                     </StackPanel>
                                 </StackPanel>
-                                <TextBlock Grid.Row="1" Text="{x:Bind Description}" TextWrapping="Wrap" Opacity="0.85" />
+                                <TextBlock Grid.Row="1" Text="{x:Bind Description}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" Opacity="0.85" />
                                 <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10">
                                     <Button Content="Restore" Command="{x:Bind RestoreCommand}" CommandParameter="{x:Bind}" />
                                     <ProgressRing Width="16" Height="16" IsActive="{x:Bind IsRestoring, Mode=OneWay}" />
