@@ -13,6 +13,9 @@ public interface IStatusService : System.ComponentModel.INotifyPropertyChanged
 
     bool IsBusy { get; }
 
+    /// <summary>The opposite of <see cref="IsBusy"/>, for the Ready dot.</summary>
+    bool IsIdle { get; }
+
     IDisposable Begin(string text);
 }
 
@@ -25,7 +28,10 @@ public sealed partial class StatusService : ObservableObject, IStatusService
     public partial string Text { get; private set; } = Ready;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsIdle))]
     public partial bool IsBusy { get; private set; }
+
+    public bool IsIdle => !IsBusy;
 
     public IDisposable Begin(string text)
     {

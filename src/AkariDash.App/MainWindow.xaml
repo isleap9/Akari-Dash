@@ -169,12 +169,22 @@
         <!-- Status bar: Ready, or what is running now with a progress bar; the build stamp on the right. -->
         <Grid Grid.Row="2" Padding="16,6,16,6">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- The green dot at rest; a spinning ring while something runs, so it shows wherever
+                     the page is scrolled to. -->
                 <Ellipse
                     Width="6"
                     Height="6"
                     Margin="0,0,7,0"
                     VerticalAlignment="Center"
+                    Visibility="{x:Bind Status.IsIdle, Mode=OneWay}"
                     Fill="{ThemeResource SystemFillColorSuccessBrush}" />
+                <ProgressRing
+                    Width="14"
+                    Height="14"
+                    Margin="0,0,8,0"
+                    VerticalAlignment="Center"
+                    IsActive="{x:Bind Status.IsBusy, Mode=OneWay}"
+                    Visibility="{x:Bind Status.IsBusy, Mode=OneWay}" />
                 <TextBlock
                     Text="{x:Bind Status.Text, Mode=OneWay}"
                     FontSize="11.5"

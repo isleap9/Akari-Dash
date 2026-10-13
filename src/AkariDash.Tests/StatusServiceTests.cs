@@ -16,6 +16,7 @@ public class StatusServiceTests
         {
             Assert.Equal("Uninstalling Microsoft Edge", status.Text);
             Assert.True(status.IsBusy);
+            Assert.False(status.IsIdle);
         }
 
         Assert.Equal("Ready", status.Text);
