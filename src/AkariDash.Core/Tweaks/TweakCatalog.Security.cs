@@ -327,13 +327,15 @@ public static partial class TweakCatalog
 
     private static DeclaredTweak WiFiSense()
     {
-        // Winhance turns both WiFi PolicyManager values off. They are missing on a fresh install, and
-        // Wi-Fi Sense itself was removed from Windows years ago, so the values only matter where an
-        // older build or an image left them behind; 0 is off either way.
+        // Winhance turns both WiFi PolicyManager values off. A missing one counts as allowed, not
+        // denied: the VM has AllowAutoConnectToWiFiSenseHotspots at 1 with the reporting key not
+        // there at all, which is how these "Allow..." values ship, and counting absent as 0 made that
+        // stock machine read Custom. Wi-Fi Sense itself was removed from Windows years ago, so this
+        // only makes sure an older setting cannot switch it back on.
         TweakTarget[] targets =
         [
-            new(new RegistryLocation(RegistryHive.LocalMachine, $@"{WiFiPolicyKey}\AllowWiFiHotSpotReporting", "Value"), AbsentMeans: RegistryValue.DWord(0)),
-            new(new RegistryLocation(RegistryHive.LocalMachine, $@"{WiFiPolicyKey}\AllowAutoConnectToWiFiSenseHotspots", "Value"), AbsentMeans: RegistryValue.DWord(0)),
+            new(new RegistryLocation(RegistryHive.LocalMachine, $@"{WiFiPolicyKey}\AllowWiFiHotSpotReporting", "Value"), AbsentMeans: RegistryValue.DWord(1)),
+            new(new RegistryLocation(RegistryHive.LocalMachine, $@"{WiFiPolicyKey}\AllowAutoConnectToWiFiSenseHotspots", "Value"), AbsentMeans: RegistryValue.DWord(1)),
         ];
 
         return SecurityTweak("security.wifi-sense", "Wi-Fi Sense",

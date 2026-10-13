@@ -13,7 +13,6 @@ public static partial class TweakCatalog
     private const string SearchSettings = @"Software\Microsoft\Windows\CurrentVersion\SearchSettings";
     private const string WindowsAIPolicies = @"SOFTWARE\Policies\Microsoft\Windows\WindowsAI";
     private const string DataCollectionPolicies = @"SOFTWARE\Policies\Microsoft\Windows\DataCollection";
-    private const string DataCollectionSettings = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection";
 
     private static IEnumerable<DeclaredTweak> PrivacyTweaks() =>
     [
@@ -73,25 +72,21 @@ public static partial class TweakCatalog
 
     private static DeclaredTweak DiagnosticData()
     {
-        // Akari-OS sets the AllowTelemetry policy to 0: required data only on Home and Pro, none at
-        // all on Enterprise and Education. Winhance sets the same policy for the user as well, and
-        // caps the older CurrentVersion\Policies\DataCollection pair at 1 (required data only), which
-        // is what Windows reads where the newer policy is not honoured. Deleting them all hands the
-        // choice back to Settings. Winhance also writes DiagTrack's ShowedToastAtLevel; that is
-        // Windows' own record of a toast it has shown, not a setting, so it is left alone.
-        TweakTarget[] policies =
+        // Akari-OS sets the AllowTelemetry policy to 0 — required data only on Home and Pro, none at
+        // all on Enterprise and Education — and Winhance sets the same policy for the user as well.
+        // Deleting both hands the choice back to Settings.
+        //
+        // Winhance also writes the older CurrentVersion\Policies\DataCollection pair (AllowTelemetry
+        // and MaxTelemetryAllowed) and DiagTrack's ShowedToastAtLevel. None of those is a target here:
+        // the VM found MaxTelemetryAllowed and that AllowTelemetry already holding 1 on a machine
+        // Akari-Dash had never written them on, so Windows keeps them itself, the way it keeps
+        // ShowedToastAtLevel. Owning a value Windows rewrites would leave this Tweak reading Custom
+        // for good after an Undo, because Undo puts exactly those values back.
+        TweakTarget[] targets =
         [
             new(new RegistryLocation(RegistryHive.LocalMachine, DataCollectionPolicies, "AllowTelemetry")),
             new(new RegistryLocation(RegistryHive.CurrentUser, DataCollectionPolicies, "AllowTelemetry")),
         ];
-        TweakTarget[] caps =
-        [
-            new(new RegistryLocation(RegistryHive.LocalMachine, DataCollectionSettings, "AllowTelemetry")),
-            new(new RegistryLocation(RegistryHive.CurrentUser, DataCollectionSettings, "AllowTelemetry")),
-            new(new RegistryLocation(RegistryHive.LocalMachine, DataCollectionSettings, "MaxTelemetryAllowed")),
-            new(new RegistryLocation(RegistryHive.CurrentUser, DataCollectionSettings, "MaxTelemetryAllowed")),
-        ];
-        TweakTarget[] targets = [.. policies, .. caps];
 
         return new DeclaredTweak(
             Id: "privacy.diagnostic-data",
@@ -102,10 +97,7 @@ public static partial class TweakCatalog
             Targets: targets,
             Options:
             [
-                new TweakOption("minimum", "Minimum", policies
-                    .Select(target => (target, value: (MachineValue?)RegistryValue.DWord(0)))
-                    .Concat(caps.Select(target => (target, value: (MachineValue?)RegistryValue.DWord(1))))
-                    .ToDictionary(pair => pair.target, pair => pair.value)),
+                DWordOption(targets, "minimum", "Minimum", 0),
                 Option(targets, "settings-decides", "As set in Settings", null),
             ],
             Activation: Activation.AfterRestart);

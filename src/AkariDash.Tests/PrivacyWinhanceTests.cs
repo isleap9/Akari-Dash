@@ -145,7 +145,9 @@ public class PrivacyWinhanceTests
     [Theory]
     [InlineData("security.automatic-device-encryption", 0)]
     [InlineData("security.remote-assistance", 1)]
-    [InlineData("security.wifi-sense", 0)]
+    // A missing "Allow..." value counts as allowed: the VM has one of the two at 1 with the other
+    // key absent, and counting absent as 0 made that stock machine read Custom.
+    [InlineData("security.wifi-sense", 1)]
     public void The_security_group_tweaks_count_a_missing_value_as_what_windows_does(string id, int absent)
     {
         Assert.All(Find(id).Targets, target => Assert.Equal(RegistryValue.DWord(absent), target.AbsentMeans));
@@ -238,24 +240,42 @@ public class PrivacyWinhanceTests
             RegistryValue.DWord(0), tweak.Options.Single(option => option.Id == optionId).Values[count]));
     }
 
-    // Minimum caps the older CurrentVersion\Policies pair at 1 while the newer policy goes to 0, which
-    // is what Winhance writes; As set in Settings deletes all six so a normal PC reads as that.
+    // Minimum sets the documented policy for the machine and the user; As set in Settings deletes
+    // both, so a PC nothing has been applied on reads as that. The older
+    // CurrentVersion\Policies\DataCollection pair is deliberately not a target: the VM found Windows
+    // keeping those values itself, so owning them would leave this Tweak Custom after an Undo.
     [Fact]
-    public void Diagnostic_data_writes_every_telemetry_policy_winhance_does()
+    public void Diagnostic_data_writes_the_telemetry_policy_for_the_machine_and_the_user()
     {
         var tweak = Find("privacy.diagnostic-data");
         var minimum = tweak.Options.Single(option => option.Id == "minimum");
 
-        Assert.Equal(6, tweak.Targets.Count);
-        foreach (var target in tweak.Targets)
+        Assert.Equal(
+            [RegistryHive.LocalMachine, RegistryHive.CurrentUser],
+            tweak.Targets.Select(target => ((RegistryLocation)target.Location).Hive));
+        Assert.All(tweak.Targets, target =>
         {
             var location = (RegistryLocation)target.Location;
-            var expected = location.Key.EndsWith(@"Policies\Microsoft\Windows\DataCollection") ? 0 : 1;
 
-            Assert.Equal(RegistryValue.DWord(expected), minimum.Values[target]);
-        }
+            Assert.Equal(@"SOFTWARE\Policies\Microsoft\Windows\DataCollection", location.Key);
+            Assert.Equal("AllowTelemetry", location.Name);
+            Assert.Equal(RegistryValue.DWord(0), minimum.Values[target]);
+            Assert.Null(tweak.Options.Single(option => option.Id == "settings-decides").Values[target]);
+        });
+    }
 
-        Assert.All(tweak.Targets, target => Assert.Null(tweak.Options.Single(option => option.Id == "settings-decides").Values[target]));
+    [Fact]
+    public void Diagnostic_data_does_not_own_the_values_windows_keeps_itself()
+    {
+        var owned = TweakCatalog.All
+            .SelectMany(tweak => tweak.Targets)
+            .Select(target => target.Location)
+            .OfType<RegistryLocation>()
+            .ToList();
+
+        Assert.DoesNotContain(owned, location => location.Name == "MaxTelemetryAllowed");
+        Assert.DoesNotContain(owned, location => location.Name == "ShowedToastAtLevel");
+        Assert.DoesNotContain(owned, location => location.Key.EndsWith(@"CurrentVersion\Policies\DataCollection"));
     }
 
     [Fact]
