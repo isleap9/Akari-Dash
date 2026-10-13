@@ -4,39 +4,42 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:AkariDash.App">
 
+    <!-- The shell, after the old Akari Tool's: a wordmark title bar, a page header with a large icon,
+         title, subtitle and the search on the right, the page on a rounded bordered surface (the
+         borders Vain Toolbox draws), and a status bar. The labelled sidebar is Akari-Dash's own. -->
     <Grid x:Name="RootElement" Background="Transparent">
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="F" Modifiers="Control" Invoked="OnFindInvoked" />
         </Grid.KeyboardAccelerators>
 
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="48" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Custom title bar (drag region) -->
-        <Grid x:Name="AppTitleBar" Height="40" Background="Transparent">
-
-            <StackPanel
-                Orientation="Horizontal"
-                Spacing="12"
-                Margin="16,0,0,0"
-                VerticalAlignment="Center">
+        <!-- Custom title bar (drag region): icon, accent dot, wordmark. -->
+        <Grid x:Name="AppTitleBar" Height="48" Padding="16,0,8,0" Background="Transparent">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <Image
                     Source="{x:Bind AppIconSource}"
                     Width="16"
                     Height="16"
+                    Margin="0,0,8,0"
                     Stretch="Uniform" />
-                <TextBlock
-                    x:Name="TitleText"
-                    Text="{x:Bind AppTitle}"
+                <Ellipse
+                    Width="5"
+                    Height="5"
+                    Margin="0,0,10,0"
                     VerticalAlignment="Center"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Style="{StaticResource CaptionTextBlockStyle}" />
+                    Fill="{ThemeResource AccentFillColorDefaultBrush}" />
+                <TextBlock FontSize="10.5" FontWeight="Bold" VerticalAlignment="Center">
+                    <Run Text="AKARI " Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                    <Run Text="DASH" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                </TextBlock>
             </StackPanel>
         </Grid>
 
-        <!-- Shell content -->
         <NavigationView
             x:Name="NavView"
             Grid.Row="1"
@@ -50,29 +53,11 @@
             MenuItemsSource="{x:Bind NavItems}"
             FooterMenuItemsSource="{x:Bind FooterNavItems}">
 
-            <!-- Searches every Tweak on every page, by title, Group, Option or the value it writes.
-                 Picking one goes to its page and scrolls it into view. -->
-            <NavigationView.AutoSuggestBox>
-                <AutoSuggestBox
-                    x:Name="SearchBox"
-                    QueryIcon="Find"
-                    PlaceholderText="Search Tweaks"
-                    TextChanged="OnSearchTextChanged"
-                    SuggestionChosen="OnSearchSuggestionChosen"
-                    QuerySubmitted="OnSearchQuerySubmitted">
-                    <AutoSuggestBox.ItemTemplate>
-                        <DataTemplate x:DataType="local:SearchResult">
-                            <StackPanel Margin="0,4">
-                                <TextBlock Text="{x:Bind Title}" />
-                                <TextBlock
-                                    Text="{x:Bind Detail}"
-                                    Opacity="0.7"
-                                    Style="{StaticResource CaptionTextBlockStyle}" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </AutoSuggestBox.ItemTemplate>
-                </AutoSuggestBox>
-            </NavigationView.AutoSuggestBox>
+            <!-- The page draws its own surface below the header, so NavigationView's must not show. -->
+            <NavigationView.Resources>
+                <SolidColorBrush x:Key="NavigationViewContentBackground" Color="Transparent" />
+                <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent" />
+            </NavigationView.Resources>
 
             <!-- One template for every level: a leaf has no Children, so it gets no chevron, and a
                  parent has no page, so picking it only opens the branch. A branch starts closed;
@@ -94,24 +79,85 @@
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
+                <!-- Page header: large icon, title, subtitle; the Tweak search on the right. -->
+                <Grid Padding="24,12,16,16" ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <FontIcon
+                        x:Name="HeaderIcon"
+                        FontSize="40"
+                        VerticalAlignment="Center"
+                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                        <TextBlock x:Name="HeaderTitle" Style="{StaticResource TitleTextBlockStyle}" />
+                        <TextBlock
+                            x:Name="HeaderSubtitle"
+                            TextWrapping="Wrap"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+
+                    <!-- Searches every Tweak on every page, by title, Group, Option or the value it writes.
+                         Picking one goes to its page and scrolls it into view. -->
+                    <AutoSuggestBox
+                        x:Name="SearchBox"
+                        Grid.Column="2"
+                        Width="280"
+                        VerticalAlignment="Center"
+                        QueryIcon="Find"
+                        PlaceholderText="Search all Tweaks"
+                        TextChanged="OnSearchTextChanged"
+                        SuggestionChosen="OnSearchSuggestionChosen"
+                        QuerySubmitted="OnSearchQuerySubmitted">
+                        <AutoSuggestBox.ItemTemplate>
+                            <DataTemplate x:DataType="local:SearchResult">
+                                <StackPanel Margin="0,4">
+                                    <TextBlock Text="{x:Bind Title}" />
+                                    <TextBlock
+                                        Text="{x:Bind Detail}"
+                                        Opacity="0.7"
+                                        Style="{StaticResource CaptionTextBlockStyle}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </AutoSuggestBox.ItemTemplate>
+                    </AutoSuggestBox>
+                </Grid>
+
                 <!-- Persistent in Phase 1 builds: cannot be closed. -->
                 <InfoBar
                     x:Name="DryRunBanner"
+                    Grid.Row="1"
+                    Margin="16,0,16,8"
                     Severity="Warning"
                     IsClosable="False"
                     IsOpen="{x:Bind IsDryRunOnly}"
                     Title="{x:Bind Strings.Get('DryRunBanner.Title')}"
                     Message="{x:Bind Strings.Get('DryRunBanner.Message')}" />
 
-                <Frame Grid.Row="1" x:Name="ContentFrame" />
+                <!-- The page's surface: one rounded, bordered panel, as in Akari Tool and Vain Toolbox. -->
+                <Border
+                    Grid.Row="2"
+                    Margin="16,0,16,0"
+                    CornerRadius="8"
+                    BorderThickness="1"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}">
+                    <Frame x:Name="ContentFrame" />
+                </Border>
 
                 <InfoBar
-                    Grid.Row="2"
+                    Grid.Row="3"
                     x:Name="ShellInfoBar"
+                    Margin="16,8,16,0"
                     Title="{x:Bind InfoBar.Title, Mode=OneWay}"
                     Message="{x:Bind InfoBar.Message, Mode=OneWay}"
                     Severity="{x:Bind InfoBar.Severity, Mode=OneWay}"
@@ -119,5 +165,28 @@
                     IsOpen="{x:Bind InfoBar.IsOpen, Mode=TwoWay}" />
             </Grid>
         </NavigationView>
+
+        <!-- Status bar: ready state on the left, build stamp on the right. -->
+        <Grid Grid.Row="2" Padding="16,6,16,6">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Ellipse
+                    Width="6"
+                    Height="6"
+                    Margin="0,0,7,0"
+                    VerticalAlignment="Center"
+                    Fill="{ThemeResource SystemFillColorSuccessBrush}" />
+                <TextBlock
+                    Text="Ready"
+                    FontSize="11.5"
+                    VerticalAlignment="Center"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+            <TextBlock
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center"
+                FontSize="10.5"
+                Text="{x:Bind BuildStamp}"
+                Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+        </Grid>
     </Grid>
 </Window>

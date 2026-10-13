@@ -5,11 +5,7 @@
     xmlns:views="using:AkariDash.App.Views">
 
     <ScrollViewer>
-        <StackPanel Padding="32" Spacing="16">
-
-            <TextBlock
-                Text="{x:Bind Strings.Get('Windows.Title')}"
-                Style="{StaticResource TitleTextBlockStyle}" />
+        <StackPanel Padding="24" Spacing="16">
 
             <views:CategoryView ViewModel="{x:Bind ViewModel}" />
 

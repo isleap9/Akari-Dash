@@ -68,6 +68,9 @@ public sealed partial class MainWindow : Window
     /// <summary>App name shown in the custom title bar.</summary>
     public string AppTitle => App.AppName;
 
+    /// <summary>The status bar's right-hand stamp.</summary>
+    public string BuildStamp => $"WinUI 3 · .NET 10 · {App.AppName} {App.AppVersion}";
+
     /// <summary>App icon shown in the custom title bar.</summary>
     public ImageSource AppIconSource { get; } = LoadAppIcon();
 
@@ -80,21 +83,21 @@ public sealed partial class MainWindow : Window
     /// <summary>Navigation items for the shell NavigationView (top of the pane).</summary>
     public IReadOnlyList<NavigationItem> NavItems { get; } =
     [
-        new("Home", "\uE80F", typeof(HomePage)),
-        new("Gaming", "\uE7FC", typeof(GamingPage)),
-        new("Privacy", "\uE72E", typeof(PrivacyPage)),
-        new("Services", "\uE9F5", typeof(ServicesPage)),
-        new("Notifications", "\uEA8F", typeof(NotificationsPage)),
+        new("Home", "\uE80F", typeof(HomePage), Subtitle: "Your gaming PC, tuned and reversible"),
+        new("Gaming", "\uE7FC", typeof(GamingPage), Subtitle: "Latency, GPU scheduling and the visual effects games pay for"),
+        new("Privacy", "\uE72E", typeof(PrivacyPage), Subtitle: "Telemetry, tracking, suggestions and Windows AI"),
+        new("Services", "\uE9F5", typeof(ServicesPage), Subtitle: "Background services and scheduled tasks"),
+        new("Notifications", "\uEA8F", typeof(NotificationsPage), Subtitle: "Toasts, tips and what Windows says while you play"),
         NavigationItem.Parent("Customize", "\uE790",
         [
-            new("Start menu", "\uE8FC", typeof(StartMenuPage)),
-            new("Taskbar", "\uE7F4", typeof(TaskbarPage)),
-            new("File Explorer", "\uEC50", typeof(ExplorerPage)),
+            new("Start menu", "\uE8FC", typeof(StartMenuPage), Subtitle: "Layout, recommendations and what Start shows"),
+            new("Taskbar", "\uE7F4", typeof(TaskbarPage), Subtitle: "Alignment, buttons and the system tray"),
+            new("File Explorer", "\uEC50", typeof(ExplorerPage), Subtitle: "Navigation pane, file names and the right-click menu"),
         ]),
-        new("Windows", "\uE771", typeof(WindowsPage)),
-        new("Windows Update", "\uE777", typeof(UpdatePage)),
-        new("Security", "\uEA18", typeof(SecurityPage)),
-        new("UWP Apps", "\uE74D", typeof(UwpAppsPage)),
+        new("Windows", "\uE771", typeof(WindowsPage), Subtitle: "Theme, system behaviour and the rest of Windows"),
+        new("Windows Update", "\uE777", typeof(UpdatePage), Subtitle: "When updates arrive, what comes with them and how loudly"),
+        new("Security", "\uEA18", typeof(SecurityPage), Subtitle: "Defender, virtualization-based security and mitigations"),
+        new("UWP Apps", "\uE74D", typeof(UwpAppsPage), Subtitle: "Remove Windows apps for good, and bring them back"),
     ];
 
     /// <summary>The page each Category's Tweaks live on, so a search result knows where to go.</summary>
@@ -115,7 +118,6 @@ public sealed partial class MainWindow : Window
     // Ctrl+F puts the caret in the search box, wherever the user is.
     private void OnFindInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        NavView.IsPaneOpen = true;
         SearchBox.Focus(FocusState.Programmatic);
         args.Handled = true;
     }
@@ -171,7 +173,7 @@ public sealed partial class MainWindow : Window
     /// <summary>Navigation items pinned to the bottom of the pane (footer).</summary>
     public IReadOnlyList<NavigationItem> FooterNavItems { get; } =
     [
-        new("Settings", "\uE713", typeof(SettingsPage)),
+        new("Settings", "\uE713", typeof(SettingsPage), Subtitle: "Theme and about"),
     ];
 
     /// <summary>Applies an application theme to this window's content and title bar.</summary>
@@ -215,6 +217,13 @@ public sealed partial class MainWindow : Window
         var item = NavItems.Concat(FooterNavItems)
             .SelectMany(top => top.SelfAndDescendants())
             .FirstOrDefault(i => i.PageType == current);
+
+        if (item is not null)
+        {
+            HeaderIcon.Glyph = item.Glyph;
+            HeaderTitle.Text = item.Label;
+            HeaderSubtitle.Text = item.Subtitle;
+        }
 
         if (item is null || ReferenceEquals(NavView.SelectedItem, item))
         {

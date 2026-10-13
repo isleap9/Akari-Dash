@@ -4,14 +4,12 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <ScrollViewer>
-        <StackPanel Padding="32" Spacing="16">
-
-            <TextBlock
-                Text="{x:Bind Strings.Get('Settings.Title')}"
-                Style="{StaticResource TitleTextBlockStyle}" />
+        <StackPanel Padding="24" Spacing="16">
 
             <!-- Appearance -->
             <Border
+                BorderThickness="1"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 CornerRadius="8"
                 Padding="16"
@@ -34,6 +32,8 @@
 
             <!-- About -->
             <Border
+                BorderThickness="1"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 CornerRadius="8"
                 Padding="16"

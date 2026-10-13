@@ -5,11 +5,7 @@
     xmlns:views="using:AkariDash.App.Views">
 
     <ScrollViewer>
-        <StackPanel Padding="32" Spacing="16">
-
-            <TextBlock
-                Text="{x:Bind Strings.Get('Security.Title')}"
-                Style="{StaticResource TitleTextBlockStyle}" />
+        <StackPanel Padding="24" Spacing="16">
 
             <views:CategoryView ViewModel="{x:Bind ViewModel}" />
 
@@ -18,6 +14,8 @@
                 Padding="16"
                 ColumnSpacing="16"
                 CornerRadius="8"
+                BorderThickness="1"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />

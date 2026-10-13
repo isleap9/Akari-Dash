@@ -5,11 +5,7 @@
     xmlns:vm="using:AkariDash.App.ViewModels">
 
     <ScrollViewer>
-        <StackPanel Padding="32" Spacing="16">
-
-            <TextBlock
-                Text="Akari-Dash"
-                Style="{StaticResource TitleTextBlockStyle}" />
+        <StackPanel Padding="24" Spacing="16">
 
             <TextBlock
                 TextWrapping="Wrap"
@@ -34,6 +30,8 @@
                 Spacing="12"
                 CornerRadius="8"
                 Visibility="{x:Bind ViewModel.HasRetiredTweaks, Mode=OneWay}"
+                BorderThickness="1"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                 <TextBlock
                     Text="{x:Bind Strings.Get('Home.RetiredTitle')}"
@@ -70,6 +68,8 @@
                 Padding="16"
                 Spacing="12"
                 CornerRadius="8"
+                BorderThickness="1"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                 <TextBlock
                     Text="{x:Bind Strings.Get('Home.ThisPc')}"

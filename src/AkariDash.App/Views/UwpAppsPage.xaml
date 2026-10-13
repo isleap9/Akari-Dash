@@ -4,16 +4,14 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:AkariDash.App.ViewModels">
 
-    <Grid Padding="32" RowSpacing="12">
+    <Grid Padding="24" RowSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TextBlock Text="UWP Apps" Style="{StaticResource TitleTextBlockStyle}" />
-
-        <SelectorBar x:Name="Tabs" Grid.Row="1" SelectionChanged="OnTabChanged">
+                <SelectorBar x:Name="Tabs" Grid.Row="1" SelectionChanged="OnTabChanged">
             <SelectorBarItem Text="Store apps" IsSelected="True">
                 <SelectorBarItem.Icon>
                     <FontIcon Glyph="&#xE7B8;" />

@@ -7,15 +7,15 @@
 
     <UserControl.Resources>
         <DataTemplate x:Key="RowTemplate" x:DataType="vm:TweakViewModel">
+          <Grid Margin="0,0,0,4">
             <Grid
-                Margin="0,0,0,4"
                 Padding="16"
                 ColumnSpacing="16"
                 CornerRadius="8"
                 Opacity="{x:Bind RowOpacity}"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
-                BorderThickness="{x:Bind HighlightThickness}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
                 Loaded="OnTweakLoaded">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -88,20 +88,28 @@
                         OnContent="{x:Bind OnLabel}" />
                 </StackPanel>
             </Grid>
+            <!-- Vain-style 1px border on every row; the accent outline that points a search
+                 result out sits on top of it, so the two never fight over one BorderBrush. -->
+            <Border
+                CornerRadius="8"
+                IsHitTestVisible="False"
+                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                BorderThickness="{x:Bind HighlightThickness}" />
+          </Grid>
         </DataTemplate>
 
         <!-- A tuner card, drawn like AkariOS-Ultimate's tuners: chips, a Current line, and
              Read current / Default / Apply (plus Undo). Apply asks first, like every other change. -->
         <DataTemplate x:Key="TunerTemplate" x:DataType="vm:TweakViewModel">
+          <Grid Margin="0,0,0,4">
             <StackPanel
-                Margin="0,0,0,4"
                 Padding="16"
                 Spacing="12"
                 CornerRadius="8"
                 Opacity="{x:Bind RowOpacity}"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
-                BorderThickness="{x:Bind HighlightThickness}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
                 Loaded="OnTweakLoaded">
                 <StackPanel Spacing="4">
                     <TextBlock Text="{x:Bind Title}" Style="{StaticResource BodyStrongTextBlockStyle}" />
@@ -174,6 +182,14 @@
                     <Run Text="{x:Bind ActivationText}" FontWeight="SemiBold" />
                 </TextBlock>
             </StackPanel>
+            <!-- Vain-style 1px border on every row; the accent outline that points a search
+                 result out sits on top of it, so the two never fight over one BorderBrush. -->
+            <Border
+                CornerRadius="8"
+                IsHitTestVisible="False"
+                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                BorderThickness="{x:Bind HighlightThickness}" />
+          </Grid>
         </DataTemplate>
 
         <views:TweakTemplateSelector
