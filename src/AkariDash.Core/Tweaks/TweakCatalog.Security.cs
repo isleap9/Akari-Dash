@@ -4,11 +4,10 @@ using Microsoft.Win32;
 namespace AkariDash.Core.Tweaks;
 
 // Security Tweaks: the parts of AkariOS-Ultimate's Defender Optimize (MIT, Tweaks/Windows.ps1) that
-// are registry values or boot settings, each with its own Undo, plus the settings Winhance keeps in
-// the Security group of its Privacy & Security page (MIT 4dc441a0): User Account Control, workplace
-// join prompts, automatic device encryption, Wi-Fi Sense and Remote Assistance. Windows Error
-// Reporting is in that group too, but it sends crash reports to Microsoft, so it sits with the other
-// diagnostics on the Privacy page. Turning Defender itself off (real-time,
+// are registry values or boot settings, each with its own Undo. The settings Winhance keeps in the
+// Security group of its Privacy & Security page (User Account Control, workplace join prompts,
+// automatic device encryption, Wi-Fi Sense, error reporting, Remote Assistance) are where Winhance
+// has them, in Privacy's own "Security" Group; see TweakCatalog.Privacy.cs. Turning Defender itself off (real-time,
 // cloud and tamper protection) needs safe boot and TrustedInstaller, so it is a separate Coded Tweak.
 // Phishing protection (WTDS\Components) goes with it too: only SYSTEM and TrustedInstaller may even
 // read that key. Smart App Control is left out: once off, Windows cannot turn it back on without a
@@ -17,9 +16,6 @@ namespace AkariDash.Core.Tweaks;
 public static partial class TweakCatalog
 {
     private const string DeviceGuardKey = @"SYSTEM\CurrentControlSet\Control\DeviceGuard";
-    private const string PoliciesSystemKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System";
-    private const string WorkplaceJoinKey = @"SOFTWARE\Policies\Microsoft\Windows\WorkplaceJoin";
-    private const string WiFiPolicyKey = @"SOFTWARE\Microsoft\PolicyManager\default\WiFi";
     private const string SecurityCenterKey = @"SOFTWARE\Microsoft\Windows Defender Security Center";
 
     private static IEnumerable<DeclaredTweak> SecurityTweaks() =>
@@ -35,11 +31,6 @@ public static partial class TweakCatalog
         DefenderScheduledTasks(),
         SecurityNotifications(),
         FirewallNotifications(),
-        UserAccountControl(),
-        WorkplaceJoinPrompts(),
-        AutomaticDeviceEncryption(),
-        WiFiSense(),
-        RemoteAssistance(),
     ];
 
     private static DeclaredTweak SecurityTweak(
@@ -257,105 +248,5 @@ public static partial class TweakCatalog
             "Windows Firewall tells you when it blocks a new app. Off blocks it quietly.",
             "Notifications", targets,
             [DWordOption(targets, "off", "Off", 1), DWordOption(targets, "on", "On", 0)]);
-    }
-
-    private static DeclaredTweak UserAccountControl()
-    {
-        // The two values behind Windows' own UAC slider, which Microsoft documents together:
-        // ConsentPromptBehaviorAdmin is what the prompt asks for (1 credentials, 2 consent, 5 consent
-        // for anything not signed by Windows, 0 nothing at all) and PromptOnSecureDesktop is whether
-        // the screen dims to the secure desktop first. Windows' own default is 5 with the dim on.
-        TweakTarget[] targets =
-        [
-            new(new RegistryLocation(RegistryHive.LocalMachine, PoliciesSystemKey, "ConsentPromptBehaviorAdmin"), AbsentMeans: RegistryValue.DWord(5)),
-            new(new RegistryLocation(RegistryHive.LocalMachine, PoliciesSystemKey, "PromptOnSecureDesktop"), AbsentMeans: RegistryValue.DWord(1)),
-        ];
-
-        return SecurityTweak("security.uac-level", "User Account Control",
-            "What Windows asks for before an app is allowed to change the system. Never notify lets every app that asks for admin rights have it without a word, which is how most malware gets in.",
-            "User Account Control", targets,
-            [
-                Level("credentials", "Ask for my password", 1, 1),
-                Level("always", "Always notify", 2, 1),
-                Level("apps", "Notify when apps make changes (Windows default)", 5, 1),
-                Level("apps-no-dim", "Notify when apps make changes, without dimming the screen", 5, 0),
-                Level("never", "Never notify", 0, 0),
-            ],
-            Activation.Immediately);
-
-        TweakOption Level(string id, string label, int behavior, int secureDesktop) => new(
-            id, label, new Dictionary<TweakTarget, MachineValue?>
-            {
-                [targets[0]] = RegistryValue.DWord(behavior),
-                [targets[1]] = RegistryValue.DWord(secureDesktop),
-            });
-    }
-
-    private static DeclaredTweak WorkplaceJoinPrompts()
-    {
-        // Winhance sets BlockAADWorkplaceJoin for the machine and the user. Microsoft documents it as
-        // blocking the prompt that asks to let an organization manage the device. Deleting it hands
-        // the prompt back, so "Not blocked" removes the value rather than writing 0.
-        TweakTarget[] targets =
-        [
-            new(new RegistryLocation(RegistryHive.LocalMachine, WorkplaceJoinKey, "BlockAADWorkplaceJoin")),
-            new(new RegistryLocation(RegistryHive.CurrentUser, WorkplaceJoinKey, "BlockAADWorkplaceJoin")),
-        ];
-
-        return SecurityTweak("security.workplace-join", "Workplace join prompts",
-            "Blocks the prompts that ask to let your organization manage this device when you sign in to a work or school account in an app. Signing in to the app still works.",
-            "Sign-in prompts", targets,
-            [DWordOption(targets, "blocked", "Blocked", 1), Option(targets, "not-blocked", "Not blocked", null)],
-            Activation.Immediately);
-    }
-
-    private static DeclaredTweak AutomaticDeviceEncryption()
-    {
-        // Winhance sets PreventDeviceEncryption. Microsoft documents it as stopping Windows from
-        // turning device encryption on by itself on a PC that supports it. A drive already encrypted
-        // stays encrypted: this only decides whether Windows starts on its own.
-        var prevent = new TweakTarget(
-            new RegistryLocation(RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\BitLocker", "PreventDeviceEncryption"),
-            AbsentMeans: RegistryValue.DWord(0));
-
-        return SecurityTweak("security.automatic-device-encryption", "Automatic device encryption",
-            "Lets Windows switch BitLocker device encryption on by itself on a PC that supports it. Blocking it keeps drives readable from another PC, and keeps you from being locked out without the recovery key; drives already encrypted stay encrypted either way.",
-            "Device encryption", [prevent],
-            [DWordOption(prevent, "blocked", "Blocked", 1), DWordOption(prevent, "allowed", "Allowed (Windows default)", 0)],
-            Activation.Immediately);
-    }
-
-    private static DeclaredTweak WiFiSense()
-    {
-        // Winhance turns both WiFi PolicyManager values off. A missing one counts as allowed, not
-        // denied: the VM has AllowAutoConnectToWiFiSenseHotspots at 1 with the reporting key not
-        // there at all, which is how these "Allow..." values ship, and counting absent as 0 made that
-        // stock machine read Custom. Wi-Fi Sense itself was removed from Windows years ago, so this
-        // only makes sure an older setting cannot switch it back on.
-        TweakTarget[] targets =
-        [
-            new(new RegistryLocation(RegistryHive.LocalMachine, $@"{WiFiPolicyKey}\AllowWiFiHotSpotReporting", "Value"), AbsentMeans: RegistryValue.DWord(1)),
-            new(new RegistryLocation(RegistryHive.LocalMachine, $@"{WiFiPolicyKey}\AllowAutoConnectToWiFiSenseHotspots", "Value"), AbsentMeans: RegistryValue.DWord(1)),
-        ];
-
-        return SecurityTweak("security.wifi-sense", "Wi-Fi Sense",
-            "Lets Windows report open Wi-Fi hotspots to Microsoft and connect to the ones other people have shared. Current Windows no longer has the feature; this makes sure an older setting cannot switch it back on.",
-            "Wi-Fi", targets,
-            [DWordOption(targets, "off", "Off", 0), DWordOption(targets, "on", "On", 1)]);
-    }
-
-    private static DeclaredTweak RemoteAssistance()
-    {
-        // Winhance turns fAllowToGetHelp off: the same switch as Remote Assistance in System
-        // Properties > Remote. Windows' own default is on.
-        var allow = new TweakTarget(
-            new RegistryLocation(RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Remote Assistance", "fAllowToGetHelp"),
-            AbsentMeans: RegistryValue.DWord(1));
-
-        return SecurityTweak("security.remote-assistance", "Remote Assistance",
-            "Lets someone you invite take over this PC to help you. Off refuses those invitations; Remote Desktop and third-party remote tools are not affected.",
-            "Remote assistance", [allow],
-            [DWordOption(allow, "off", "Off", 0), DWordOption(allow, "on", "On (Windows default)", 1)],
-            Activation.Immediately);
     }
 }

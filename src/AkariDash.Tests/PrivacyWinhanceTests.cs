@@ -125,7 +125,7 @@ public class PrivacyWinhanceTests
     public void Uac_levels_write_the_consent_prompt_and_the_secure_desktop_together(
         string optionId, int behavior, int secureDesktop)
     {
-        var tweak = Find("security.uac-level");
+        var tweak = Find("privacy.uac-level");
         var option = tweak.Options.Single(candidate => candidate.Id == optionId);
 
         Assert.Equal(RegistryValue.DWord(behavior), option.Values[tweak.Targets[0]]);
@@ -135,7 +135,7 @@ public class PrivacyWinhanceTests
     [Fact]
     public void Uac_counts_a_machine_with_no_values_as_the_level_windows_ships_with()
     {
-        var tweak = Find("security.uac-level");
+        var tweak = Find("privacy.uac-level");
 
         Assert.Equal(RegistryValue.DWord(5), tweak.Targets[0].AbsentMeans);
         Assert.Equal(RegistryValue.DWord(1), tweak.Targets[1].AbsentMeans);
@@ -143,11 +143,11 @@ public class PrivacyWinhanceTests
     }
 
     [Theory]
-    [InlineData("security.automatic-device-encryption", 0)]
-    [InlineData("security.remote-assistance", 1)]
+    [InlineData("privacy.automatic-device-encryption", 0)]
+    [InlineData("privacy.remote-assistance", 1)]
     // A missing "Allow..." value counts as allowed: the VM has one of the two at 1 with the other
     // key absent, and counting absent as 0 made that stock machine read Custom.
-    [InlineData("security.wifi-sense", 1)]
+    [InlineData("privacy.wifi-sense", 1)]
     public void The_security_group_tweaks_count_a_missing_value_as_what_windows_does(string id, int absent)
     {
         Assert.All(Find(id).Targets, target => Assert.Equal(RegistryValue.DWord(absent), target.AbsentMeans));
@@ -156,7 +156,7 @@ public class PrivacyWinhanceTests
     [Fact]
     public void Wifi_sense_switches_both_of_its_policy_manager_values()
     {
-        var tweak = Find("security.wifi-sense");
+        var tweak = Find("privacy.wifi-sense");
 
         Assert.Equal(
             [@"SOFTWARE\Microsoft\PolicyManager\default\WiFi\AllowWiFiHotSpotReporting",

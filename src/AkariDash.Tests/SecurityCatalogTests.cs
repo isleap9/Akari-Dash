@@ -4,10 +4,7 @@ using Xunit;
 
 namespace AkariDash.Tests;
 
-/// <summary>
-/// The Security page: the registry and boot-setting parts of Defender Optimize (issue #26), and the
-/// settings Winhance keeps in the Security group of its Privacy &amp; Security page.
-/// </summary>
+/// <summary>The Security page: the registry and boot-setting parts of Defender Optimize (issue #26).</summary>
 public class SecurityCatalogTests
 {
     private static readonly IReadOnlyList<DeclaredTweak> Security =
@@ -18,10 +15,7 @@ public class SecurityCatalogTests
     [Fact]
     public void Security_page_has_its_groups_and_no_recommended_option()
     {
-        Assert.Equal(
-            ["Core isolation", "SmartScreen", "Exploit protection", "Microsoft Defender", "Notifications",
-             "User Account Control", "Sign-in prompts", "Device encryption", "Wi-Fi", "Remote assistance"],
-            Security.Select(tweak => tweak.Group).Distinct());
+        Assert.Equal(["Core isolation", "SmartScreen", "Exploit protection", "Microsoft Defender", "Notifications"], Security.Select(tweak => tweak.Group).Distinct());
         Assert.All(Security, tweak =>
         {
             Assert.StartsWith("security.", tweak.Id);
