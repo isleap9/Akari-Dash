@@ -1,0 +1,28 @@
+<UserControl
+    x:Class="AkariDash.App.Views.WorkInProgressView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- The card a page shows until there is something behind it. -->
+    <Grid Padding="24">
+        <StackPanel
+            MaxWidth="520"
+            Padding="32"
+            Spacing="12"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            CornerRadius="8"
+            BorderThickness="1"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+            <FontIcon FontSize="40" Glyph="{x:Bind Glyph}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+            <TextBlock HorizontalAlignment="Center" Style="{StaticResource SubtitleTextBlockStyle}" Text="Work in progress" />
+            <TextBlock
+                HorizontalAlignment="Center"
+                TextAlignment="Center"
+                TextWrapping="Wrap"
+                Opacity="0.8"
+                Text="{x:Bind Description}" />
+        </StackPanel>
+    </Grid>
+</UserControl>

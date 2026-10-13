@@ -98,6 +98,8 @@ public sealed partial class MainWindow : Window
         new("Windows Update", "\uE777", typeof(UpdatePage), Subtitle: "When updates arrive, what comes with them and how loudly"),
         new("Security", "\uEA18", typeof(SecurityPage), Subtitle: "Defender, virtualization-based security and mitigations"),
         new("UWP Apps", "\uE74D", typeof(UwpAppsPage), Subtitle: "Remove Windows apps for good, and bring them back"),
+        new("Downloads", "", typeof(DownloadsPage), Subtitle: "Work in progress"),
+        new("Network", "", typeof(NetworkPage), Subtitle: "Work in progress"),
         new("GPUs", "", typeof(GpusPage), Subtitle: "Work in progress"),
     ];
 
