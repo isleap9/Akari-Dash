@@ -162,4 +162,160 @@ public class PrivacyWinhanceTests
             tweak.Targets.Select(target => ((RegistryLocation)target.Location).Key));
         Assert.All(tweak.Targets, target => Assert.Equal("Value", ((RegistryLocation)target.Location).Name));
     }
+
+    // Winhance writes a Group Policy next to the switch in Settings for these. The policy is its own
+    // Option rather than part of Off, because a PC where someone only used the switch in Settings has
+    // to keep reading as Off instead of turning into Custom.
+    [Theory]
+    [InlineData("privacy.advertising-id", "DisabledByGroupPolicy", 1)]
+    [InlineData("privacy.tailored-experiences", "DisableTailoredExperiencesWithDiagnosticData", 1)]
+    [InlineData("privacy.online-speech", "AllowInputPersonalization", 0)]
+    [InlineData("privacy.location", "DisableLocation", 1)]
+    public void Off_leaves_the_policy_alone_and_off_and_locked_writes_it(string id, string policyName, int offValue)
+    {
+        var tweak = Find(id);
+        var policies = tweak.Targets
+            .Where(target => ((RegistryLocation)target.Location).Name == policyName)
+            .ToList();
+
+        // One copy for the machine and one for the user, as Winhance writes them.
+        Assert.Equal(
+            [RegistryHive.LocalMachine, RegistryHive.CurrentUser],
+            policies.Select(target => ((RegistryLocation)target.Location).Hive));
+
+        foreach (var optionId in new[] { "off", "on" })
+        {
+            var option = tweak.Options.Single(candidate => candidate.Id == optionId);
+            Assert.All(policies, policy => Assert.Null(option.Values[policy]));
+        }
+
+        var locked = tweak.Options.Single(option => option.Id == "off-locked");
+        Assert.All(policies, policy => Assert.Equal(RegistryValue.DWord(offValue), locked.Values[policy]));
+    }
+
+    // Off and "Off, and locked" must write the same thing to the setting itself: only the policy differs.
+    [Theory]
+    [InlineData("privacy.advertising-id")]
+    [InlineData("privacy.tailored-experiences")]
+    [InlineData("privacy.online-speech")]
+    [InlineData("privacy.location")]
+    public void The_locked_option_switches_the_setting_off_the_same_way_off_does(string id)
+    {
+        var tweak = Find(id);
+        var off = tweak.Options.Single(option => option.Id == "off");
+        var locked = tweak.Options.Single(option => option.Id == "off-locked");
+        var settings = tweak.Targets.Where(target => off.Values[target] is not null);
+
+        Assert.NotEmpty(settings);
+        Assert.All(settings, target => Assert.Equal(off.Values[target], locked.Values[target]));
+    }
+
+    // The permissions Winhance has no policy for keep their two Options, so no empty choice appears.
+    [Theory]
+    [InlineData("privacy.camera")]
+    [InlineData("privacy.microphone")]
+    [InlineData("privacy.account-info")]
+    [InlineData("privacy.app-diagnostics")]
+    public void App_permissions_without_a_policy_stay_off_or_on(string id)
+    {
+        Assert.Equal(["off", "on"], Find(id).Options.Select(option => option.Id));
+    }
+
+    [Fact]
+    public void Feedback_requests_can_be_set_to_never_with_or_without_the_policy()
+    {
+        var tweak = Find("privacy.feedback-frequency");
+        var policies = tweak.Targets
+            .Where(target => ((RegistryLocation)target.Location).Name == "DoNotShowFeedbackNotifications")
+            .ToList();
+        var count = tweak.Targets.Single(target => ((RegistryLocation)target.Location).Name == "NumberOfSIUFInPeriod");
+
+        Assert.Equal(2, policies.Count);
+        Assert.All(policies, policy => Assert.Null(tweak.Options.Single(option => option.Id == "never").Values[policy]));
+        Assert.All(policies, policy => Assert.Equal(
+            RegistryValue.DWord(1), tweak.Options.Single(option => option.Id == "never-locked").Values[policy]));
+        Assert.All(["never", "never-locked"], optionId => Assert.Equal(
+            RegistryValue.DWord(0), tweak.Options.Single(option => option.Id == optionId).Values[count]));
+    }
+
+    // Minimum caps the older CurrentVersion\Policies pair at 1 while the newer policy goes to 0, which
+    // is what Winhance writes; As set in Settings deletes all six so a normal PC reads as that.
+    [Fact]
+    public void Diagnostic_data_writes_every_telemetry_policy_winhance_does()
+    {
+        var tweak = Find("privacy.diagnostic-data");
+        var minimum = tweak.Options.Single(option => option.Id == "minimum");
+
+        Assert.Equal(6, tweak.Targets.Count);
+        foreach (var target in tweak.Targets)
+        {
+            var location = (RegistryLocation)target.Location;
+            var expected = location.Key.EndsWith(@"Policies\Microsoft\Windows\DataCollection") ? 0 : 1;
+
+            Assert.Equal(RegistryValue.DWord(expected), minimum.Values[target]);
+        }
+
+        Assert.All(tweak.Targets, target => Assert.Null(tweak.Options.Single(option => option.Id == "settings-decides").Values[target]));
+    }
+
+    [Fact]
+    public void Activity_history_sets_the_policy_for_the_machine_and_the_user()
+    {
+        var tweak = Find("privacy.activity-history");
+
+        Assert.Equal(
+            [RegistryHive.LocalMachine, RegistryHive.CurrentUser],
+            tweak.Targets.Select(target => ((RegistryLocation)target.Location).Hive));
+        Assert.All(tweak.Targets, target => Assert.Equal("PublishUserActivities", ((RegistryLocation)target.Location).Name));
+    }
+
+    // The preset is only honest if it writes exactly what the Tweaks it stands for would write, so
+    // picking All off leaves every one of them reading Off rather than Custom.
+    [Fact]
+    public void The_suggestions_preset_writes_what_each_tweak_it_covers_writes()
+    {
+        var preset = Find("privacy.suggestions-preset");
+        var covered = TweakCatalog.All
+            .Where(tweak => tweak.Category == Category.Privacy && tweak.Id != preset.Id)
+            .Where(tweak => tweak.Targets.All(target => preset.Targets.Contains(target)))
+            .ToList();
+
+        Assert.Equal(13, covered.Count);
+        Assert.Equal(preset.Targets.Count, covered.Sum(tweak => tweak.Targets.Count));
+
+        foreach (var optionId in new[] { "off", "on" })
+        {
+            var option = preset.Options.Single(candidate => candidate.Id == optionId);
+            foreach (var tweak in covered)
+            {
+                var child = tweak.Options.Single(candidate => candidate.Id == optionId);
+                Assert.All(tweak.Targets, target => Assert.Equal(child.Values[target], option.Values[target]));
+            }
+        }
+    }
+
+    [Fact]
+    public void The_suggestions_preset_covers_the_lock_screen_and_task_view_as_winhances_switch_does()
+    {
+        var preset = Find("privacy.suggestions-preset");
+
+        Assert.All(
+            new[] { "privacy.windows-spotlight", "privacy.lock-screen-tips", "privacy.lock-screen-slideshow", "privacy.timeline-suggestions" },
+            id => Assert.All(Find(id).Targets, target => Assert.Contains(target, preset.Targets)));
+
+        // Not everything in the group is a ContentDeliveryManager value: these two have their own
+        // Settings values and policies, and Winhance's switch leaves them alone too.
+        Assert.All(
+            new[] { "privacy.advertising-id", "privacy.tailored-experiences" },
+            id => Assert.All(Find(id).Targets, target => Assert.DoesNotContain(target, preset.Targets)));
+    }
+
+    [Fact]
+    public void No_tweak_writes_the_same_target_twice()
+    {
+        var preset = Find("privacy.suggestions-preset");
+
+        Assert.Equal(preset.Targets.Count, preset.Targets.Distinct().Count());
+        Assert.All(preset.Options, option => Assert.Equal(preset.Targets.Count, option.Values.Count));
+    }
 }

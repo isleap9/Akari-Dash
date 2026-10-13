@@ -12,6 +12,8 @@ public static partial class TweakCatalog
     private const string ConsentStore = @"SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore";
     private const string SearchSettings = @"Software\Microsoft\Windows\CurrentVersion\SearchSettings";
     private const string WindowsAIPolicies = @"SOFTWARE\Policies\Microsoft\Windows\WindowsAI";
+    private const string DataCollectionPolicies = @"SOFTWARE\Policies\Microsoft\Windows\DataCollection";
+    private const string DataCollectionSettings = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection";
 
     private static IEnumerable<DeclaredTweak> PrivacyTweaks() =>
     [
@@ -19,6 +21,7 @@ public static partial class TweakCatalog
         FeedbackFrequency(),
         ImproveInkingAndTyping(),
         ErrorReporting(),
+        SuggestionsPreset(),
         TailoredExperiences(),
         AutomaticAppInstalls(),
         ContentDeliveryAllowed(),
@@ -49,7 +52,14 @@ public static partial class TweakCatalog
         NarratorOnlineServices(),
         NarratorScripting(),
         InkingAndTypingDictionary(),
-        AppAccess("location", "Location", "Lets Windows and apps find out where this PC is. Off also stops Find my device from locating it."),
+        AppAccess(
+            "location", "Location",
+            "Lets Windows and apps find out where this PC is. Off also stops Find my device from locating it; locked also sets the Group Policy behind it, so nothing can switch location back on until you undo this.",
+            policies:
+            [
+                new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors", "DisableLocation"),
+                new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors", "DisableLocation"),
+            ]),
         AppAccess("camera", "Camera", "Lets Windows and apps use the camera. Off stops video calls and streaming from seeing you.", "webcam"),
         AppAccess("microphone", "Microphone", "Lets Windows and apps use the microphone. Off stops voice chat, calls and streaming from hearing you."),
         AppAccess("account-info", "Account info", "Lets apps read your name, picture and other details of the account you are signed in with.", "userAccountInformation"),
@@ -64,9 +74,24 @@ public static partial class TweakCatalog
     private static DeclaredTweak DiagnosticData()
     {
         // Akari-OS sets the AllowTelemetry policy to 0: required data only on Home and Pro, none at
-        // all on Enterprise and Education. Deleting the policy hands the choice back to Settings.
-        var policy = new TweakTarget(
-            new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry"));
+        // all on Enterprise and Education. Winhance sets the same policy for the user as well, and
+        // caps the older CurrentVersion\Policies\DataCollection pair at 1 (required data only), which
+        // is what Windows reads where the newer policy is not honoured. Deleting them all hands the
+        // choice back to Settings. Winhance also writes DiagTrack's ShowedToastAtLevel; that is
+        // Windows' own record of a toast it has shown, not a setting, so it is left alone.
+        TweakTarget[] policies =
+        [
+            new(new RegistryLocation(RegistryHive.LocalMachine, DataCollectionPolicies, "AllowTelemetry")),
+            new(new RegistryLocation(RegistryHive.CurrentUser, DataCollectionPolicies, "AllowTelemetry")),
+        ];
+        TweakTarget[] caps =
+        [
+            new(new RegistryLocation(RegistryHive.LocalMachine, DataCollectionSettings, "AllowTelemetry")),
+            new(new RegistryLocation(RegistryHive.CurrentUser, DataCollectionSettings, "AllowTelemetry")),
+            new(new RegistryLocation(RegistryHive.LocalMachine, DataCollectionSettings, "MaxTelemetryAllowed")),
+            new(new RegistryLocation(RegistryHive.CurrentUser, DataCollectionSettings, "MaxTelemetryAllowed")),
+        ];
+        TweakTarget[] targets = [.. policies, .. caps];
 
         return new DeclaredTweak(
             Id: "privacy.diagnostic-data",
@@ -74,11 +99,14 @@ public static partial class TweakCatalog
             Description: "How much data about your PC and how you use it Windows sends to Microsoft. Minimum sends only what Windows needs to stay secure and up to date (nothing at all on Enterprise and Education), and locks the choice in Settings.",
             Category: Category.Privacy,
             Group: "Diagnostics & feedback",
-            Targets: [policy],
+            Targets: targets,
             Options:
             [
-                Option(policy, "minimum", "Minimum", RegistryValue.DWord(0)),
-                Option(policy, "settings-decides", "As set in Settings", null),
+                new TweakOption("minimum", "Minimum", policies
+                    .Select(target => (target, value: (MachineValue?)RegistryValue.DWord(0)))
+                    .Concat(caps.Select(target => (target, value: (MachineValue?)RegistryValue.DWord(1))))
+                    .ToDictionary(pair => pair.target, pair => pair.value)),
+                Option(targets, "settings-decides", "As set in Settings", null),
             ],
             Activation: Activation.AfterRestart);
     }
@@ -86,50 +114,70 @@ public static partial class TweakCatalog
     private static DeclaredTweak FeedbackFrequency()
     {
         // Akari-OS sets NumberOfSIUFInPeriod to 0 and deletes PeriodInNanoSeconds ("Never").
-        // With neither value, Windows asks automatically.
+        // With neither value, Windows asks automatically. Winhance instead sets the
+        // DoNotShowFeedbackNotifications policy for the machine and the user, which is the Group
+        // Policy for the same thing, so it is the third Option here rather than part of Never:
+        // a PC where only the Siuf values say never has to keep reading as Never.
         var count = new TweakTarget(new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Microsoft\Siuf\Rules", "NumberOfSIUFInPeriod"));
         var period = new TweakTarget(new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Microsoft\Siuf\Rules", "PeriodInNanoSeconds"));
+        TweakTarget[] policies =
+        [
+            new(new RegistryLocation(RegistryHive.LocalMachine, DataCollectionPolicies, "DoNotShowFeedbackNotifications")),
+            new(new RegistryLocation(RegistryHive.CurrentUser, DataCollectionPolicies, "DoNotShowFeedbackNotifications")),
+        ];
 
         return new DeclaredTweak(
             Id: "privacy.feedback-frequency",
             Title: "Feedback requests",
-            Description: "How often Windows pops up asking for your feedback.",
+            Description: "How often Windows pops up asking for your feedback. Locked also sets the Group Policy behind it, so nothing can ask again until you undo this.",
             Category: Category.Privacy,
             Group: "Diagnostics & feedback",
-            Targets: [count, period],
+            Targets: [count, period, .. policies],
             Options:
             [
-                new TweakOption("never", "Never", new Dictionary<TweakTarget, MachineValue?> { [count] = RegistryValue.DWord(0), [period] = null }),
-                Option([count, period], "automatically", "Automatically", null),
+                Never("never", "Never", locked: false),
+                Never("never-locked", "Never, and locked", locked: true),
+                Option([count, period, .. policies], "automatically", "Automatically", null),
             ]);
+
+        TweakOption Never(string id, string label, bool locked)
+        {
+            var values = new Dictionary<TweakTarget, MachineValue?> { [count] = RegistryValue.DWord(0), [period] = null };
+            foreach (var policy in policies)
+            {
+                values[policy] = locked ? RegistryValue.DWord(1) : null;
+            }
+
+            return new TweakOption(id, label, values);
+        }
     }
 
-    private static DeclaredTweak TailoredExperiences()
-    {
-        // Akari-OS turns both values off. Windows treats missing values as on.
-        TweakTarget[] targets =
-        [
-            new(new RegistryLocation(RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Privacy", "TailoredExperiencesWithDiagnosticDataEnabled"),
-                AbsentMeans: RegistryValue.DWord(1)),
-            new(new RegistryLocation(RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\CPSS\Store\TailoredExperiencesWithDiagnosticDataEnabled", "Value"),
-                AbsentMeans: RegistryValue.DWord(1)),
-        ];
-
-        return new DeclaredTweak(
-            Id: "privacy.tailored-experiences",
-            Title: "Tailored experiences",
-            Description: "Lets Microsoft use your diagnostic data to show you personalised tips, ads and recommendations.",
-            Category: Category.Privacy,
-            Group: "Ads & suggestions",
-            Targets: targets,
-            Options: [DWordOption(targets, "off", "Off", 0), DWordOption(targets, "on", "On", 1)]);
-    }
+    private static DeclaredTweak TailoredExperiences() =>
+        // Akari-OS turns both Settings values off; Winhance also sets the CloudContent policy for the
+        // machine and the user, which is the locked Option here. Windows treats missing values as on.
+        OnByDefaultOrLocked(
+            "privacy.tailored-experiences",
+            "Tailored experiences",
+            "Lets Microsoft use your diagnostic data to show you personalised tips, ads and recommendations. Locked also sets the Group Policy behind it, so it stays off until you undo this.",
+            "Ads & suggestions",
+            [
+                (@"Software\Microsoft\Windows\CurrentVersion\Privacy", "TailoredExperiencesWithDiagnosticDataEnabled"),
+                (@"Software\Microsoft\Windows\CurrentVersion\CPSS\Store\TailoredExperiencesWithDiagnosticDataEnabled", "Value"),
+            ],
+            [
+                new RegistryLocation(RegistryHive.LocalMachine, @"Software\Policies\Microsoft\Windows\CloudContent", "DisableTailoredExperiencesWithDiagnosticData"),
+                new RegistryLocation(RegistryHive.CurrentUser, @"Software\Policies\Microsoft\Windows\CloudContent", "DisableTailoredExperiencesWithDiagnosticData"),
+            ]);
 
     private static DeclaredTweak ActivityHistory()
     {
-        // Akari-OS sets the PublishUserActivities policy to 0; deleting it hands the choice back to Settings.
-        var policy = new TweakTarget(
-            new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\System", "PublishUserActivities"));
+        // Akari-OS sets the PublishUserActivities policy to 0, Winhance for the user as well;
+        // deleting them hands the choice back to Settings.
+        TweakTarget[] targets =
+        [
+            new(new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\System", "PublishUserActivities")),
+            new(new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Policies\Microsoft\Windows\System", "PublishUserActivities")),
+        ];
 
         return new DeclaredTweak(
             Id: "privacy.activity-history",
@@ -137,11 +185,11 @@ public static partial class TweakCatalog
             Description: "Windows keeps a history of the apps, files and websites you use on this PC.",
             Category: Category.Privacy,
             Group: "Activity & search",
-            Targets: [policy],
+            Targets: targets,
             Options:
             [
-                Option(policy, "off", "Off", RegistryValue.DWord(0)),
-                Option(policy, "settings-decides", "As set in Settings", null),
+                DWordOption(targets, "off", "Off", 0),
+                Option(targets, "settings-decides", "As set in Settings", null),
             ],
             Activation: Activation.AfterSignOut);
     }
@@ -251,6 +299,51 @@ public static partial class TweakCatalog
     }
 
     /// <summary>
+    /// An Off/On Tweak over current-user Settings values that also offers to lock the choice in with
+    /// the Group Policy values Winhance writes for it. "Off" writes only what the switch in Settings
+    /// writes, so a PC where someone used Settings still reads as Off; "Off, and locked" writes the
+    /// policies too, which stops Windows and other apps turning it back on and greys the switch out;
+    /// "On" deletes the policies again. <paramref name="policyOff"/> is what the policy holds to turn
+    /// the setting off, which is 0 for the policies named "Allow...".
+    /// </summary>
+    private static DeclaredTweak OnByDefaultOrLocked(
+        string id, string title, string description, string group,
+        (string Key, string Name)[] values, RegistryLocation[] policies,
+        Activation activation = Activation.Immediately, int absentMeans = 1, int policyOff = 1)
+    {
+        TweakTarget[] settings = values
+            .Select(value => new TweakTarget(new RegistryLocation(RegistryHive.CurrentUser, value.Key, value.Name), AbsentMeans: RegistryValue.DWord(absentMeans)))
+            .ToArray();
+        TweakTarget[] locks = policies.Select(policy => new TweakTarget(policy)).ToArray();
+
+        return new DeclaredTweak(
+            Id: id,
+            Title: title,
+            Description: description,
+            Category: Category.Privacy,
+            Group: group,
+            Targets: [.. settings, .. locks],
+            Options:
+            [
+                Values("off", "Off", 0, locked: false),
+                Values("off-locked", "Off, and locked", 0, locked: true),
+                Values("on", "On", 1, locked: false),
+            ],
+            Activation: activation);
+
+        TweakOption Values(string optionId, string label, int setting, bool locked)
+        {
+            var written = settings.ToDictionary(target => target, target => (MachineValue?)RegistryValue.DWord(setting));
+            foreach (var padlock in locks)
+            {
+                written[padlock] = locked ? RegistryValue.DWord(policyOff) : null;
+            }
+
+            return new TweakOption(optionId, label, written);
+        }
+    }
+
+    /// <summary>
     /// A policy Tweak: "off" sets every policy value to <paramref name="offValue"/>; deleting them
     /// hands the choice back. Policies that turn something off hold 1, except the ones named
     /// "Allow..." (AllowCortana), which turn it off by holding 0.
@@ -299,13 +392,18 @@ public static partial class TweakCatalog
             handBackLabel: "As set in Windows");
 
     private static DeclaredTweak AdvertisingId() =>
-        // Akari-Dash writes only the Settings toggle; Winhance also sets the AdvertisingInfo policies.
-        OnByDefault(
+        // The Settings toggle, plus the AdvertisingInfo policies Winhance sets for the machine and
+        // the user ("Turn off the advertising ID"), offered as the locked Option.
+        OnByDefaultOrLocked(
             "privacy.advertising-id",
             "Advertising ID",
-            "Gives apps an ID that follows you from app to app, so they can show you ads based on what you do.",
+            "Gives apps an ID that follows you from app to app, so they can show you ads based on what you do. Locked also sets the Group Policy behind it, so apps cannot ask for the ID again until you undo this.",
             "Ads & suggestions",
-            [(@"Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo", "Enabled")]);
+            [(@"Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo", "Enabled")],
+            [
+                new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo", "DisabledByGroupPolicy"),
+                new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo", "DisabledByGroupPolicy"),
+            ]);
 
     private static DeclaredTweak LockScreenTips() =>
         // Akari-OS and Winhance turn RotatingLockScreenOverlayEnabled off.
@@ -318,6 +416,60 @@ public static partial class TweakCatalog
 
     // The rest of the ContentDeliveryManager family, each value its own Tweak as Winhance (MIT) has
     // them. Windows treats every one of them as on when it is missing, and reads them at sign-in.
+    /// <summary>
+    /// The Tweaks the suggestions preset sets at once: every value Windows keeps under
+    /// ContentDeliveryManager, which is what Winhance's own Ads, Suggestions and Promotional Content
+    /// switch covers. Built by calling each Tweak, which is a pure function, so the preset reads the
+    /// values from the Tweaks themselves rather than repeating them.
+    /// </summary>
+    private static DeclaredTweak[] SuggestionTweaks() =>
+    [
+        AutomaticAppInstalls(),
+        ContentDeliveryAllowed(),
+        SubscribedContent(),
+        FeatureSuggestions(),
+        TipsAfterUpdates(),
+        ManufacturersApps(),
+        SuggestedApps(),
+        SuggestedAppsHistory(),
+        SuggestionsInSettings(),
+        WindowsSpotlight(),
+        LockScreenTips(),
+        LockScreenSlideshow(),
+        TimelineSuggestions(),
+    ];
+
+    private static DeclaredTweak SuggestionsPreset()
+    {
+        var suggestions = SuggestionTweaks();
+        TweakTarget[] targets = [.. suggestions.SelectMany(tweak => tweak.Targets)];
+
+        return new DeclaredTweak(
+            Id: "privacy.suggestions-preset",
+            Title: "Suggestions and promotions",
+            Description: "Sets every suggestion Tweak at once, the ones below and the three on the lock screen, the way Winhance's own switch does. Off stops Windows fetching suggested apps, promotions, spotlight pictures and tips from Microsoft. A mix of settings reads as Custom until you pick one here.",
+            Category: Category.Privacy,
+            Group: "Ads & suggestions",
+            Targets: targets,
+            Options: [Preset("off", "All off", "off"), Preset("on", "All on (Windows defaults)", "on")],
+            Activation: Activation.AfterSignOut);
+
+        TweakOption Preset(string id, string label, string childOption)
+        {
+            var values = new Dictionary<TweakTarget, MachineValue?>();
+            foreach (var tweak in suggestions)
+            {
+                var option = tweak.Options.Single(candidate => candidate.Id == childOption);
+                foreach (var target in tweak.Targets)
+                {
+                    values[target] = option.Values[target];
+                }
+            }
+
+            return new TweakOption(id, label, values);
+        }
+    }
+
     private static DeclaredTweak ContentDeliveryAllowed() =>
         OnByDefault(
             "privacy.content-delivery",
@@ -527,22 +679,22 @@ public static partial class TweakCatalog
             Activation: Activation.AfterSignOut);
     }
 
-    private static DeclaredTweak OnlineSpeechRecognition()
-    {
-        // Winhance turns HasAccepted off. It is missing until you are asked, and missing means not accepted.
-        var accepted = new TweakTarget(
-            new RegistryLocation(RegistryHive.CurrentUser, @"Software\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy", "HasAccepted"),
-            AbsentMeans: RegistryValue.DWord(0));
-
-        return new DeclaredTweak(
-            Id: "privacy.online-speech",
-            Title: "Online speech recognition",
-            Description: "Sends your voice to Microsoft's cloud to turn it into text, for dictation and voice typing in apps. Off keeps the on-device recognition.",
-            Category: Category.Privacy,
-            Group: "Speech, inking & typing",
-            Targets: [accepted],
-            Options: [DWordOption(accepted, "off", "Off", 0), DWordOption(accepted, "on", "On", 1)]);
-    }
+    private static DeclaredTweak OnlineSpeechRecognition() =>
+        // Winhance turns HasAccepted off (it is missing until you are asked, and missing means not
+        // accepted) and sets the AllowInputPersonalization policy for the machine and the user. That
+        // policy turns the setting off by holding 0, not 1, and is the locked Option here.
+        OnByDefaultOrLocked(
+            "privacy.online-speech",
+            "Online speech recognition",
+            "Sends your voice to Microsoft's cloud to turn it into text, for dictation and voice typing in apps. Off keeps the on-device recognition; locked also sets the Group Policy behind it, so nothing can accept it again until you undo this.",
+            "Speech, inking & typing",
+            [(@"Software\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy", "HasAccepted")],
+            [
+                new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\InputPersonalization", "AllowInputPersonalization"),
+                new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Policies\Microsoft\InputPersonalization", "AllowInputPersonalization"),
+            ],
+            absentMeans: 0,
+            policyOff: 0);
 
     private static DeclaredTweak InkingAndTypingDictionary()
     {
@@ -580,13 +732,25 @@ public static partial class TweakCatalog
                 .ToDictionary(pair => pair.target, pair => (MachineValue?)pair.value));
     }
 
-    private static DeclaredTweak AppAccess(string name, string title, string description, string? consentKey = null)
+    private static DeclaredTweak AppAccess(
+        string name, string title, string description, string? consentKey = null, RegistryLocation[]? policies = null)
     {
         // Akari-OS and Winhance set the machine-wide ConsentStore value: "Allow" or "Deny". A matter
         // of taste, so no Recommended Option: Akari-OS itself turns camera and microphone on.
+        // Where Winhance also has a Group Policy for the same permission (location), it is the third,
+        // locked Option, so a PC where the permission was simply denied still reads as Off.
         var access = new TweakTarget(
             new RegistryLocation(RegistryHive.LocalMachine, $@"{ConsentStore}\{consentKey ?? name}", "Value"),
             AbsentMeans: RegistryValue.String("Allow"));
+        TweakTarget[] locks = (policies ?? []).Select(policy => new TweakTarget(policy)).ToArray();
+
+        List<TweakOption> options = [Consent("off", "Off", "Deny", locked: false)];
+        if (locks.Length > 0)
+        {
+            options.Add(Consent("off-locked", "Off, and locked", "Deny", locked: true));
+        }
+
+        options.Add(Consent("on", "On", "Allow", locked: false));
 
         return new DeclaredTweak(
             Id: $"privacy.{name}",
@@ -594,8 +758,19 @@ public static partial class TweakCatalog
             Description: description,
             Category: Category.Privacy,
             Group: "App permissions",
-            Targets: [access],
-            Options: [Option(access, "off", "Off", RegistryValue.String("Deny")), Option(access, "on", "On", RegistryValue.String("Allow"))]);
+            Targets: [access, .. locks],
+            Options: options);
+
+        TweakOption Consent(string optionId, string label, string consent, bool locked)
+        {
+            var values = new Dictionary<TweakTarget, MachineValue?> { [access] = RegistryValue.String(consent) };
+            foreach (var padlock in locks)
+            {
+                values[padlock] = locked ? RegistryValue.DWord(1) : null;
+            }
+
+            return new TweakOption(optionId, label, values);
+        }
     }
 
     private static DeclaredTweak Copilot() =>

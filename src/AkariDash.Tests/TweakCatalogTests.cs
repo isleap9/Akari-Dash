@@ -48,6 +48,22 @@ public class TweakCatalogTests
         Assert.Equal(tweak.Options.Count, tweak.Options.Select(option => option.Id).Distinct().Count());
     }
 
+    // Two Options that write the same values would both match one machine, so the Live State read
+    // would pick whichever came first and the other Option could never be reached.
+    [Theory]
+    [MemberData(nameof(TweakIds))]
+    public void No_two_options_of_a_tweak_write_the_same_values(string id)
+    {
+        var tweak = Find(id);
+        var written = tweak.Options
+            .Select(option => string.Join(
+                "|",
+                tweak.Targets.Select(target => option.Values[target]?.ToString() ?? "(deleted)")))
+            .ToList();
+
+        Assert.Equal(written.Count, written.Distinct().Count());
+    }
+
     [Theory]
     [MemberData(nameof(TweakIds))]
     public void Every_tweak_has_a_title_description_and_group(string id)
@@ -273,12 +289,13 @@ public class TweakCatalogTests
     }
 
     [Fact]
-    public void Feedback_frequency_automatically_deletes_both_values_so_windows_decides_again()
+    public void Feedback_frequency_automatically_deletes_every_value_so_windows_decides_again()
     {
         var tweak = Find("privacy.feedback-frequency");
         var automatically = tweak.Options.Single(option => option.Id == "automatically");
 
-        Assert.Equal(2, tweak.Targets.Count);
+        // The two Siuf values, plus the machine and user copies of the policy behind them.
+        Assert.Equal(4, tweak.Targets.Count);
         Assert.All(tweak.Targets, target => Assert.Null(automatically.Values[target]));
     }
 
@@ -292,9 +309,8 @@ public class TweakCatalogTests
     public void Policy_tweaks_can_remove_the_policy_again(string id)
     {
         var tweak = Find(id);
-        var target = Assert.Single(tweak.Targets);
 
-        Assert.Contains(tweak.Options, option => option.Values[target] is null);
+        Assert.Contains(tweak.Options, option => tweak.Targets.All(target => option.Values[target] is null));
     }
 
     [Theory]
