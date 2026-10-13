@@ -53,7 +53,7 @@ A named cluster of related **Tweaks** inside a **Category** (e.g. Game Mode, Net
 _Avoid_: Subcategory, block, card
 
 **Original Values**:
-The machine's own values a **Tweak** touches, saved once, just before Akari-Dash first applies it, and kept unchanged until **Undo**; re-applying or switching **Options** never overwrites them. Undo restores exactly these. "Did not exist" is a valid Original Value, restored by deleting.
+The machine's own values a **Tweak** touches, saved once, just before Akari-Dash first applies it, and kept unchanged until **Undo**; re-applying or switching **Options** never overwrites them. Undo restores exactly these. "Did not exist" is a valid Original Value, restored by deleting. An Original Value belongs to the target rather than to the Tweak: where two Tweaks share a target, the one applied second inherits what the first recorded instead of reading the machine, which by then holds Akari-Dash's own write. So both restore the same thing, and the order they are undone in does not matter.
 _Avoid_: Default, backup, Windows default, snapshot
 
 **Undo**:

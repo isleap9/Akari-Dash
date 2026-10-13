@@ -414,4 +414,60 @@ public class UpdateCatalogTests
 
         Assert.IsType<LiveState.Drifted>(engine.ReadLiveState(policy, TweakCatalog.All));
     }
+
+    [Fact]
+    public void A_policy_mode_records_the_machines_own_values_not_the_rows_it_covers()
+    {
+        // From the VM report of 2026-10-13: the rows below were set first, then Paused (AkariOS), and
+        // update.policy saved NoAutoUpdate = 1, AUOptions = 1, BranchReadinessLevel = 20 and the rest
+        // as its "Original Values" -- Akari-Dash's own writes, recorded as if Windows had put them
+        // there. An Original Value belongs to the location and is the machine's own value, so the
+        // mode must inherit what the rows already recorded.
+        var machine = new InMemoryMachine();
+        var store = new InMemoryOriginalValuesStore();
+        var engine = new TweakEngine(machine, store);
+
+        engine.Apply(Find("update.automatic-updates"), OptionOf("update.automatic-updates", "off"));
+        engine.Apply(Find("update.feature-updates"), OptionOf("update.feature-updates", "hold-back-a-year"));
+        engine.Apply(Find("update.quality-updates"), OptionOf("update.quality-updates", "hold-back-a-week"));
+        engine.Apply(Find("update.shutdown-option"), OptionOf("update.shutdown-option", "hide"));
+        engine.Apply(Find("update.policy"), OptionOf("update.policy", "akari-pause"));
+
+        Assert.All(
+            store.Get("update.policy")!.OriginalValues,
+            original => Assert.Null(original.Value));
+    }
+
+    [Fact]
+    public void Undoing_a_policy_mode_last_leaves_nothing_of_the_rows_it_covered_behind()
+    {
+        // The hazard the record above carried: undo the covered rows first and the mode last, and the
+        // mode writes their values back from its own record -- after their records are gone, so
+        // nothing owns them any more and no Undo can reach them.
+        var machine = new InMemoryMachine();
+        var engine = new TweakEngine(machine);
+        DeclaredTweak[] rows =
+        [
+            Find("update.automatic-updates"), Find("update.feature-updates"),
+            Find("update.quality-updates"), Find("update.shutdown-option"),
+        ];
+
+        foreach (var row in rows)
+        {
+            engine.Apply(row, row.Options[1]);
+        }
+
+        engine.Apply(Find("update.policy"), OptionOf("update.policy", "akari-pause"));
+
+        foreach (var row in rows)
+        {
+            engine.Undo(row);
+        }
+
+        engine.Undo(Find("update.policy"));
+
+        Assert.All(
+            Find("update.policy").Targets,
+            target => Assert.Null(machine.Read(target.Location)));
+    }
 }

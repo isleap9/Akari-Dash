@@ -139,6 +139,27 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
         return dryRun.PlannedChanges;
     }
 
+    /// <summary>
+    /// The machine's own value for <paramref name="location"/>: the Original Value another applied
+    /// Tweak already holds for it, or what the machine reads now when none does.
+    ///
+    /// An Original Value belongs to the location, not to the Tweak, and is the machine's own value —
+    /// so two Tweaks that share a location must record the same one. Two Tweaks may share on purpose:
+    /// an update policy mode covers the rows beneath it. Reading the machine for the second of them
+    /// would record Akari-Dash's own earlier write as if Windows had put it there, and undoing that
+    /// Tweak would then restore a state the PC was never in — and, once the first Tweak's record is
+    /// gone, leave those values behind with nothing owning them.
+    /// </summary>
+    private MachineValue? MachinesOwnValue(MachineLocation location, string tweakId) =>
+        _store.AppliedTweakIds()
+            .Where(id => id != tweakId)
+            .Select(_store.Get)
+            .OfType<AppliedTweak>()
+            .SelectMany(other => other.OriginalValues)
+            .FirstOrDefault(original => original.Location == location) is { } recorded
+            ? recorded.Value
+            : _writes.Read(location);
+
     /// <summary>Whether Akari-Dash holds Original Values for <paramref name="tweak"/>, and so can Undo it.</summary>
     public bool IsApplied(DeclaredTweak tweak) => _store.Get(tweak.Id) is not null;
 
@@ -177,7 +198,7 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
         List<OriginalValue> originals = [.. applied?.OriginalValues ?? []];
         var newTargets = tweak.Targets
             .Where(target => originals.All(original => original.Location != target.Location))
-            .Select(target => new OriginalValue(target.Location, _writes.Read(target.Location)))
+            .Select(target => new OriginalValue(target.Location, MachinesOwnValue(target.Location, tweak.Id)))
             .ToList();
 
         if (newTargets.Count > 0)
