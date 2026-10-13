@@ -114,4 +114,63 @@ public class PrivacyAITests
             TweakCatalog.All.SelectMany(tweak => tweak.Targets).Select(target => target.Location).OfType<RegistryLocation>(),
             location => location.Name == name);
     }
+
+    private static readonly IReadOnlyList<DeclaredTweak> EdgeAI =
+        TweakCatalog.All.Where(tweak => tweak.Group == "Microsoft Edge AI").ToList();
+
+    [Fact]
+    public void Every_edge_row_is_one_documented_policy_under_edges_machine_policy_key()
+    {
+        // Microsoft publishes the same registry path for all of them, so a row writing anywhere else
+        // would be a value somebody made up.
+        Assert.Equal(5, EdgeAI.Count);
+        Assert.All(EdgeAI, tweak =>
+        {
+            Assert.Equal(Category.Privacy, tweak.Category);
+            var location = (RegistryLocation)Assert.Single(tweak.Targets).Location;
+            Assert.Equal(RegistryHive.LocalMachine, location.Hive);
+            Assert.Equal(@"SOFTWARE\Policies\Microsoft\Edge", location.Key);
+        });
+    }
+
+    [Theory]
+    [InlineData("privacy.edge-copilot-page-context", "CopilotPageContext", 0)]
+    [InlineData("privacy.edge-history-ai-search", "EdgeHistoryAISearchEnabled", 0)]
+    [InlineData("privacy.edge-builtin-ai-apis", "BuiltInAIAPIsEnabled", 0)]
+    [InlineData("privacy.edge-ai-themes", "AIGenThemesEnabled", 0)]
+    // The one enum in the group: Microsoft documents 1 as Disallowed, not as "enabled = true".
+    [InlineData("privacy.edge-local-ai-model", "GenAILocalFoundationalModelSettings", 1)]
+    public void An_edge_row_writes_the_value_microsoft_documents_for_it(string id, string name, int off)
+    {
+        var tweak = EdgeAI.Single(candidate => candidate.Id == id);
+        var target = Assert.Single(tweak.Targets);
+
+        Assert.Equal(name, ((RegistryLocation)target.Location).Name);
+        Assert.Equal(RegistryValue.DWord(off), tweak.Options[0].Values[target]);
+        Assert.Null(tweak.Options[1].Values[target]);
+    }
+
+    [Fact]
+    public void No_edge_row_is_unavailable_without_edge()
+    {
+        // #35: the policy is writable whether or not Edge is installed, and takes effect when Edge
+        // arrives. Hiding the rows on a PC without Edge would be worse than saying so in the words.
+        Assert.All(EdgeAI, tweak => Assert.Null(tweak.RequiresGpu));
+        Assert.All(EdgeAI, tweak => Assert.Contains("Edge", tweak.Description));
+    }
+
+    [Theory]
+    [InlineData("EdgeCopilotEnabled")]
+    [InlineData("CopilotCDPPageContext")]
+    [InlineData("EdgeEntraCopilotPageContext")]
+    [InlineData("Microsoft365CopilotChatIconEnabled")]
+    [InlineData("ComposeInlineEnabled")]
+    public void The_edge_policies_that_do_nothing_here_are_left_out(string name)
+    {
+        // Reasons above EdgeAITweaks(): not supported on Windows, obsolete, or scoped to Entra work
+        // profiles and Edge for Business.
+        Assert.DoesNotContain(
+            TweakCatalog.All.SelectMany(tweak => tweak.Targets).Select(target => target.Location).OfType<RegistryLocation>(),
+            location => location.Name == name);
+    }
 }

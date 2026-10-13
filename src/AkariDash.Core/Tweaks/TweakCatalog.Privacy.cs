@@ -90,6 +90,7 @@ public static partial class TweakCatalog
         ClickToDo(),
         AIInPaint(),
         AIInNotepad(),
+        .. EdgeAITweaks(),
     ];
 
     private static DeclaredTweak DiagnosticData()
@@ -869,6 +870,70 @@ public static partial class TweakCatalog
             [new RegistryLocation(RegistryHive.LocalMachine, @"Software\Microsoft\Windows\Shell\Copilot\BingChat", "IsUserEligible")],
             offValue: 0,
             handBackLabel: "As Windows decides");
+
+    // The Microsoft Edge AI Group (#35). Every value here comes from Microsoft's own Edge policy
+    // documentation, which publishes the registry path, value name and type for each one; none came
+    // from the Shield-era Winhance tree, which ADR-0003 forbids as a source of values.
+    //
+    // These are machine policies under Edge's policy key, so they are ordinary registry data and
+    // write perfectly well on a PC with no Edge: the policy simply waits for Edge to arrive. That is
+    // why none of them is Unavailable without Edge, and why the descriptions say "Edge" rather than
+    // pretending the row is about Windows.
+    //
+    // Checked against the documentation one page at a time, because "it is an Edge policy" does not
+    // mean it works here. Of the twelve #35 listed:
+    //
+    //   EdgeCopilotEnabled, the Copilot sidebar switch, is documented "Windows: Not supported" —
+    //   it is an Android and iOS policy. CopilotCDPPageContext is marked obsolete.
+    //
+    //   DevTools AI and sharing history with Copilot have no published Edge policy under any name
+    //   this search could find, so there is nothing to write.
+    //
+    //   EdgeEntraCopilotPageContext, Microsoft365CopilotChatIconEnabled and ComposeInlineEnabled are
+    //   documented, and scoped to Microsoft Entra work profiles and Microsoft Edge for Business.
+    //   They do nothing on the personal account a gaming PC signs in with. CopilotPageContext is the
+    //   one of that family worth having, and its own description says who it applies to.
+    private static IEnumerable<DeclaredTweak> EdgeAITweaks() =>
+    [
+        EdgeAIPolicy(
+            "privacy.edge-copilot-page-context",
+            "Copilot reading the page in Edge",
+            "Stops Copilot in Edge's side pane reading the page you are on, which is what it needs to summarise a page or work on text you have selected. Microsoft scopes this one to work profiles signed in with a Microsoft Entra account, not to a personal Microsoft account — on a personal account Edge's own settings are what decide, and Edge turns it off by default in the EU either way.",
+            "CopilotPageContext"),
+        EdgeAIPolicy(
+            "privacy.edge-history-ai-search",
+            "AI search in Edge's history",
+            "Turns Edge's browsing history back into an exact-text search. On, Edge reads your history with a language model so you can find a page by describing it; off, you get only what you actually type.",
+            "EdgeHistoryAISearchEnabled"),
+        EdgeAIPolicy(
+            "privacy.edge-builtin-ai-apis",
+            "Websites using Edge's built-in AI",
+            "Blocks the APIs any website can call to use the language model Edge ships with — summarising, writing and rewriting text. Off, those calls fail with an error instead, so a page cannot quietly run a model over what you typed.",
+            "BuiltInAIAPIsEnabled"),
+        EdgeAIPolicy(
+            "privacy.edge-ai-themes",
+            "AI-generated themes in Edge",
+            "Removes Edge's generate-a-theme feature, which sends your description to Microsoft's image model and themes the browser with what comes back.",
+            "AIGenThemesEnabled"),
+        // The odd one out: an enum rather than a switch, where 1 means Disallowed. Microsoft documents
+        // that disallowing it also deletes the model already downloaded.
+        EdgeAIPolicy(
+            "privacy.edge-local-ai-model",
+            "Edge's local AI model",
+            "Stops Edge downloading the on-device model it runs AI features from, and deletes the copy it has already downloaded, freeing the disk space that took. Features that need it stop working until you undo this.",
+            "GenAILocalFoundationalModelSettings",
+            offValue: 1),
+    ];
+
+    /// <summary>
+    /// One Microsoft Edge policy, under the machine policy key Microsoft documents for all of them.
+    /// Most are "...Enabled" switches where Off is 0; <paramref name="offValue"/> is for the ones
+    /// that are not.
+    /// </summary>
+    private static DeclaredTweak EdgeAIPolicy(string id, string title, string description, string name, int offValue = 0) =>
+        OffByPolicy(id, title, description, "Microsoft Edge AI",
+            [new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Edge", name)],
+            offValue: offValue, handBackLabel: "As Edge decides");
 
     private static DeclaredTweak RecallSnapshots() =>
         // Akari-OS also sets AllowRecallEnablement to 0, but Microsoft documents that it removes
