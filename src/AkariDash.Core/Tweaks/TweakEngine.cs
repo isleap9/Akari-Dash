@@ -53,11 +53,16 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
     /// when it is no longer in the Option Akari-Dash last applied, or <see cref="LiveState.Unavailable"/>
     /// when it cannot be used on this machine, including when Windows does not let it be read.
     /// </summary>
-    public LiveState ReadLiveState(DeclaredTweak tweak)
+    /// <param name="catalog">
+    /// The other Tweaks to read this one against, so that a value one of them has been applied over
+    /// is not reported as Drift. Leaving it out reports every move away from the applied Option as
+    /// Drift, which is right only when nothing else can have written these values.
+    /// </param>
+    public LiveState ReadLiveState(DeclaredTweak tweak, IEnumerable<DeclaredTweak>? catalog = null)
     {
         try
         {
-            return ReadLiveStateUnguarded(tweak);
+            return ReadLiveStateUnguarded(tweak, catalog);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -65,7 +70,7 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
         }
     }
 
-    private LiveState ReadLiveStateUnguarded(DeclaredTweak tweak)
+    private LiveState ReadLiveStateUnguarded(DeclaredTweak tweak, IEnumerable<DeclaredTweak>? catalog)
     {
         if (UnavailableReason(tweak) is { } reason)
         {
@@ -81,7 +86,46 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
         }
 
         var stillApplied = live is LiveState.InOption current && current.Option == applied;
-        return stillApplied ? live : new LiveState.Drifted(applied, live);
+        return stillApplied || ChangedByAnotherTweak(tweak, applied, catalog)
+            ? live
+            : new LiveState.Drifted(applied, live);
+    }
+
+    /// <summary>
+    /// Whether every value that has moved away from <paramref name="applied"/> now holds what
+    /// another Tweak Akari-Dash has applied put there. Two Tweaks may share a value on purpose — an
+    /// update policy mode covers the rows beneath it — and when the user then sets one of those rows,
+    /// the other has not drifted: Akari-Dash moved it, on the user's instruction, and offering to
+    /// re-apply would undo the choice they just made. Drift means Windows reset it, so this is not
+    /// Drift; the Tweak reads as whatever the machine is in now, Undo included.
+    /// </summary>
+    private bool ChangedByAnotherTweak(DeclaredTweak tweak, TweakOption applied, IEnumerable<DeclaredTweak>? catalog)
+    {
+        if (catalog is null)
+        {
+            return false;
+        }
+
+        var others = catalog
+            .Where(other => other.Id != tweak.Id)
+            .Select(other => (Tweak: other, Applied: AppliedOption(other)))
+            .Where(other => other.Applied is not null)
+            .ToList();
+
+        if (others.Count == 0)
+        {
+            return false;
+        }
+
+        var moved = tweak.Targets
+            .Select(target => (Target: target, Value: machine.Read(target.Location)))
+            .Where(live => Effective(live.Target, live.Value) != Effective(live.Target, applied.Values[live.Target]))
+            .ToList();
+
+        // Nothing moved yet the Tweak is not in its Option: the Options overlap, not our business here.
+        return moved.Count > 0 && moved.All(live => others.Any(other =>
+            other.Tweak.Targets.FirstOrDefault(target => target.Location == live.Target.Location) is { } theirs &&
+            Effective(theirs, other.Applied!.Values[theirs]) == Effective(theirs, live.Value)));
     }
 
     /// <summary>Lists what applying <paramref name="option"/> would change, writing nothing.</summary>
@@ -515,5 +559,5 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
 
     /// <summary>What Windows behaves as for <paramref name="value"/>, treating a missing value as the target's <see cref="TweakTarget.AbsentMeans"/>.</summary>
     private static MachineValue? Effective(TweakTarget target, MachineValue? value) =>
-        value ?? target.AbsentMeans;
+        target.Effective(value);
 }

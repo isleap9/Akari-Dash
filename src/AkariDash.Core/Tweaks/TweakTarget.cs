@@ -8,4 +8,12 @@ namespace AkariDash.Core.Tweaks;
 /// <paramref name="AbsentMeans"/> is what Windows behaves as when it does not exist
 /// (e.g. Game Mode is on by default), so a missing value can still resolve to an Option.
 /// </summary>
-public sealed record TweakTarget(MachineLocation Location, MachineValue? AbsentMeans = null);
+public sealed record TweakTarget(MachineLocation Location, MachineValue? AbsentMeans = null)
+{
+    /// <summary>
+    /// What Windows behaves as when this target holds <paramref name="value"/>: the value itself,
+    /// or <see cref="AbsentMeans"/> when it does not exist. Two values compare as the same state
+    /// only through this, so a missing value and the value it stands for are not told apart.
+    /// </summary>
+    public MachineValue? Effective(MachineValue? value) => value ?? AbsentMeans;
+}

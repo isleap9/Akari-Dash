@@ -109,4 +109,61 @@ public class TweakEngineDriftTests
 
         Assert.Same(On, Assert.IsType<LiveState.InOption>(engine.ReadLiveState(Tweak)).Option);
     }
+
+    // A second Tweak over the same value, as an update policy mode sits over the rows beneath it.
+    private static readonly DeclaredTweak Covering =
+        new("covering", "Covering", "Writes the same value.", Category.Gaming, "Test Group", [Target], [Off, On]);
+
+    [Fact]
+    public void A_value_another_applied_tweak_changed_is_not_drift()
+    {
+        // The #31 case: the update policy mode is applied, then one of the rows it covers is set to
+        // something else. The mode has not drifted — Akari-Dash moved it, on the user's instruction —
+        // and offering to re-apply would undo the choice they just made.
+        var engine = Engine();
+        engine.Apply(Covering, Off);
+        engine.Apply(Tweak, On);
+
+        Assert.Same(On, Assert.IsType<LiveState.InOption>(engine.ReadLiveState(Covering, [Tweak, Covering])).Option);
+        Assert.Same(On, Assert.IsType<LiveState.InOption>(engine.ReadLiveState(Tweak, [Tweak, Covering])).Option);
+    }
+
+    [Fact]
+    public void Windows_resetting_the_value_is_still_drift_even_beside_another_applied_tweak()
+    {
+        var engine = Engine();
+        engine.Apply(Covering, Off);
+        engine.Apply(Tweak, Off);
+
+        // Nothing Akari-Dash applied asks for 5, so this is Windows, and it is Drift for both.
+        _machine.Write(Location, RegistryValue.DWord(5));
+
+        Assert.IsType<LiveState.Drifted>(engine.ReadLiveState(Covering, [Tweak, Covering]));
+        Assert.IsType<LiveState.Drifted>(engine.ReadLiveState(Tweak, [Tweak, Covering]));
+    }
+
+    [Fact]
+    public void An_unapplied_tweak_over_the_same_value_explains_nothing()
+    {
+        var engine = Engine();
+        engine.Apply(Covering, Off);
+
+        // Covering's value moved, and the only other Tweak that holds it was never applied, so
+        // nothing accounts for the move but Windows.
+        _machine.Write(Location, RegistryValue.DWord(1));
+
+        Assert.IsType<LiveState.Drifted>(engine.ReadLiveState(Covering, [Tweak, Covering]));
+    }
+
+    [Fact]
+    public void Without_a_catalog_every_move_is_still_drift()
+    {
+        // The default stays as it was: a caller that does not say what else may write these values
+        // gets the old reading, so nothing silently stops reporting drift.
+        var engine = Engine();
+        engine.Apply(Covering, Off);
+        engine.Apply(Tweak, On);
+
+        Assert.IsType<LiveState.Drifted>(engine.ReadLiveState(Covering));
+    }
 }

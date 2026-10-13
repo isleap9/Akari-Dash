@@ -106,7 +106,8 @@ public sealed class CategoryViewModel(
                     isApplied: engine.IsApplied(tweak),
                     ChooseOption,
                     Undo,
-                    Refresh)
+                    Refresh,
+                    engine.AppliedOption(tweak))
                 {
                     IsHighlighted = tweak.Id == HighlightedTweakId,
                 }).ToList()))
@@ -120,7 +121,10 @@ public sealed class CategoryViewModel(
     {
         try
         {
-            return engine.ReadLiveState(tweak);
+            // The whole catalog, so a value another Tweak was applied over reads as what it is
+            // rather than as Drift: the update policy modes and privacy.suggestions-preset both
+            // write values the rows beneath them own.
+            return engine.ReadLiveState(tweak, TweakCatalog.All);
         }
         catch (Exception ex)
         {

@@ -373,4 +373,45 @@ public class UpdateCatalogTests
         Assert.All(Updates, tweak => Assert.Equal(Activation.Immediately, tweak.Activation));
     }
 
+    [Fact]
+    public void Setting_a_covered_row_after_a_policy_mode_is_not_drift_on_either_of_them()
+    {
+        // Reported from the VM build of #31: Paused (AkariOS), then Automatic updates > Never check
+        // on its own, and the policy row claimed Drift over all 28 of its values and offered to
+        // re-apply — which would have undone the choice just made. Akari-Dash moved those values, so
+        // it is not Drift; the row reads what the machine is in, and Undo still restores its originals.
+        var machine = new InMemoryMachine();
+        var engine = new TweakEngine(machine);
+        var policy = Find("update.policy");
+        var automatic = Find("update.automatic-updates");
+
+        engine.Apply(policy, OptionOf("update.policy", "akari-pause"));
+        engine.Apply(automatic, OptionOf("update.automatic-updates", "off"));
+
+        Assert.IsNotType<LiveState.Drifted>(engine.ReadLiveState(policy, TweakCatalog.All));
+        Assert.Same(
+            OptionOf("update.automatic-updates", "off"),
+            Assert.IsType<LiveState.InOption>(engine.ReadLiveState(automatic, TweakCatalog.All)).Option);
+
+        // The pause is still there and still the policy row's to undo.
+        Assert.True(engine.IsApplied(policy));
+        Assert.Equal(28, engine.ReadLiveState(policy, TweakCatalog.All) is LiveState.Custom custom ? custom.Values.Count : 0);
+    }
+
+    [Fact]
+    public void A_policy_mode_that_windows_moved_still_reads_as_drift()
+    {
+        var machine = new InMemoryMachine();
+        var engine = new TweakEngine(machine);
+        var policy = Find("update.policy");
+
+        engine.Apply(policy, OptionOf("update.policy", "akari-pause"));
+
+        // Nothing on this page asks for an empty pause window, so this one is Windows' doing.
+        machine.Write(
+            policy.Targets.Single(target => ((RegistryLocation)target.Location).Name == "PauseUpdatesExpiryTime").Location,
+            RegistryValue.String("2026-11-01T00:00:00Z"));
+
+        Assert.IsType<LiveState.Drifted>(engine.ReadLiveState(policy, TweakCatalog.All));
+    }
 }

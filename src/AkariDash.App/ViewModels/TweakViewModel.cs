@@ -23,6 +23,11 @@ public sealed partial class TweakViewModel : ViewModelBase
     private TweakOption? _selectedOption;
 
     /// <param name="isApplied">Whether Akari-Dash has applied this Tweak (and so can Undo it).</param>
+    /// <param name="appliedOption">
+    /// The Option Akari-Dash last applied, where it has. A row that is no longer in it says what
+    /// differs from it rather than listing every value it touches, which for a Tweak over dozens of
+    /// them is the difference between one line and a paragraph.
+    /// </param>
     /// <param name="chooseOption">Called when the user picks an Option; the row is rebuilt afterwards.</param>
     /// <param name="undo">Called when the user asks to Undo; the row is rebuilt afterwards.</param>
     /// <param name="refresh">Re-reads every row; a tuner card's Read current button calls it.</param>
@@ -32,7 +37,8 @@ public sealed partial class TweakViewModel : ViewModelBase
         bool isApplied,
         Action<DeclaredTweak, TweakOption> chooseOption,
         Action<DeclaredTweak> undo,
-        Action? refresh = null)
+        Action? refresh = null,
+        TweakOption? appliedOption = null)
     {
         _tweak = tweak;
         _chooseOption = chooseOption;
@@ -57,7 +63,7 @@ public sealed partial class TweakViewModel : ViewModelBase
         if (state is LiveState.Drifted drifted)
         {
             _driftedFrom = drifted.Expected;
-            DriftText = $"Akari-Dash set {drifted.Expected.Label}, but it is now {Describe(drifted.Actual)}.";
+            DriftText = $"Akari-Dash set {drifted.Expected.Label}, but it is now {Describe(drifted.Actual, drifted.Expected)}.";
             actual = drifted.Actual;
         }
 
@@ -81,7 +87,7 @@ public sealed partial class TweakViewModel : ViewModelBase
             // Drift takes precedence: a drifted Tweak shows its value in the Drift badge instead.
             IsCustom = !IsDrifted;
             MatchesNoOption = true;
-            CustomValue = Describe(custom);
+            CustomValue = Describe(custom, appliedOption);
         }
 
         if (tweak.Tuner is { } tuner)
@@ -267,15 +273,33 @@ public sealed partial class TweakViewModel : ViewModelBase
         }
     }
 
-    private static string Describe(LiveState state) => state switch
+    private static string Describe(LiveState state, TweakOption? against) => state switch
     {
         LiveState.InOption inOption => inOption.Option.Label,
-        LiveState.Custom custom => Describe(custom),
+        LiveState.Custom custom => Describe(custom, against),
         _ => throw new UnreachableException($"Drift is never in another state: {state}"),
     };
 
-    private static string Describe(LiveState.Custom custom) =>
-        custom.Values.Count == 1
-            ? MachineValue.Describe(custom.Values[0].Value)
-            : string.Join("; ", custom.Values.Select(v => $"{v.Target.Location} = {MachineValue.Describe(v.Value)}"));
+    /// <summary>
+    /// What the machine holds, named against <paramref name="against"/> where there is one: only the
+    /// values that differ from it, since the ones that match it say nothing the row has not said.
+    /// A Tweak over one value just shows that value.
+    /// </summary>
+    private static string Describe(LiveState.Custom custom, TweakOption? against)
+    {
+        if (custom.Values.Count == 1)
+        {
+            return MachineValue.Describe(custom.Values[0].Value);
+        }
+
+        var shown = against is null
+            ? custom.Values
+            : custom.Values
+                .Where(v => v.Target.Effective(v.Value) != v.Target.Effective(against.Values[v.Target]))
+                .ToList();
+
+        return shown.Count == 0
+            ? MachineValue.Describe(null)
+            : string.Join("; ", shown.Select(v => $"{v.Target.Location} = {MachineValue.Describe(v.Value)}"));
+    }
 }

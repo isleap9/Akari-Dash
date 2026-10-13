@@ -33,7 +33,7 @@ Which **Option** the machine is actually in right now, read fresh from the syste
 _Avoid_: Status, current value, saved state
 
 **Custom**:
-A **Live State** that matches none of a **Tweak**'s **Options** and was not caused by Akari-Dash; shown with the actual value.
+A **Live State** that matches none of a **Tweak**'s **Options** and was not caused by Akari-Dash applying *this* Tweak; shown with the values that differ from the **Option** it last applied, or with all of them when it has applied none. A Tweak two Tweaks share a value with reads Custom, not **Drift**, once the other one is applied over it.
 _Avoid_: Unknown, invalid, Drift
 
 **Unavailable**:
@@ -65,7 +65,7 @@ An apply that reads the real machine but writes nothing, recording exactly what 
 _Avoid_: Simulation, mock mode, preview mode
 
 **Drift**:
-When a **Tweak**'s **Live State** no longer matches the **Option** Akari-Dash last applied, typically because Windows reset it.
+When a **Tweak**'s **Live State** no longer matches the **Option** Akari-Dash last applied *and nothing Akari-Dash did explains it* — so, because Windows reset it. Two Tweaks may write one value on purpose (an update policy mode covers the rows beneath it), and applying one of them is not the other drifting: Akari-Dash moved it, on the user's instruction, and offering to re-apply would undo the choice they just made. That reads as **Custom**, with **Undo** intact.
 _Avoid_: Reverted, out of sync, broken
 
 **Restore Point**:
