@@ -77,7 +77,12 @@ public sealed partial class RestorationViewModel : ViewModelBase
             var installed = (await _apps.ListAsync()).Select(app => app.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
             Missing.Clear();
 
-            foreach (var app in LegacyApps.All.Where(app => !_legacy.IsInstalled(app)))
+            // Only what has an installer, and a Windows 10 program only on Windows 10.
+            var restorable = LegacyApps.All.Where(app =>
+                app.InstallScript is not null &&
+                (!app.Windows10Only || Services.WindowsLegacyAppService.IsWindows10) &&
+                !_legacy.IsInstalled(app));
+            foreach (var app in restorable)
             {
                 Missing.Add(new RestorableAppViewModel(
                     app.Id, app.Name, app.Description, "Not installed", () => _legacy.InstallAsync(app), RestoreCommand));

@@ -113,6 +113,22 @@ public sealed class WindowsInstalledAppService(ILegacyAppService legacy) : IInst
         ReadUninstallKey(RegistryHive.LocalMachine, @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall", apps, seen);
         ReadUninstallKey(RegistryHive.CurrentUser, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", apps, seen);
 
+        // Legacy programs with no Uninstall entry of their own (Remote Desktop Connection, the Windows 10
+        // Snipping Tool, brlapi) still get a row whenever they are on this PC.
+        foreach (var legacyApp in LegacyApps.All)
+        {
+            if (!seen.Contains($"legacy:{legacyApp.Id}") && WindowsLegacyAppService.Detect(legacyApp))
+            {
+                apps.Add(new InstalledApp(
+                    Id: $"legacy:{legacyApp.Id}",
+                    Name: legacyApp.Name,
+                    Publisher: "Microsoft Corporation",
+                    Version: string.Empty,
+                    Kind: InstalledAppKind.Win32,
+                    Legacy: legacyApp));
+            }
+        }
+
         return apps.OrderBy(app => app.Name, StringComparer.CurrentCultureIgnoreCase);
     }
 
@@ -143,8 +159,8 @@ public sealed class WindowsInstalledAppService(ILegacyAppService legacy) : IInst
                         continue;
                     }
 
-                    // Edge and WebView2 hide their removal, and are offered anyway: AkariOS-Ultimate's
-                    // script removes them, not the entry's own uninstaller.
+                    // Legacy programs (Edge and WebView2 hide their removal) are offered anyway:
+                    // AkariOS-Ultimate's script removes them, not the entry's own uninstaller.
                     var legacyApp = LegacyApps.ForUninstallName(displayName);
 
                     // Updates, components and entries with no removal must not be offered.
@@ -165,9 +181,15 @@ public sealed class WindowsInstalledAppService(ILegacyAppService legacy) : IInst
                         continue;
                     }
 
-                    if (!seen.Add(displayName))
+                    // One row per legacy program, however many entries it left (one per KB update, say).
+                    if (!seen.Add(legacyApp is null ? displayName : $"legacy:{legacyApp.Id}"))
                     {
                         continue;
+                    }
+
+                    if (legacyApp is not null)
+                    {
+                        displayName = legacyApp.Name;
                     }
 
                     var publisher = (sub.GetValue("Publisher") as string)?.Trim() ?? string.Empty;

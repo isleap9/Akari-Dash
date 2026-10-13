@@ -17,6 +17,8 @@ internal static class EmbeddedScripts
             ?? throw new InvalidOperationException($"{script} is missing from this build."))
         await using (var target = File.Create(path))
         {
+            // Windows PowerShell's progress bar slows IWR downloads to a crawl, and nobody sees it here.
+            await target.WriteAsync("$ProgressPreference = 'SilentlyContinue'\r\n"u8.ToArray(), cancellationToken);
             await source.CopyToAsync(target, cancellationToken);
         }
 

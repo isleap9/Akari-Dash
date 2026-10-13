@@ -1,39 +1,45 @@
-using System.Diagnostics;
 using AkariDash.Core.Apps;
+using Microsoft.Win32;
 
 namespace AkariDash.App.Services;
 
 /// <summary>
-/// Removes legacy apps with AkariOS-Ultimate's own scripts (see <see cref="EmbeddedScripts"/>), and
-/// reinstalls them with the installers AkariOS-Ultimate downloads from its AkariOS-Files release.
+/// Removes and reinstalls legacy apps with AkariOS-Ultimate's own scripts (see <see cref="EmbeddedScripts"/>),
+/// and tells whether each is on this PC by what the script removes.
 /// </summary>
 public sealed class WindowsLegacyAppService : ILegacyAppService
 {
-    private static readonly HttpClient Http = new();
+    private static string X86(string path) => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), path);
 
-    private static string MicrosoftX86 => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microsoft");
+    private static string System32(string path) => Path.Combine(Environment.SystemDirectory, path);
 
-    public bool IsInstalled(LegacyApp app) => app.Id switch
+    public bool IsInstalled(LegacyApp app) => Detect(app);
+
+    /// <summary>Whether the program is here, read off what its removal script takes away.</summary>
+    public static bool Detect(LegacyApp app) => app.Id switch
     {
-        "edge" => File.Exists(Path.Combine(MicrosoftX86, @"Edge\Application\msedge.exe")),
-        "webview" => Directory.Exists(Path.Combine(MicrosoftX86, @"EdgeWebView\Application")),
-        _ => throw Unknown(app),
+        "edge" => File.Exists(X86(@"Microsoft\Edge\Application\msedge.exe")),
+        "webview" => Directory.Exists(X86(@"Microsoft\EdgeWebView\Application")),
+        "onedrive" =>
+            File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Microsoft\OneDrive\OneDrive.exe")) ||
+            File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Microsoft OneDrive\OneDrive.exe")) ||
+            File.Exists(X86(@"Microsoft OneDrive\OneDrive.exe")),
+        "remote-desktop" => File.Exists(System32("mstsc.exe")),
+        "snipping-tool" => File.Exists(System32("SnippingTool.exe")),
+        "brlapi" => Directory.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "brltty")) ||
+            Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\brlapi") is { } service && Dispose(service),
+        _ => HasUninstallEntry(app),
     };
+
+    public static bool IsWindows10 => Environment.OSVersion.Version.Build < 22000;
 
     public async Task RemoveAsync(LegacyApp app, CancellationToken cancellationToken = default)
     {
-        var script = app.Id switch
-        {
-            "edge" => "RemoveEdge.ps1",
-            "webview" => "RemoveWebView.ps1",
-            _ => throw Unknown(app),
-        };
-
-        var errors = await EmbeddedScripts.RunAsync(script, cancellationToken);
+        var errors = await EmbeddedScripts.RunAsync(app.RemoveScript, cancellationToken);
 
         // The scripts carry on past what fails, as AkariOS-Ultimate's do, so the result is read off the
         // machine rather than the exit code.
-        if (IsInstalled(app))
+        if (Detect(app))
         {
             throw new InvalidOperationException($"Could not uninstall {app.Name}.{FirstLine(errors)}");
         }
@@ -41,38 +47,42 @@ public sealed class WindowsLegacyAppService : ILegacyAppService
 
     public async Task InstallAsync(LegacyApp app, CancellationToken cancellationToken = default)
     {
-        var installer = Path.Combine(Path.GetTempPath(), $"AkariDash-{Guid.NewGuid():N}-{Path.GetFileName(app.Installer.LocalPath)}");
-        try
+        if (app.InstallScript is null)
         {
-            try
-            {
-                await using var download = await Http.GetStreamAsync(app.Installer, cancellationToken);
-                await using var file = File.Create(installer);
-                await download.CopyToAsync(file, cancellationToken);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                throw new InvalidOperationException($"Could not download {app.Name}'s installer: {ex.Message}", ex);
-            }
-
-            using (var process = Process.Start(new ProcessStartInfo(installer) { UseShellExecute = false })
-                ?? throw new InvalidOperationException($"{app.Name}'s installer did not start."))
-            {
-                await process.WaitForExitAsync(cancellationToken);
-            }
-
-            if (!IsInstalled(app))
-            {
-                throw new InvalidOperationException($"{app.Name}'s installer finished, but {app.Name} is not installed.");
-            }
+            throw new InvalidOperationException($"{app.Name} has no installer here.");
         }
-        finally
+
+        var errors = await EmbeddedScripts.RunAsync(app.InstallScript, cancellationToken);
+        if (!Detect(app))
         {
-            File.Delete(installer);
+            throw new InvalidOperationException($"{app.Name}'s installer finished, but {app.Name} is not installed.{FirstLine(errors)}");
         }
     }
 
-    private static ArgumentOutOfRangeException Unknown(LegacyApp app) => new(nameof(app), app.Id, "Not a legacy app.");
+    private static bool HasUninstallEntry(LegacyApp app)
+    {
+        foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+        {
+            using var uninstall = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, view)
+                .OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall");
+            foreach (var name in uninstall?.GetSubKeyNames() ?? [])
+            {
+                using var entry = uninstall!.OpenSubKey(name);
+                if (entry?.GetValue("DisplayName") is string displayName && app.Matches(displayName.Trim()))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool Dispose(RegistryKey key)
+    {
+        key.Dispose();
+        return true;
+    }
 
     private static string FirstLine(string text) =>
         text.Trim() is { Length: > 0 } trimmed ? $" {trimmed.Split('\n')[0].Trim()}" : string.Empty;

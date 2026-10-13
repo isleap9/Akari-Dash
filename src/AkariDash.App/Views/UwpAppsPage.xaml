@@ -184,7 +184,7 @@
                 <TextBlock
                     TextWrapping="Wrap"
                     Opacity="0.8"
-                    Text="Reinstall Windows apps that were removed, by Akari-Dash or anything else. A Store app comes back from the copy still on this PC when Windows kept one, otherwise from the Microsoft Store; Edge and WebView2 come back from AkariOS-Ultimate&apos;s installers. Both need an internet connection." />
+                    Text="Reinstall Windows apps that were removed, by Akari-Dash or anything else. A Store app comes back from the copy still on this PC when Windows kept one, otherwise from the Microsoft Store; Edge, WebView2, OneDrive and the other built-in programs come back with AkariOS-Ultimate&apos;s installers. Most need an internet connection." />
                 <StackPanel Orientation="Horizontal" Spacing="12">
                     <TextBlock Opacity="0.8" Text="{x:Bind ViewModel.Restoration.StatusText, Mode=OneWay}" />
                     <ProgressRing Width="16" Height="16" IsActive="{x:Bind ViewModel.Restoration.IsBusy, Mode=OneWay}" />
