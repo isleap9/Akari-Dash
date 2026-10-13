@@ -36,6 +36,55 @@ public class TweakEngineActivationTests
         Assert.Equal(Activation.Immediately, tweak.Activation);
     }
 
+    // One Option may take longer than the rest: UAC's levels are immediate, but the Option that
+    // switches UAC itself off needs a restart. The Tweak stays Immediately and the Option says so.
+    [Fact]
+    public void An_option_that_waits_on_a_restart_makes_the_tweak_pending_a_restart()
+    {
+        var target = new TweakTarget(new RegistryLocation(RegistryHive.CurrentUser, @"Software\Akari\Test", "level"));
+        var now = Option(target, "now", 1);
+        var later = new TweakOption(
+            "later", "later", new Dictionary<TweakTarget, MachineValue?> { [target] = RegistryValue.DWord(0) },
+            Activation.AfterRestart);
+        var tweak = new DeclaredTweak(
+            "levels", "Levels", "A test Tweak.", Category.Gaming, "Test Group", [target], [now, later],
+            Activation: Activation.Immediately);
+        var engine = Engine();
+
+        Assert.Equal(Activation.Immediately, tweak.ActivationOf(now));
+        Assert.Equal(Activation.AfterRestart, tweak.ActivationOf(later));
+
+        engine.Apply(tweak, now);
+        Assert.True(engine.Pending.IsEmpty);
+
+        engine.Apply(tweak, later);
+        Assert.Equal([tweak], engine.Pending.AfterRestart);
+        Assert.True(engine.Pending.NeedsRestart);
+
+        // Back to an immediate Option: the Tweak is no longer waiting on anything.
+        engine.Apply(tweak, now);
+        Assert.True(engine.Pending.IsEmpty);
+    }
+
+    // Putting back what the waiting Option wrote waits just as long.
+    [Fact]
+    public void Undoing_an_option_that_waited_on_a_restart_waits_on_one_too()
+    {
+        var target = new TweakTarget(new RegistryLocation(RegistryHive.CurrentUser, @"Software\Akari\Test", "level"));
+        var later = new TweakOption(
+            "later", "later", new Dictionary<TweakTarget, MachineValue?> { [target] = RegistryValue.DWord(0) },
+            Activation.AfterRestart);
+        var tweak = new DeclaredTweak(
+            "levels", "Levels", "A test Tweak.", Category.Gaming, "Test Group", [target],
+            [Option(target, "now", 1), later]);
+        var engine = Engine();
+
+        engine.Apply(tweak, later);
+        engine.Undo(tweak);
+
+        Assert.Equal([tweak], engine.Pending.AfterRestart);
+    }
+
     [Fact]
     public void Nothing_is_pending_before_any_tweak_is_changed()
     {

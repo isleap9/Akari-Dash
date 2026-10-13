@@ -844,14 +844,21 @@ public static partial class TweakCatalog
         // ConsentPromptBehaviorAdmin is what the prompt asks for (1 credentials, 2 consent, 5 consent
         // for anything not signed by Windows, 0 nothing at all) and PromptOnSecureDesktop is whether
         // the screen dims to the secure desktop first. Windows' own default is 5 with the dim on.
+        //
+        // EnableLUA is the third value, and a different thing: it switches UAC itself off rather than
+        // changing what it asks. AkariOS-Ultimate's own UAC Tweak (MIT, Tweaks/Windows.ps1) is that
+        // one value, so its state is the last Option here. Every other Option writes EnableLUA 1, so
+        // picking a level also switches UAC back on, and a machine that already has it off reads as
+        // that Option instead of Custom.
         TweakTarget[] targets =
         [
             new(new RegistryLocation(RegistryHive.LocalMachine, PoliciesSystemKey, "ConsentPromptBehaviorAdmin"), AbsentMeans: RegistryValue.DWord(5)),
             new(new RegistryLocation(RegistryHive.LocalMachine, PoliciesSystemKey, "PromptOnSecureDesktop"), AbsentMeans: RegistryValue.DWord(1)),
+            new(new RegistryLocation(RegistryHive.LocalMachine, PoliciesSystemKey, "EnableLUA"), AbsentMeans: RegistryValue.DWord(1)),
         ];
 
         return SecurityGroupTweak("privacy.uac-level", "User Account Control",
-            "What Windows asks for before an app is allowed to change the system. Never notify lets every app that asks for admin rights have it without a word, which is how most malware gets in.",
+            "What Windows asks for before an app is allowed to change the system. Never notify lets every app that asks for admin rights have it without a word, which is how most malware gets in, but UAC itself keeps running. The AkariOS-Ultimate Option goes further and switches UAC off altogether: that takes a restart, and Windows then refuses to start Store apps, including Settings, the Store itself and Terminal, with \"This app can't be activated when UAC is disabled\".",
             targets,
             [
                 Level("credentials", "Ask for my password", 1, 1),
@@ -859,15 +866,19 @@ public static partial class TweakCatalog
                 Level("apps", "Notify when apps make changes (Windows default)", 5, 1),
                 Level("apps-no-dim", "Notify when apps make changes, without dimming the screen", 5, 0),
                 Level("never", "Never notify", 0, 0),
+                Level("off", "UAC off (AkariOS-Ultimate)", 0, 0, enableLua: 0, activation: Activation.AfterRestart),
             ],
             Activation.Immediately);
 
-        TweakOption Level(string id, string label, int behavior, int secureDesktop) => new(
+        TweakOption Level(
+            string id, string label, int behavior, int secureDesktop, int enableLua = 1, Activation? activation = null) => new(
             id, label, new Dictionary<TweakTarget, MachineValue?>
             {
                 [targets[0]] = RegistryValue.DWord(behavior),
                 [targets[1]] = RegistryValue.DWord(secureDesktop),
-            });
+                [targets[2]] = RegistryValue.DWord(enableLua),
+            },
+            activation);
     }
 
     private static DeclaredTweak WorkplaceJoinPrompts()

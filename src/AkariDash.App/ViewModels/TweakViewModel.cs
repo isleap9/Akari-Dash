@@ -47,15 +47,6 @@ public sealed partial class TweakViewModel : ViewModelBase
         Options = tweak.Options;
         IsSelector = tweak.Options.Count > 2;
         RecommendedLabel = tweak.Recommended?.Label;
-        ActivationText = tweak.Activation switch
-        {
-            Activation.Immediately => "Immediately",
-            Activation.AfterSignOut => "After sign-out",
-            Activation.AfterRestart => "After restart",
-            _ => throw new UnreachableException($"Unknown Activation: {tweak.Activation}"),
-        };
-        IsDelayed = tweak.Activation != Activation.Immediately;
-
         if (state is LiveState.Unavailable unavailable)
         {
             UnavailableReason = unavailable.Reason;
@@ -72,6 +63,18 @@ public sealed partial class TweakViewModel : ViewModelBase
 
         _selectedOption = (actual as LiveState.InOption)?.Option;
         _isOn = _selectedOption == tweak.Options[1];
+
+        // What the row says it takes: the Option the machine is in where that Option waits longer
+        // than its Tweak, so "UAC off" reads After restart while the other levels read Immediately.
+        var activation = _selectedOption is null ? tweak.Activation : tweak.ActivationOf(_selectedOption);
+        ActivationText = activation switch
+        {
+            Activation.Immediately => "Immediately",
+            Activation.AfterSignOut => "After sign-out",
+            Activation.AfterRestart => "After restart",
+            _ => throw new UnreachableException($"Unknown Activation: {activation}"),
+        };
+        IsDelayed = activation != Activation.Immediately;
 
         if (actual is LiveState.Custom custom)
         {

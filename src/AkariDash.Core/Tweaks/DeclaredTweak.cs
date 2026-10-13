@@ -21,4 +21,11 @@ public sealed record DeclaredTweak(
     TweakOption? Recommended = null,
     GpuVendor? RequiresGpu = null,
     Activation Activation = Activation.Immediately,
-    TunerLayout? Tuner = null);
+    TunerLayout? Tuner = null)
+{
+    /// <summary>
+    /// When putting this Tweak into <paramref name="option"/> takes effect: the Option's own
+    /// Activation where it has one, otherwise the Tweak's.
+    /// </summary>
+    public Activation ActivationOf(TweakOption option) => option.Activation ?? Activation;
+}

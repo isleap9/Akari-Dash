@@ -132,6 +132,54 @@ public class PrivacyWinhanceTests
         Assert.Equal(RegistryValue.DWord(secureDesktop), option.Values[tweak.Targets[1]]);
     }
 
+    // AkariOS-Ultimate's own UAC Tweak is one value, EnableLUA = 0, which switches UAC off rather
+    // than changing what it asks. It is the last Option here, and the only one that needs a restart.
+    [Fact]
+    public void The_akarios_ultimate_option_switches_uac_itself_off_after_a_restart()
+    {
+        var tweak = Find("privacy.uac-level");
+        var off = tweak.Options.Single(option => option.Id == "off");
+        var enableLua = tweak.Targets.Single(target => ((RegistryLocation)target.Location).Name == "EnableLUA");
+
+        Assert.Equal("UAC off (AkariOS-Ultimate)", off.Label);
+        Assert.Equal(RegistryValue.DWord(0), off.Values[enableLua]);
+        Assert.Equal(Activation.AfterRestart, tweak.ActivationOf(off));
+
+        // The prompt values go to their quietest, as Never notify does, so the two differ only in
+        // whether UAC is still running.
+        var never = tweak.Options.Single(option => option.Id == "never");
+        Assert.Equal(never.Values[tweak.Targets[0]], off.Values[tweak.Targets[0]]);
+        Assert.Equal(never.Values[tweak.Targets[1]], off.Values[tweak.Targets[1]]);
+        Assert.NotEqual(never.Values[enableLua], off.Values[enableLua]);
+    }
+
+    // Every level switches UAC back on, so picking one undoes the AkariOS-Ultimate Option, and a
+    // machine that already has UAC off reads as that Option instead of Custom.
+    [Fact]
+    public void Every_other_uac_level_leaves_uac_itself_on_and_takes_effect_at_once()
+    {
+        var tweak = Find("privacy.uac-level");
+        var enableLua = tweak.Targets.Single(target => ((RegistryLocation)target.Location).Name == "EnableLUA");
+
+        Assert.Equal(RegistryValue.DWord(1), enableLua.AbsentMeans);
+        Assert.All(tweak.Options.Where(option => option.Id != "off"), option =>
+        {
+            Assert.Equal(RegistryValue.DWord(1), option.Values[enableLua]);
+            Assert.Equal(Activation.Immediately, tweak.ActivationOf(option));
+        });
+    }
+
+    [Fact]
+    public void The_description_says_the_akarios_ultimate_option_goes_further()
+    {
+        var description = Find("privacy.uac-level").Description;
+
+        Assert.Contains("AkariOS-Ultimate", description);
+        Assert.Contains("goes further", description);
+        Assert.Contains("restart", description);
+        Assert.Contains("Store apps", description);
+    }
+
     [Fact]
     public void Uac_counts_a_machine_with_no_values_as_the_level_windows_ships_with()
     {

@@ -15,7 +15,7 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
 {
     private readonly IOriginalValuesStore _store = store ?? new InMemoryOriginalValuesStore();
     private readonly IMachine _writes = applyTo ?? machine;
-    private readonly List<DeclaredTweak> _changed = [];
+    private readonly List<(DeclaredTweak Tweak, Activation Activation)> _changed = [];
 
     // Applies and Undos may run off the UI thread (the first waits for a restore point), so they
     // take turns: no write starts before the session's restore point has been asked for.
@@ -37,8 +37,13 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
             lock (_changed)
             {
                 return new(
-                    _changed.Where(tweak => tweak.Activation == Activation.AfterSignOut).ToList(),
-                    _changed.Where(tweak => tweak.Activation == Activation.AfterRestart).ToList());
+                    Waiting(Activation.AfterSignOut),
+                    Waiting(Activation.AfterRestart));
+
+                List<DeclaredTweak> Waiting(Activation activation) => _changed
+                    .Where(change => change.Activation == activation)
+                    .Select(change => change.Tweak)
+                    .ToList();
             }
         }
     }
@@ -155,7 +160,7 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
         }
 
         _store.Save(tweak.Id, applied! with { LastAppliedOptionId = option.Id });
-        MarkChanged(tweak);
+        MarkChanged(tweak, tweak.ActivationOf(option));
     }
 
     /// <summary>Puts <paramref name="tweak"/>'s targets back to their Original Values, then forgets them. Does nothing if it was not applied.</summary>
@@ -181,7 +186,10 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
 
         WriteAll(_writes, tweak.Title, writes);
         _store.Clear(tweak.Id);
-        MarkChanged(tweak);
+
+        // Putting back what the applied Option wrote waits on whatever that Option waited on.
+        var undone = tweak.Options.FirstOrDefault(option => option.Id == applied.LastAppliedOptionId);
+        MarkChanged(tweak, undone is null ? tweak.Activation : tweak.ActivationOf(undone));
     }
 
     /// <summary>
@@ -314,13 +322,25 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
         }
     }
 
-    private void MarkChanged(DeclaredTweak tweak)
+    /// <summary>
+    /// Remembers that a Tweak was changed and what its change is waiting on, which is the applied
+    /// Option's Activation rather than the Tweak's where the two differ.
+    /// </summary>
+    private void MarkChanged(DeclaredTweak tweak, Activation activation)
     {
         lock (_changed)
         {
-            if (!_changed.Contains(tweak))
+            var at = _changed.FindIndex(change => change.Tweak == tweak);
+
+            // The latest change decides: picking an Option that waits on a restart, after one that
+            // took effect at once, moves the Tweak to the restart list without losing its place.
+            if (at >= 0)
             {
-                _changed.Add(tweak);
+                _changed[at] = (tweak, activation);
+            }
+            else
+            {
+                _changed.Add((tweak, activation));
             }
         }
     }
