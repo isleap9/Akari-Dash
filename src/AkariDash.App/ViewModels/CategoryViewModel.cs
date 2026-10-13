@@ -122,8 +122,7 @@ public sealed class CategoryViewModel(
         try
         {
             // The whole catalog, so a value another Tweak was applied over reads as what it is
-            // rather than as Drift: the update policy modes and privacy.suggestions-preset both
-            // write values the rows beneath them own.
+            // rather than as Drift: privacy.suggestions-preset writes values the rows beneath it own.
             return engine.ReadLiveState(tweak, TweakCatalog.All);
         }
         catch (Exception ex)

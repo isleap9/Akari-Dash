@@ -78,52 +78,24 @@ public class UpdateCatalogTests
     }
 
     [Fact]
-    public void The_policy_row_is_the_only_one_that_shares_a_value_with_another_row_on_this_page()
+    public void No_two_rows_on_this_page_share_a_value()
     {
-        // Two owners of one value fight: each reads the other's apply as drift of its own. The modes
-        // of update.policy are the one place the catalog allows it, because covering the rows below is
-        // half of what that row is for.
-        var rows = Updates.Where(tweak => tweak.Id != "update.policy").ToList();
-
+        // Two owners of one value fight: each reads the other's apply as drift of its own. The old
+        // update.policy modes shared values with the rows below on purpose, and that is where this
+        // page's Drift and Original Values bugs came from.
         Assert.Equal(
-            rows.SelectMany(Locations).Count(),
-            rows.SelectMany(Locations).Distinct().Count());
+            Updates.SelectMany(Locations).Count(),
+            Updates.SelectMany(Locations).Distinct().Count());
     }
 
     [Fact]
-    public void The_policy_row_offers_winhances_modes_with_akarios_pause_in_place_of_winhances()
+    public void The_policy_row_offers_normal_and_akarios_pause_only()
     {
-        // Winhance's own "Paused for a long time" is not among them: it is a pause wearing most of
-        // Disabled, over values three other rows on this page already own. AkariOS-Ultimate's pause
-        // writes the six values Settings writes and stops there.
+        // Winhance's Security updates only and Disabled were presets over rows below that still
+        // exist, and its own pause wore most of Disabled. AkariOS-Ultimate's pause is the one kept.
         Assert.Equal(
-            ["normal", "security-only", "akari-pause", "off"],
-            Find("update.policy").Options.Select(option => option.Id));
-    }
-
-    [Fact]
-    public void Security_updates_only_sets_the_three_rows_below_it_to_their_own_held_back_options()
-    {
-        // The preset relationship, as privacy.suggestions-preset has it: after this Option is applied,
-        // each covered row reads its own state back correctly instead of reading Custom.
-        var mode = OptionOf("update.policy", "security-only");
-        (string Id, int Option)[] covered =
-        [
-            ("update.automatic-updates", 1), ("update.feature-updates", 1), ("update.quality-updates", 1),
-        ];
-
-        foreach (var (id, index) in covered)
-        {
-            var row = Find(id);
-            var option = row.Options[index];
-            Assert.All(row.Targets, target => Assert.Equal(option.Values[target], mode.Values[target]));
-        }
-
-        // And it writes nothing those three do not: no pause, no WSUS, no shutdown option.
-        var theirs = covered.SelectMany(pair => Locations(Find(pair.Id))).ToHashSet();
-        Assert.All(
-            Find("update.policy").Targets.Where(target => !theirs.Contains((RegistryLocation)target.Location)),
-            target => Assert.Null(mode.Values[target]));
+            [("normal", "Normal (Windows default)"), ("akari-pause", "Paused")],
+            Find("update.policy").Options.Select(option => (option.Id, option.Label)));
     }
 
     [Fact]
@@ -174,12 +146,10 @@ public class UpdateCatalogTests
     }
 
     [Fact]
-    public void The_policy_row_is_the_only_owner_of_the_pause_window_and_the_wsus_value()
+    public void The_policy_row_is_the_only_owner_of_the_pause_window()
     {
-        // UseWUServer was left out as a row of its own: nobody picks it one at a time.
         string[] itsAlone =
         [
-            "UseWUServer",
             "PauseUpdatesStartTime", "PauseUpdatesExpiryTime", "PauseFeatureUpdatesStartTime",
             "PauseFeatureUpdatesEndTime", "PauseQualityUpdatesStartTime", "PauseQualityUpdatesEndTime",
         ];
@@ -193,14 +163,14 @@ public class UpdateCatalogTests
     [Fact]
     public void Nothing_writes_what_only_winhances_paused_mode_wrote()
     {
-        // Dropped with that mode. AutoInstallMinorUpdates and AlwaysAutoRebootAtScheduledTime are
+        // Dropped with Winhance's paused mode, and UseWUServer with its Disabled. AutoInstallMinorUpdates and AlwaysAutoRebootAtScheduledTime are
         // not decisions anyone makes one at a time, and the rest are Windows Update's own bookkeeping
         // about a pause, which the six dates above are enough to ask for.
         string[] gone =
         [
             "AutoInstallMinorUpdates", "AlwaysAutoRebootAtScheduledTime",
             "PausedFeatureDate", "PausedQualityDate", "PausedFeatureStatus", "PausedQualityStatus",
-            "FlightSettingsMaxPauseDays",
+            "FlightSettingsMaxPauseDays", "UseWUServer",
         ];
 
         Assert.All(gone, name => Assert.Empty(Owners(name)));
@@ -380,28 +350,24 @@ public class UpdateCatalogTests
     }
 
     [Fact]
-    public void Setting_a_covered_row_after_a_policy_mode_is_not_drift_on_either_of_them()
+    public void The_pause_and_the_rows_below_it_each_read_their_own_state()
     {
-        // Reported from the VM build of #31: Paused (AkariOS), then Automatic updates > Never check
-        // on its own, and the policy row claimed Drift over all 28 of its values and offered to
-        // re-apply — which would have undone the choice just made. Akari-Dash moved those values, so
-        // it is not Drift; the row reads what the machine is in, and Undo still restores its originals.
-        var machine = new InMemoryMachine();
-        var engine = new TweakEngine(machine);
+        // Reported from the VM build of #31, when the policy modes shared values with the rows below:
+        // Paused, then Automatic updates > Never check on its own, and the policy row claimed Drift.
+        // The pause now owns its six values alone, so each row reads exactly the Option it was given.
+        var engine = new TweakEngine(new InMemoryMachine());
         var policy = Find("update.policy");
         var automatic = Find("update.automatic-updates");
 
         engine.Apply(policy, OptionOf("update.policy", "akari-pause"));
         engine.Apply(automatic, OptionOf("update.automatic-updates", "off"));
 
-        Assert.IsNotType<LiveState.Drifted>(engine.ReadLiveState(policy, TweakCatalog.All));
+        Assert.Same(
+            OptionOf("update.policy", "akari-pause"),
+            Assert.IsType<LiveState.InOption>(engine.ReadLiveState(policy, TweakCatalog.All)).Option);
         Assert.Same(
             OptionOf("update.automatic-updates", "off"),
             Assert.IsType<LiveState.InOption>(engine.ReadLiveState(automatic, TweakCatalog.All)).Option);
-
-        // The pause is still there and still the policy row's to undo.
-        Assert.True(engine.IsApplied(policy));
-        Assert.Equal(17, engine.ReadLiveState(policy, TweakCatalog.All) is LiveState.Custom custom ? custom.Values.Count : 0);
     }
 
     [Fact]
@@ -422,59 +388,15 @@ public class UpdateCatalogTests
     }
 
     [Fact]
-    public void A_policy_mode_records_the_machines_own_values_not_the_rows_it_covers()
+    public void Undoing_the_pause_ends_it()
     {
-        // From the VM report of 2026-10-13: the rows below were set first, then Paused (AkariOS), and
-        // update.policy saved NoAutoUpdate = 1, AUOptions = 1, BranchReadinessLevel = 20 and the rest
-        // as its "Original Values" -- Akari-Dash's own writes, recorded as if Windows had put them
-        // there. An Original Value belongs to the location and is the machine's own value, so the
-        // mode must inherit what the rows already recorded. (update.shutdown-option no longer shares
-        // a value with the mode, so it is here only to prove the inheritance ignores what it does not.)
-        var machine = new InMemoryMachine();
-        var store = new InMemoryOriginalValuesStore();
-        var engine = new TweakEngine(machine, store);
-
-        engine.Apply(Find("update.automatic-updates"), OptionOf("update.automatic-updates", "off"));
-        engine.Apply(Find("update.feature-updates"), OptionOf("update.feature-updates", "hold-back-a-year"));
-        engine.Apply(Find("update.quality-updates"), OptionOf("update.quality-updates", "hold-back-a-week"));
-        engine.Apply(Find("update.shutdown-option"), OptionOf("update.shutdown-option", "hide"));
-        engine.Apply(Find("update.policy"), OptionOf("update.policy", "akari-pause"));
-
-        Assert.All(
-            store.Get("update.policy")!.OriginalValues,
-            original => Assert.Null(original.Value));
-    }
-
-    [Fact]
-    public void Undoing_a_policy_mode_last_leaves_nothing_of_the_rows_it_covered_behind()
-    {
-        // The hazard the record above carried: undo the covered rows first and the mode last, and the
-        // mode writes their values back from its own record -- after their records are gone, so
-        // nothing owns them any more and no Undo can reach them.
         var machine = new InMemoryMachine();
         var engine = new TweakEngine(machine);
-        DeclaredTweak[] rows =
-        [
-            Find("update.automatic-updates"), Find("update.feature-updates"),
-            Find("update.quality-updates"), Find("update.shutdown-option"),
-        ];
+        var policy = Find("update.policy");
 
-        foreach (var row in rows)
-        {
-            engine.Apply(row, row.Options[1]);
-        }
+        engine.Apply(policy, OptionOf("update.policy", "akari-pause"));
+        engine.Undo(policy);
 
-        engine.Apply(Find("update.policy"), OptionOf("update.policy", "akari-pause"));
-
-        foreach (var row in rows)
-        {
-            engine.Undo(row);
-        }
-
-        engine.Undo(Find("update.policy"));
-
-        Assert.All(
-            Find("update.policy").Targets,
-            target => Assert.Null(machine.Read(target.Location)));
+        Assert.All(policy.Targets, target => Assert.Null(machine.Read(target.Location)));
     }
 }

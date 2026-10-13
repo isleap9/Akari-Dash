@@ -20,12 +20,14 @@ namespace AkariDash.Core.Tweaks;
 //
 // Left out of Winhance's own update page:
 //
-//   AutoInstallMinorUpdates and AlwaysAutoRebootAtScheduledTime, which Winhance writes only inside
-//   its own paused mode, and that mode is not here (see UpdatePolicy). Restart behaviour is one
-//   decision on this page, update.restart-while-signed-in.
+//   Its policy modes but Normal. Security updates only, Disabled and its "Paused for a long time"
+//   were presets over values the rows below already own (see UpdatePolicy), and a preset sharing
+//   values with the rows beneath it is where this page's Drift and Original Values bugs came from.
+//   Disabled's one value of its own, UseWUServer, goes with it: nobody picks it one at a time.
 //
-//   UseWUServer as a row of its own: nobody picks it one at a time. update.policy writes it to 0
-//   inside Disabled, which is where Winhance writes it too.
+//   AutoInstallMinorUpdates and AlwaysAutoRebootAtScheduledTime, which Winhance writes only inside
+//   its own paused mode. Restart behaviour is one decision on this page,
+//   update.restart-while-signed-in.
 public static partial class TweakCatalog
 {
     private const string AutoUpdatePolicies = @"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU";
@@ -73,21 +75,14 @@ public static partial class TweakCatalog
         ];
 
     /// <summary>
-    /// Winhance's own update policy switch (its updates-policy-mode), with AkariOS-Ultimate's pause
-    /// in place of Winhance's. One decision — how this PC updates — in the modes a person actually
-    /// picks between, rather than one row per registry value.
+    /// Normal, or AkariOS-Ultimate's pause: the six values Settings' own Pause updates page writes,
+    /// and nothing else, so the Windows Update page keeps working under it and Resume there ends it.
     ///
-    /// Winhance's "Paused for a long time" is not here. AkariOS-Ultimate pauses with the six values
-    /// Settings' own Pause updates page writes; Winhance writes those plus PausedFeatureDate and
-    /// PausedQualityDate, the paused-status pair, the undocumented FlightSettingsMaxPauseDays, and
-    /// NoAUShutdownOption, AlwaysAutoRebootAtScheduledTime, AutoInstallMinorUpdates and UseWUServer
-    /// on top — a pause wearing most of Disabled, over values three other rows here already own.
-    /// One pause, the smaller one, and the Windows Update page keeps working under it.
-    ///
-    /// What is left still covers the rows below it, the way privacy.suggestions-preset covers its
-    /// Group: Security updates only writes exactly what update.automatic-updates,
-    /// update.feature-updates and update.quality-updates write for their own held-back Options, so
-    /// each reads its own state back afterwards. The pause window and UseWUServer are this row's alone.
+    /// Winhance's other modes are not here. Security updates only and Disabled were presets over
+    /// update.automatic-updates and the two hold-back rows, which a user can still set one at a time,
+    /// and "Security updates only" held the monthly security fixes back a week while its name said
+    /// the opposite. Winhance's own pause wrote those six values plus a dozen more, most of Disabled
+    /// among them. What is left shares no value with any other row, so this row's state is its own.
     /// </summary>
     private static DeclaredTweak UpdatePolicy()
     {
@@ -105,73 +100,26 @@ public static partial class TweakCatalog
         const string PausedFrom = "2020-01-01T00:00:00Z";
         const string PausedUntil = "2051-12-31T00:00:00Z";
 
-        TweakTarget[] noAutoUpdate = [.. AutoUpdatePolicy("NoAutoUpdate")];
-        TweakTarget[] auOptions = [.. AutoUpdatePolicy("AUOptions")];
-        TweakTarget[] wsus = [.. AutoUpdatePolicy("UseWUServer")];
-
-        TweakTarget[] deferral =
-        [
-            PolicyValue("BranchReadinessLevel"), PolicyValue("DeferFeatureUpdates"), PolicyValue("DeferFeatureUpdatesPeriodInDays"),
-            PolicyValue("DeferQualityUpdates"), PolicyValue("DeferQualityUpdatesPeriodInDays"),
-        ];
-        int[] heldBack = [20, 1, 365, 1, 7];
-
-        // The six values Settings' own Pause updates page writes, which is all AkariOS-Ultimate touches.
         TweakTarget[] pauseStarts = [Ux("PauseUpdatesStartTime"), Ux("PauseFeatureUpdatesStartTime"), Ux("PauseQualityUpdatesStartTime")];
         TweakTarget[] pauseEnds = [Ux("PauseUpdatesExpiryTime"), Ux("PauseFeatureUpdatesEndTime"), Ux("PauseQualityUpdatesEndTime")];
-        TweakTarget[] targets = [.. noAutoUpdate, .. auOptions, .. deferral, .. pauseStarts, .. pauseEnds, .. wsus];
+        TweakTarget[] targets = [.. pauseStarts, .. pauseEnds];
 
         return new DeclaredTweak(
             Id: "update.policy",
             Title: "Windows Update policy",
-            Description: "How this PC updates, as one choice, and it sets the rows below it to match. Security updates only makes Windows ask before downloading anything and holds the next Windows version back a year and each month's fixes back a week. Paused stops updates outright, written the way AkariOS-Ultimate writes it — the six values Settings' own Pause updates page uses and nothing else, so that page keeps working and shows this PC paused until 2051. Resume there, or Undo here, ends it. Disabled is the bluntest of the three: Windows stops looking for updates at all. Everything but Normal leaves this PC without security fixes for as long as it is set, and a PC that misses a month of them is a PC with known holes in it.",
+            Description: "Normal lets Windows Update run as it ships. Paused stops updates outright, written the way AkariOS-Ultimate writes it: the six values Settings' own Pause updates page uses and nothing else, so that page keeps working and shows this PC paused until 2051. Resume there, or Undo here, ends it. While paused this PC is without security fixes, and a PC that misses a month of them is a PC with known holes in it.",
             Category: Category.Update,
             Group: "Update policy",
             Targets: targets,
             Options:
             [
-                Mode("normal", "Normal (Windows default)", _ => { }),
-                Mode("security-only", "Security updates only", values =>
-                {
-                    Set(values, auOptions, RegistryValue.DWord(2));
-                    foreach (var (target, held) in deferral.Zip(heldBack))
-                    {
-                        values[target] = RegistryValue.DWord(held);
-                    }
-                }),
-                Mode("akari-pause", "Paused (AkariOS)", values =>
-                {
-                    Set(values, pauseStarts, RegistryValue.String(PausedFrom));
-                    Set(values, pauseEnds, RegistryValue.String(PausedUntil));
-                }),
-                Mode("off", "Disabled", values =>
-                {
-                    Set(values, noAutoUpdate, RegistryValue.DWord(1));
-                    Set(values, auOptions, RegistryValue.DWord(1));
-                    Set(values, wsus, RegistryValue.DWord(0));
-                }),
+                Option(targets, "normal", "Normal (Windows default)", null),
+                new TweakOption("akari-pause", "Paused", targets.ToDictionary(
+                    target => target,
+                    target => (MachineValue?)RegistryValue.String(pauseStarts.Contains(target) ? PausedFrom : PausedUntil))),
             ]);
 
-        // Every Option starts from "delete the lot" and writes only what its mode asks for, so Normal
-        // is the empty one and no Option can forget to clear a value another leaves behind.
-        TweakOption Mode(string id, string label, Action<Dictionary<TweakTarget, MachineValue?>> write)
-        {
-            var values = targets.ToDictionary(target => target, _ => (MachineValue?)null);
-            write(values);
-            return new TweakOption(id, label, values);
-        }
-
-        static void Set(Dictionary<TweakTarget, MachineValue?> values, TweakTarget[] written, MachineValue value)
-        {
-            foreach (var target in written)
-            {
-                values[target] = value;
-            }
-        }
-
         static TweakTarget Ux(string name) => new(new RegistryLocation(RegistryHive.LocalMachine, UpdateUxSettings, name));
-
-        static TweakTarget PolicyValue(string name) => new(new RegistryLocation(RegistryHive.LocalMachine, WindowsUpdatePolicies, name));
     }
 
     private static DeclaredTweak AutomaticUpdates()

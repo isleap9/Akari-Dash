@@ -16,7 +16,9 @@ One **Tweak** is one decision, which is already what `CONTEXT.md` says and what 
 
 Porting every row a source offers, and asking before dropping one. That had it backwards: leaving a row out is the normal case now and needs no ceremony, while putting one in needs a reason that survives being written down in its description.
 
-It does **not** reverse the same rule applied *inside* a Tweak. Once a Tweak ships, it ships every state the machine really has: the four taskbar search modes, the six UAC levels, all five update policy modes. Half a Tweak is a worse lie than no Tweak, because the user sees the choice and cannot make it.
+It does **not** reverse the same rule applied *inside* a Tweak. Once a Tweak ships, it ships every state the machine really has: the four taskbar search modes, the six UAC levels. Half a Tweak is a worse lie than no Tweak, because the user sees the choice and cannot make it.
+
+A source's *preset* is not a state, though. An Option that only sets values other rows already own is a shortcut, not a choice the machine otherwise lacks, and it can be left out like any row. That is why `update.policy` offers Normal and AkariOS-Ultimate's pause only: Winhance's Security updates only and Disabled were presets over the rows below it, and every machine state they reached is still one row away.
 
 ## The cost, accepted
 

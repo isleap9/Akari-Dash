@@ -93,8 +93,8 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
 
     /// <summary>
     /// Whether every value that has moved away from <paramref name="applied"/> now holds what
-    /// another Tweak Akari-Dash has applied put there. Two Tweaks may share a value on purpose — an
-    /// update policy mode covers the rows beneath it — and when the user then sets one of those rows,
+    /// another Tweak Akari-Dash has applied put there. Two Tweaks may share a value on purpose — a
+    /// preset covers the rows beneath it — and when the user then sets one of those rows,
     /// the other has not drifted: Akari-Dash moved it, on the user's instruction, and offering to
     /// re-apply would undo the choice they just made. Drift means Windows reset it, so this is not
     /// Drift; the Tweak reads as whatever the machine is in now, Undo included.
@@ -145,7 +145,7 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
     ///
     /// An Original Value belongs to the location, not to the Tweak, and is the machine's own value —
     /// so two Tweaks that share a location must record the same one. Two Tweaks may share on purpose:
-    /// an update policy mode covers the rows beneath it. Reading the machine for the second of them
+    /// a preset covers the rows beneath it. Reading the machine for the second of them
     /// would record Akari-Dash's own earlier write as if Windows had put it there, and undoing that
     /// Tweak would then restore a state the PC was never in — and, once the first Tweak's record is
     /// gone, leave those values behind with nothing owning them.

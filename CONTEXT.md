@@ -65,7 +65,7 @@ An apply that reads the real machine but writes nothing, recording exactly what 
 _Avoid_: Simulation, mock mode, preview mode
 
 **Drift**:
-When a **Tweak**'s **Live State** no longer matches the **Option** Akari-Dash last applied *and nothing Akari-Dash did explains it* — so, because Windows reset it. Two Tweaks may write one value on purpose (an update policy mode covers the rows beneath it), and applying one of them is not the other drifting: Akari-Dash moved it, on the user's instruction, and offering to re-apply would undo the choice they just made. That reads as **Custom**, with **Undo** intact.
+When a **Tweak**'s **Live State** no longer matches the **Option** Akari-Dash last applied *and nothing Akari-Dash did explains it* — so, because Windows reset it. Two Tweaks may write one value on purpose (a preset covers the rows beneath it, as `privacy.suggestions-preset` does), and applying one of them is not the other drifting: Akari-Dash moved it, on the user's instruction, and offering to re-apply would undo the choice they just made. That reads as **Custom**, with **Undo** intact.
 _Avoid_: Reverted, out of sync, broken
 
 **Restore Point**:
