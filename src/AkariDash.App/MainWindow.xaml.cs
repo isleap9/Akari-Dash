@@ -48,6 +48,8 @@ public sealed partial class MainWindow : Window
         SetTitleBar(AppTitleBar);
         ConfigureWindow();
 
+        RootElement.ActualThemeChanged += (_, _) => UpdatePageLogo();
+
         _navigation.SetFrame(ContentFrame);
         _navigation.NavigateTo<HomePage>();
         _navigation.Navigated += (_, _) => RefreshShellState();
@@ -191,7 +193,12 @@ public sealed partial class MainWindow : Window
         RootElement.RequestedTheme = target;
 
         ApplyTitleBarColors(theme);
+        UpdatePageLogo();
     }
+
+    // The logo is white, so it shows only on a dark page; System can be either.
+    private void UpdatePageLogo() =>
+        PageLogo.Visibility = RootElement.ActualTheme == ElementTheme.Light ? Visibility.Collapsed : Visibility.Visible;
 
     private void OnNavSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {

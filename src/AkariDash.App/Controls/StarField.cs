@@ -8,13 +8,13 @@ namespace AkariDash.App.Controls;
 
 /// <summary>
 /// The galaxy behind every page, after Vain Toolbox's: small white stars drifting slowly down and
-/// twinkling, in every theme. On a light background the stars turn grey and fainter so they stay
-/// a texture rather than dirt. It moves only while it is loaded and visible.
+/// twinkling, in every theme: white on dark themes, black on Light. It moves only while it is
+/// loaded and visible.
 /// </summary>
 public sealed class StarField : Canvas
 {
     private static readonly SolidColorBrush DarkThemeStarBrush = new(Colors.White);
-    private static readonly SolidColorBrush LightThemeStarBrush = new(Colors.Gray);
+    private static readonly SolidColorBrush LightThemeStarBrush = new(Colors.Black);
 
     private readonly List<Star> _stars = [];
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(40) };
@@ -105,8 +105,7 @@ public sealed class StarField : Canvas
             }
 
             star.Place();
-            var twinkle = Math.Clamp(star.BaseOpacity + Math.Sin(_elapsedSeconds * 2 + star.X + star.Y) * 0.15, 0.05, 0.85);
-            star.Element.Opacity = IsLight ? twinkle * 0.5 : twinkle;
+            star.Element.Opacity = Math.Clamp(star.BaseOpacity + Math.Sin(_elapsedSeconds * 2 + star.X + star.Y) * 0.15, 0.05, 0.85);
         }
     }
 

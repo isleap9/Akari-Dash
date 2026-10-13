@@ -166,8 +166,10 @@
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     Background="{ThemeResource LayerFillColorDefaultBrush}">
                     <Grid>
-                        <!-- The AkariOS logo, faint, centred on the page behind it, in every theme. -->
+                        <!-- The AkariOS logo, faint, centred on the page behind it. Hidden in Light,
+                             where the white logo does not show (UpdatePageLogo). -->
                         <Image
+                            x:Name="PageLogo"
                             Source="ms-appx:///Assets/img.png"
                             Stretch="UniformToFill"
                             HorizontalAlignment="Center"
