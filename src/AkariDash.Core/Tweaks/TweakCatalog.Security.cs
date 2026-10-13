@@ -186,6 +186,11 @@ public static partial class TweakCatalog
     private static DeclaredTweak DefenderScheduledTasks()
     {
         // Defender Optimize disables these four in normal boot as admin; Windows ships them enabled.
+        // They do not always stay off: with tamper protection on, Defender rewrote all four task
+        // files back to Enabled nine minutes after an apply on DESKTOP-LLLM7SU, with Akari-Dash
+        // closed. Nothing here can stop that (it needs safe boot and TrustedInstaller, which is out
+        // of scope), so the description says so and Live State keeps telling the truth: it reads On
+        // again while Original Values still records the Off apply, which Undo then clears.
         TweakTarget[] targets =
         [
             .. new[] { "Windows Defender Cache Maintenance", "Windows Defender Cleanup", "Windows Defender Scheduled Scan", "Windows Defender Verification" }
@@ -193,7 +198,7 @@ public static partial class TweakCatalog
         ];
 
         return SecurityTweak("security.defender-tasks", "Defender scheduled tasks",
-            "Defender's background scan, cache upkeep, cleanup and update check, which can start while you play. Off stops them; real-time protection still scans files as they are opened.",
+            "Defender's background scan, cache upkeep, cleanup and update check, which can start while you play. Off stops them; real-time protection still scans files as they are opened. If tamper protection is on, Defender turns these tasks back on by itself after a while, and this Tweak reads On again.",
             "Microsoft Defender", targets,
             [Option(targets, "off", "Off", TaskEnabledValue.Off), Option(targets, "on", "On", TaskEnabledValue.On)],
             Activation.Immediately);
