@@ -102,6 +102,27 @@
   <data name="Windows.Title" xml:space="preserve">
     <value>Windows</value>
   </data>
+  <data name="Uninstaller.Title" xml:space="preserve">
+    <value>Uninstaller</value>
+  </data>
+  <data name="Uninstaller.Search" xml:space="preserve">
+    <value>Search for an app</value>
+  </data>
+  <data name="Uninstaller.SelectAll" xml:space="preserve">
+    <value>Select all</value>
+  </data>
+  <data name="Uninstaller.Selected" xml:space="preserve">
+    <value>selected</value>
+  </data>
+  <data name="Uninstaller.UninstallSelected" xml:space="preserve">
+    <value>Uninstall Selected</value>
+  </data>
+  <data name="Uninstaller.Description" xml:space="preserve">
+    <value>Remove preinstalled Microsoft Store apps and any other apps you no longer need. Tick what you want gone, then click uninstall.</value>
+  </data>
+  <data name="Uninstaller.Working" xml:space="preserve">
+    <value>Working...</value>
+  </data>
   <data name="DryRunBanner.Title" xml:space="preserve">
     <value>Dry Run only</value>
   </data>

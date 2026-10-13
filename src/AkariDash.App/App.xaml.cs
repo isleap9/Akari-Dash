@@ -9,6 +9,7 @@ using AkariDash.App.Services;
 using AkariDash.Framework.Logging;
 using AkariDash.App.ViewModels;
 using AkariDash.Core.Machine;
+using AkariDash.Core.Apps;
 using AkariDash.Core.Tweaks;
 using AkariDash.Framework;
 using AkariDash.Framework.Navigation;
@@ -169,6 +170,10 @@ public partial class App : Application
         builder.Services.AddTransient<HomeViewModel>();
         builder.Services.AddTransient<SettingsViewModel>();
         builder.Services.AddTransient<CategoryViewModel>();
+        builder.Services.AddTransient<UninstallerViewModel>();
+
+        // Uninstaller (an Action backend, ADR-0004): lists and removes Store and Win32 apps.
+        builder.Services.AddSingleton<IInstalledAppService, WindowsInstalledAppService>();
 
         // Navigation: pages are created through the DI container.
         builder.Services.AddSingleton<INavigationService>(sp =>

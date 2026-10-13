@@ -1,0 +1,157 @@
+<Page
+    x:Class="AkariDash.App.Views.UninstallerPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:AkariDash.App.ViewModels">
+
+    <Grid Padding="32" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Header: title, search, select-all, count, uninstall. -->
+        <Grid ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock
+                VerticalAlignment="Center"
+                Text="{x:Bind Strings.Get('Uninstaller.Title')}"
+                Style="{StaticResource TitleTextBlockStyle}" />
+
+            <AutoSuggestBox
+                Grid.Column="1"
+                Width="260"
+                VerticalAlignment="Center"
+                QueryIcon="Find"
+                PlaceholderText="{x:Bind Strings.Get('Uninstaller.Search')}"
+                Text="{x:Bind ViewModel.SearchText, Mode=TwoWay}" />
+
+            <CheckBox
+                Grid.Column="2"
+                VerticalAlignment="Center"
+                IsThreeState="True"
+                Content="{x:Bind Strings.Get('Uninstaller.SelectAll')}"
+                IsChecked="{x:Bind ViewModel.IsSelectAllChecked, Mode=TwoWay}"
+                Command="{x:Bind ViewModel.ToggleSelectAllCommand}" />
+
+            <TextBlock
+                Grid.Column="3"
+                VerticalAlignment="Center"
+                Opacity="0.8">
+                <Run Text="{x:Bind ViewModel.SelectedCount, Mode=OneWay}" />
+                <Run Text="{x:Bind Strings.Get('Uninstaller.Selected')}" />
+            </TextBlock>
+
+            <Button
+                Grid.Column="5"
+                VerticalAlignment="Center"
+                Content="{x:Bind Strings.Get('Uninstaller.UninstallSelected')}"
+                Command="{x:Bind ViewModel.UninstallSelectedCommand}"
+                IsEnabled="{x:Bind ViewModel.HasSelection, Mode=OneWay}"
+                Background="{ThemeResource SystemFillColorCriticalBrush}"
+                Foreground="White" />
+        </Grid>
+
+        <TextBlock
+            Grid.Row="1"
+            TextWrapping="Wrap"
+            Opacity="0.8"
+            Text="{x:Bind Strings.Get('Uninstaller.Description')}" />
+
+        <StackPanel
+            Grid.Row="2"
+            Orientation="Horizontal"
+            Spacing="12">
+            <TextBlock Opacity="0.8" Text="{x:Bind ViewModel.AppsFoundText, Mode=OneWay}" />
+            <ProgressRing
+                Width="16"
+                Height="16"
+                IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}" />
+            <TextBlock
+                Opacity="0.8"
+                Visibility="{x:Bind ViewModel.IsWorking, Mode=OneWay}"
+                Text="{x:Bind Strings.Get('Uninstaller.Working')}" />
+        </StackPanel>
+
+        <!-- App cards that fill the width: two across when there is room for two, one when there is
+             not, so the page never wraps to a single narrow column with half the window empty. -->
+        <ScrollViewer Grid.Row="3" Padding="0,0,16,0">
+            <ItemsRepeater ItemsSource="{x:Bind ViewModel.Filtered, Mode=OneWay}">
+                <ItemsRepeater.Layout>
+                    <UniformGridLayout
+                        MinItemWidth="340"
+                        MinItemHeight="64"
+                        MinRowSpacing="8"
+                        MinColumnSpacing="8"
+                        MaximumRowsOrColumns="2"
+                        ItemsStretch="Fill" />
+                </ItemsRepeater.Layout>
+                <ItemsRepeater.ItemTemplate>
+                    <DataTemplate x:DataType="vm:InstalledAppEntryViewModel">
+                        <Grid
+                            Padding="14,10"
+                            ColumnSpacing="14"
+                            CornerRadius="8"
+                            BorderThickness="1"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- A CheckBox keeps 120px for a label it does not have unless told otherwise. -->
+                            <CheckBox
+                                MinWidth="0"
+                                Padding="0"
+                                VerticalAlignment="Center"
+                                IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
+
+                            <Grid
+                                Grid.Column="1"
+                                Width="40"
+                                Height="40"
+                                CornerRadius="6"
+                                VerticalAlignment="Center"
+                                Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                <Image
+                                    Width="32"
+                                    Height="32"
+                                    Stretch="Uniform"
+                                    Source="{x:Bind Icon, Mode=OneWay}" />
+                                <FontIcon
+                                    FontSize="20"
+                                    Opacity="0.8"
+                                    Glyph="&#xE71D;"
+                                    Visibility="{x:Bind IsIconMissing, Mode=OneWay}" />
+                            </Grid>
+
+                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="1">
+                                <TextBlock
+                                    Text="{x:Bind Name}"
+                                    TextTrimming="CharacterEllipsis"
+                                    ToolTipService.ToolTip="{x:Bind Name}" />
+                                <TextBlock
+                                    Text="{x:Bind Publisher}"
+                                    Opacity="0.7"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsRepeater.ItemTemplate>
+            </ItemsRepeater>
+        </ScrollViewer>
+    </Grid>
+</Page>
