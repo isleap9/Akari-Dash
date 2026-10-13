@@ -9,6 +9,7 @@ public enum Category
     Notifications,
     Security,
     StartMenu,
+    Taskbar,
     Windows,
     Update,
 }

@@ -13,8 +13,8 @@ namespace AkariDash.Core.Tweaks;
 // than Start. The Copilot taskbar button is gone in current Windows; privacy.copilot covers Copilot.
 // EnableAutoTray (show all notification area icons), which Akari-OS sets, made no visible difference
 // in the VM on build 26300, so it is left out too. The Notifications Group that used to be here
-// is a Category of its own now; see TweakCatalog.Notifications.cs, and the Start Group went the same
-// way to TweakCatalog.StartMenu.cs (#32).
+// is a Category of its own now; see TweakCatalog.Notifications.cs, and the Start and Taskbar Groups
+// went the same way to TweakCatalog.StartMenu.cs and TweakCatalog.Taskbar.cs (#32).
 public static partial class TweakCatalog
 {
     private const string ExplorerKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer";
@@ -35,14 +35,6 @@ public static partial class TweakCatalog
         Toggle("windows.recent-files", "Recent files", "Shows the files you opened recently in File Explorer's Home.",
             "File Explorer", ExplorerKey, "ShowRecent", shownValue: 1, hiddenValue: 0, absent: 1),
 
-        TaskbarAlignment(),
-        TaskbarSearch(),
-        Toggle("windows.task-view-button", "Task View button", "Shows the Task View button, for your open windows and desktops, on the taskbar.",
-            "Taskbar", ExplorerAdvanced, "ShowTaskViewButton", shownValue: 1, hiddenValue: 0, absent: 1),
-        Widgets(),
-        OnOff("windows.end-task", "End task in the taskbar menu", "Adds End task to an app's right-click menu on the taskbar, to close an app that stopped responding.",
-            "Taskbar", $@"{ExplorerAdvanced}\TaskbarDeveloperSettings", "TaskbarEndTask", absent: 0),
-
         ColorMode(),
 
         AltTabTabs(),
@@ -62,16 +54,6 @@ public static partial class TweakCatalog
             Activation.AfterSignOut);
     }
 
-    /// <summary>An On/Off Tweak over one current-user DWORD (1 is on).</summary>
-    private static DeclaredTweak OnOff(string id, string title, string description, string group, string key, string name, int absent)
-    {
-        var target = new TweakTarget(new RegistryLocation(RegistryHive.CurrentUser, key, name), AbsentMeans: RegistryValue.DWord(absent));
-
-        return WindowsTweak(id, title, description, group, target,
-            [DWordOption(target, "on", "On", 1), DWordOption(target, "off", "Off", 0)],
-            Activation.AfterSignOut);
-    }
-
     private static DeclaredTweak WindowsTweak(
         string id, string title, string description, string group, TweakTarget target, IReadOnlyList<TweakOption> options, Activation activation) =>
         new(id, title, description, Category.Windows, group, [target], options, Activation: activation);
@@ -85,47 +67,6 @@ public static partial class TweakCatalog
             "File Explorer", launchTo,
             [DWordOption(launchTo, "home", "Home", 2), DWordOption(launchTo, "this-pc", "This PC", 1)],
             Activation.Immediately);
-    }
-
-    private static DeclaredTweak TaskbarAlignment()
-    {
-        // Akari-OS sets TaskbarAl to 0 (left); Windows 11 centres the taskbar when it is missing.
-        var alignment = new TweakTarget(new RegistryLocation(RegistryHive.CurrentUser, ExplorerAdvanced, "TaskbarAl"), AbsentMeans: RegistryValue.DWord(1));
-
-        return WindowsTweak("windows.taskbar-alignment", "Taskbar alignment", "Where the Start button and app icons sit on the taskbar.",
-            "Taskbar", alignment,
-            [DWordOption(alignment, "center", "Center", 1), DWordOption(alignment, "left", "Left", 0)],
-            Activation.Immediately);
-    }
-
-    private static DeclaredTweak TaskbarSearch()
-    {
-        // Akari-OS hides search (0). 1 is the icon, 2 the search box, 3 the icon with a label. Fresh
-        // Windows 11 shows the search box when the value is missing.
-        var mode = new TweakTarget(
-            new RegistryLocation(RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Search", "SearchboxTaskbarMode"),
-            AbsentMeans: RegistryValue.DWord(2));
-
-        return WindowsTweak("windows.taskbar-search", "Search on the taskbar", "How search shows on the taskbar. You can still search by opening Start and typing.",
-            "Taskbar", mode,
-            [
-                DWordOption(mode, "hidden", "Hidden", 0),
-                DWordOption(mode, "icon", "Icon only", 1),
-                DWordOption(mode, "icon-label", "Icon and label", 3),
-                DWordOption(mode, "box", "Search box", 2),
-            ],
-            Activation.Immediately);
-    }
-
-    private static DeclaredTweak Widgets()
-    {
-        // Akari-OS sets the AllowNewsAndInterests policy to 0; deleting it gives widgets back.
-        var policy = new TweakTarget(new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Dsh", "AllowNewsAndInterests"));
-
-        return WindowsTweak("windows.widgets", "Widgets", "The widgets board with news, weather and more, and its button on the taskbar.",
-            "Taskbar", policy,
-            [Option(policy, "off", "Off", RegistryValue.DWord(0)), Option(policy, "not-blocked", "Not blocked", null)],
-            Activation.AfterSignOut);
     }
 
     private static DeclaredTweak AltTabTabs()

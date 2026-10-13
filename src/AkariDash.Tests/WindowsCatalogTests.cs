@@ -9,16 +9,14 @@ public class WindowsCatalogTests
     private static readonly IReadOnlyList<DeclaredTweak> Windows =
         TweakCatalog.All.Where(tweak => tweak.Category == Category.Windows).ToList();
 
-    private static DeclaredTweak Find(string id) => Windows.Single(tweak => tweak.Id == id);
-
     [Fact]
-    public void Windows_page_has_about_fifteen_tweaks_in_its_groups()
+    public void Windows_page_has_about_ten_tweaks_in_its_groups()
     {
-        Assert.InRange(Windows.Count, 12, 20);
+        Assert.InRange(Windows.Count, 8, 15);
         Assert.All(Windows, tweak => Assert.StartsWith("windows.", tweak.Id));
-        // Notifications and Start used to be Groups here; both are Categories of their own now.
+        // Notifications, Start and Taskbar used to be Groups here; all three are Categories now.
         Assert.Equal(
-            ["Appearance", "File Explorer", "Multitasking", "System", "Taskbar"],
+            ["Appearance", "File Explorer", "Multitasking", "System"],
             Windows.Select(tweak => tweak.Group).Distinct().Order());
     }
 
@@ -29,21 +27,12 @@ public class WindowsCatalogTests
     }
 
     [Fact]
-    public void Missing_values_count_as_one_of_the_options_except_for_policies()
+    public void Missing_values_count_as_one_of_the_options()
     {
         // A fresh Windows has most of these values missing; it should still read as an Option, not Custom.
-        Assert.All(Windows.Where(tweak => tweak.Id != "windows.widgets"), tweak =>
+        Assert.All(Windows, tweak =>
             Assert.Contains(tweak.Options, option =>
                 tweak.Targets.All(target => target.AbsentMeans is { } absent && Equals(option.Values[target], absent))));
-    }
-
-    [Fact]
-    public void Taskbar_search_has_four_options_with_the_search_box_as_windows_default()
-    {
-        var tweak = Find("windows.taskbar-search");
-
-        Assert.Equal(["hidden", "icon", "icon-label", "box"], tweak.Options.Select(option => option.Id));
-        Assert.Equal(RegistryValue.DWord(2), Assert.Single(tweak.Targets).AbsentMeans);
     }
 
     [Fact]

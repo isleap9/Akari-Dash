@@ -88,6 +88,7 @@ public sealed partial class MainWindow : Window
         NavigationItem.Parent("Customize", "\uE790",
         [
             new("Start menu", "\uE8FC", typeof(StartMenuPage)),
+            new("Taskbar", "\uE7F4", typeof(TaskbarPage)),
         ]),
         new("Windows", "\uE771", typeof(WindowsPage)),
         new("Windows Update", "\uE777", typeof(UpdatePage)),
@@ -102,6 +103,7 @@ public sealed partial class MainWindow : Window
         [Category.Services] = typeof(ServicesPage),
         [Category.Notifications] = typeof(NotificationsPage),
         [Category.StartMenu] = typeof(StartMenuPage),
+        [Category.Taskbar] = typeof(TaskbarPage),
         [Category.Windows] = typeof(WindowsPage),
         [Category.Update] = typeof(UpdatePage),
         [Category.Security] = typeof(SecurityPage),

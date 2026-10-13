@@ -22,6 +22,13 @@ public static class RenamedTweaks
         ["windows.start-most-used"] = "start.most-used",
         ["windows.start-recommendations"] = "start.recommendations",
         ["windows.start-account-notifications"] = "start.account-notifications",
+
+        // #32: the Windows page's Taskbar Group became the Taskbar Category, under Customize.
+        ["windows.taskbar-search"] = "taskbar.search",
+        ["windows.taskbar-alignment"] = "taskbar.alignment",
+        ["windows.task-view-button"] = "taskbar.task-view",
+        ["windows.widgets"] = "taskbar.widgets",
+        ["windows.end-task"] = "taskbar.end-task",
     };
 
     /// <summary>
