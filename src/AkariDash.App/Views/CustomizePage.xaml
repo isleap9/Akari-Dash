@@ -28,13 +28,13 @@
             </SelectorBarItem>
         </SelectorBar>
 
-        <ScrollViewer x:Name="StartMenuTab" Grid.Row="1" Padding="0,0,0,24">
+        <ScrollViewer x:Name="StartMenuTab" Grid.Row="1" Padding="0,0,16,24">
             <views:CategoryView ViewModel="{x:Bind ViewModel.StartMenu}" />
         </ScrollViewer>
-        <ScrollViewer x:Name="TaskbarTab" Grid.Row="1" Padding="0,0,0,24" Visibility="Collapsed">
+        <ScrollViewer x:Name="TaskbarTab" Grid.Row="1" Padding="0,0,16,24" Visibility="Collapsed">
             <views:CategoryView ViewModel="{x:Bind ViewModel.Taskbar}" />
         </ScrollViewer>
-        <ScrollViewer x:Name="ExplorerTab" Grid.Row="1" Padding="0,0,0,24" Visibility="Collapsed">
+        <ScrollViewer x:Name="ExplorerTab" Grid.Row="1" Padding="0,0,16,24" Visibility="Collapsed">
             <views:CategoryView ViewModel="{x:Bind ViewModel.Explorer}" />
         </ScrollViewer>
     </Grid>

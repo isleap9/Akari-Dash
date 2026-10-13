@@ -107,6 +107,7 @@
                     </Grid>
                     <ListView
                         Grid.Row="1"
+                        Padding="0,0,16,0"
                         SelectionMode="None"
                         ItemsSource="{x:Bind ViewModel.StoreApps.Filtered, Mode=OneWay}">
                         <ListView.ItemContainerStyle>
