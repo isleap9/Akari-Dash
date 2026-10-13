@@ -12,13 +12,13 @@ public class WindowsCatalogTests
     private static DeclaredTweak Find(string id) => Windows.Single(tweak => tweak.Id == id);
 
     [Fact]
-    public void Windows_page_has_about_twenty_tweaks_in_its_groups()
+    public void Windows_page_has_about_fifteen_tweaks_in_its_groups()
     {
-        Assert.InRange(Windows.Count, 18, 25);
+        Assert.InRange(Windows.Count, 12, 20);
         Assert.All(Windows, tweak => Assert.StartsWith("windows.", tweak.Id));
-        // Notifications used to be a Group here; it is a Category of its own now.
+        // Notifications and Start used to be Groups here; both are Categories of their own now.
         Assert.Equal(
-            ["Appearance", "File Explorer", "Multitasking", "Start", "System", "Taskbar"],
+            ["Appearance", "File Explorer", "Multitasking", "System", "Taskbar"],
             Windows.Select(tweak => tweak.Group).Distinct().Order());
     }
 

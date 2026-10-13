@@ -8,6 +8,7 @@ public enum Category
     Services,
     Notifications,
     Security,
+    StartMenu,
     Windows,
     Update,
 }

@@ -85,6 +85,10 @@ public sealed partial class MainWindow : Window
         new("Privacy", "\uE72E", typeof(PrivacyPage)),
         new("Services", "\uE9F5", typeof(ServicesPage)),
         new("Notifications", "\uEA8F", typeof(NotificationsPage)),
+        NavigationItem.Parent("Customize", "\uE790",
+        [
+            new("Start menu", "\uE8FC", typeof(StartMenuPage)),
+        ]),
         new("Windows", "\uE771", typeof(WindowsPage)),
         new("Windows Update", "\uE777", typeof(UpdatePage)),
         new("Security", "\uEA18", typeof(SecurityPage)),
@@ -97,6 +101,7 @@ public sealed partial class MainWindow : Window
         [Category.Privacy] = typeof(PrivacyPage),
         [Category.Services] = typeof(ServicesPage),
         [Category.Notifications] = typeof(NotificationsPage),
+        [Category.StartMenu] = typeof(StartMenuPage),
         [Category.Windows] = typeof(WindowsPage),
         [Category.Update] = typeof(UpdatePage),
         [Category.Security] = typeof(SecurityPage),
@@ -200,7 +205,11 @@ public sealed partial class MainWindow : Window
     private void RefreshShellState()
     {
         var current = _navigation.CurrentPageType;
-        var item = NavItems.Concat(FooterNavItems).FirstOrDefault(i => i.PageType == current);
+
+        // Every level, so a page under Customize is selected in the pane like any other.
+        var item = NavItems.Concat(FooterNavItems)
+            .SelectMany(top => top.SelfAndDescendants())
+            .FirstOrDefault(i => i.PageType == current);
 
         if (item is not null && !ReferenceEquals(NavView.SelectedItem, item))
         {

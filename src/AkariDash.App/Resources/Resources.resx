@@ -90,6 +90,9 @@
   <data name="Update.Title" xml:space="preserve">
     <value>Windows Update</value>
   </data>
+  <data name="StartMenu.Title" xml:space="preserve">
+    <value>Start menu</value>
+  </data>
   <data name="Windows.Title" xml:space="preserve">
     <value>Windows</value>
   </data>

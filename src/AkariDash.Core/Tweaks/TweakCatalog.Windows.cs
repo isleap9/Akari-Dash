@@ -13,12 +13,12 @@ namespace AkariDash.Core.Tweaks;
 // than Start. The Copilot taskbar button is gone in current Windows; privacy.copilot covers Copilot.
 // EnableAutoTray (show all notification area icons), which Akari-OS sets, made no visible difference
 // in the VM on build 26300, so it is left out too. The Notifications Group that used to be here
-// is a Category of its own now; see TweakCatalog.Notifications.cs.
+// is a Category of its own now; see TweakCatalog.Notifications.cs, and the Start Group went the same
+// way to TweakCatalog.StartMenu.cs (#32).
 public static partial class TweakCatalog
 {
     private const string ExplorerKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer";
     private const string ExplorerAdvanced = @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
-    private const string StartKey = @"Software\Microsoft\Windows\CurrentVersion\Start";
     private const string ContentDelivery = @"Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager";
 
     private static IEnumerable<DeclaredTweak> WindowsTweaks() =>
@@ -42,15 +42,6 @@ public static partial class TweakCatalog
         Widgets(),
         OnOff("windows.end-task", "End task in the taskbar menu", "Adds End task to an app's right-click menu on the taskbar, to close an app that stopped responding.",
             "Taskbar", $@"{ExplorerAdvanced}\TaskbarDeveloperSettings", "TaskbarEndTask", absent: 0),
-
-        Toggle("windows.start-recently-added", "Recently added apps", "Shows apps you just installed at the top of Start's app list.",
-            "Start", StartKey, "ShowRecentList", shownValue: 1, hiddenValue: 0, absent: 1),
-        Toggle("windows.start-most-used", "Most used apps", "Shows the apps you open most in Start.",
-            "Start", StartKey, "ShowFrequentList", shownValue: 1, hiddenValue: 0, absent: 1),
-        Toggle("windows.start-recommendations", "Tips, shortcuts and new apps", "Shows recommendations for tips, shortcuts, new apps and more in Start.",
-            "Start", ExplorerAdvanced, "Start_IrisRecommendations", shownValue: 1, hiddenValue: 0, absent: 1),
-        Toggle("windows.start-account-notifications", "Account notifications in Start", "Shows prompts about your Microsoft account, like backing up or finishing sign-in, on your picture in Start.",
-            "Start", ExplorerAdvanced, "Start_AccountNotifications", shownValue: 1, hiddenValue: 0, absent: 1),
 
         ColorMode(),
 

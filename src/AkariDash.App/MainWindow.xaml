@@ -74,9 +74,16 @@
                 </AutoSuggestBox>
             </NavigationView.AutoSuggestBox>
 
+            <!-- One template for every level: a leaf has no Children, so it gets no chevron, and a
+                 parent has no page, so picking it only opens the branch. -->
             <NavigationView.MenuItemTemplate>
                 <DataTemplate x:DataType="local:NavigationItem">
-                    <NavigationViewItem Content="{x:Bind Label}" Tag="{x:Bind PageType}">
+                    <NavigationViewItem
+                        Content="{x:Bind Label}"
+                        Tag="{x:Bind PageType}"
+                        MenuItemsSource="{x:Bind Children}"
+                        SelectsOnInvoked="{x:Bind IsPage}"
+                        IsExpanded="{x:Bind StartsExpanded}">
                         <NavigationViewItem.Icon>
                             <FontIcon Glyph="{x:Bind Glyph}" />
                         </NavigationViewItem.Icon>

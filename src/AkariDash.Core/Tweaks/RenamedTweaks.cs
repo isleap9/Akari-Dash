@@ -16,6 +16,12 @@ public static class RenamedTweaks
         ["windows.tips-notifications"] = "notifications.tips",
         ["windows.welcome-experience"] = "notifications.welcome-experience",
         ["windows.finish-setup"] = "notifications.finish-setup",
+
+        // #32: the Windows page's Start Group became the Start menu Category, under Customize.
+        ["windows.start-recently-added"] = "start.recently-added",
+        ["windows.start-most-used"] = "start.most-used",
+        ["windows.start-recommendations"] = "start.recommendations",
+        ["windows.start-account-notifications"] = "start.account-notifications",
     };
 
     /// <summary>
