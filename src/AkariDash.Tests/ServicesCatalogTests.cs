@@ -136,4 +136,14 @@ public class ServicesCatalogTests
 
         Assert.Equal(new ServiceStartValue(windowsDefault), tweak.Options.Single(option => option.Id == "on").Values[target]);
     }
+
+    [Fact]
+    public void The_windows_default_names_its_start_type_so_manual_is_never_hidden()
+    {
+        // Telephony starts as Manual. Its Windows default is that Manual, so the list does not offer
+        // Manual twice, and the default has to say it is Manual or Manual seems missing.
+        Assert.Equal("Manual (Windows default)", Find("services.telephony").Options.Single(option => option.Id == "on").Label);
+        Assert.All(Services, tweak => Assert.EndsWith("(Windows default)", tweak.Options.Single(option => option.Id == "on").Label));
+        Assert.Contains(Services, tweak => tweak.Options.Single(option => option.Id == "on").Label.StartsWith("Automatic"));
+    }
 }

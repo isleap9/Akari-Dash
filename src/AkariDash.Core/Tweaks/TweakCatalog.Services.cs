@@ -150,7 +150,20 @@ public static partial class TweakCatalog
     {
         var targets = services.Select(service => new TweakTarget(new ServiceLocation(service.Name))).ToList();
         var off = Option(targets, "off", "Off", new ServiceStartValue(ServiceStartType.Disabled));
-        var on = new TweakOption("on", "On (Windows default)", targets.Zip(services)
+        // Named after the start type Windows gives it, so a service that starts as Manual reads
+        // "Manual (Windows default)" rather than hiding Manual behind "On". A row of services with
+        // different defaults has no one start type to name, so it stays "On (Windows default)".
+        var defaults = services.Select(service => service.WindowsDefault).Distinct().ToList();
+        var onLabel = defaults.Count == 1
+            ? $"{defaults[0] switch
+            {
+                ServiceStartType.Manual => "Manual",
+                ServiceStartType.Automatic => "Automatic",
+                ServiceStartType.AutomaticDelayed => "Automatic (delayed start)",
+                _ => "On",
+            }} (Windows default)"
+            : "On (Windows default)";
+        var on = new TweakOption("on", onLabel, targets.Zip(services)
             .ToDictionary(pair => pair.First, pair => (MachineValue?)new ServiceStartValue(pair.Second.WindowsDefault)));
 
         // Off and On are not the only answers: Manual leaves a service there for whatever needs it
