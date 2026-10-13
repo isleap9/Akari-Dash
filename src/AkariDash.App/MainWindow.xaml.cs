@@ -283,8 +283,11 @@ public sealed partial class MainWindow : Window
         try
         {
             var workArea = DisplayArea.GetFromWindowId(appWindow.Id, DisplayAreaFallback.Nearest).WorkArea;
-            var width = Math.Min(1150, workArea.Width - 60);
-            var height = Math.Min(800, workArea.Height - 80);
+            // Most of the screen, so a page's tabs and tables have room on any monitor: 85% of the
+            // width and 88% of the height of the work area, but never under the old 1150 x 800 where
+            // the screen has room for that.
+            var width = Math.Min(Math.Max(1150, workArea.Width * 85 / 100), workArea.Width - 40);
+            var height = Math.Min(Math.Max(800, workArea.Height * 88 / 100), workArea.Height - 40);
             appWindow.Resize(new SizeInt32((int)width, (int)height));
 
             appWindow.Move(new PointInt32(
