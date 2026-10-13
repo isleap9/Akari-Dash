@@ -1,7 +1,8 @@
-# Microsoft Edge and WebView2: uninstall. From AkariOS-Ultimate's 'edge-webview' tweak (Tweaks/Windows.ps1,
-# MIT, Copyright (c) FR33THY, Copyright (c) 2026 isleap9), unchanged but for the console output and
-# the internet check, which removing does not need. Akari-Dash runs it elevated.
-
+# Microsoft Edge: uninstall. The Edge half of AkariOS-Ultimate's 'edge-webview' tweak (Tweaks/Windows.ps1,
+# MIT, Copyright (c) FR33THY, Copyright (c) 2026 isleap9). Akari-Dash offers Edge and WebView2 as two
+# Uninstaller rows, so the WebView2 line lives in RemoveWebView.ps1, and the two cleanups that would take
+# WebView2 too are narrowed to Edge: its uninstall entry by exact name, and its own folders rather than
+# all of Program Files (x86)\Microsoft. The console output and the internet check are dropped.
 
 # stop edge running
 $stop = "backgroundTaskHost", "Copilot", "CrossDeviceResume", "GameBar", "MicrosoftEdgeUpdate", "msedge", "msedgewebview2", "OneDrive", "OneDrive.Sync.Service", "OneDriveStandaloneUpdater", "Resume", "RuntimeBroker", "Search", "SearchHost", "Setup", "StoreDesktopExtension", "WidgetService", "Widgets"
@@ -48,13 +49,10 @@ Start-Process cmd.exe "/c $uninstallstring" -WindowStyle Hidden -Wait
 # clean folder file
 Remove-Item -Recurse -Force "$env:SystemRoot\SystemApps\Microsoft.MicrosoftEdge_8wekyb3d8bbwe" -ErrorAction SilentlyContinue | Out-Null
 
-# remove edgewebview uninstaller
-cmd /c "reg delete `"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft EdgeWebView`" /f >nul 2>&1"
-
 # remove edge uninstaller
 $findmicrosoftedge = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
 $microsoftedge = Get-ItemProperty $findmicrosoftedge -ErrorAction SilentlyContinue |
-Where-Object { $_.DisplayName -like "*Microsoft Edge*" }
+Where-Object { $_.DisplayName -eq "Microsoft Edge" }
 if ($microsoftedge) {
 $guid = $microsoftedge.PSChildName
 cmd /c "reg delete `"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\$guid`" /f >nul 2>&1"
@@ -65,7 +63,7 @@ Remove-Item -Recurse -Force "$env:SystemDrive\Windows\System32\config\systemprof
 Remove-Item -Recurse -Force "$env:SystemDrive\Users\Public\Desktop\Microsoft Edge.lnk" -ErrorAction SilentlyContinue | Out-Null
 
 # remove edge folders
-Remove-Item -Recurse -Force "$env:SystemDrive\Program Files (x86)\Microsoft" -ErrorAction SilentlyContinue | Out-Null
+"Edge", "EdgeCore", "EdgeUpdate" | ForEach-Object { Remove-Item -Recurse -Force "$env:SystemDrive\Program Files (x86)\Microsoft\$_" -ErrorAction SilentlyContinue | Out-Null }
 
 # remove edge services
 $services = Get-Service | Where-Object { $_.Name -match 'Edge' }

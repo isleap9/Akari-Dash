@@ -11,7 +11,7 @@ namespace AkariDash.App.Services;
 /// Uninstall registry keys, and removes them. Runs elevated (see app.manifest), so per-machine
 /// removals do not fail halfway for lack of rights.
 /// </summary>
-public sealed class WindowsInstalledAppService : IInstalledAppService
+public sealed class WindowsInstalledAppService(ILegacyAppService legacy) : IInstalledAppService
 {
     public async Task<IReadOnlyList<InstalledApp>> ListAsync(CancellationToken cancellationToken = default)
     {
@@ -143,8 +143,12 @@ public sealed class WindowsInstalledAppService : IInstalledAppService
                         continue;
                     }
 
+                    // Edge and WebView2 hide their removal, and are offered anyway: AkariOS-Ultimate's
+                    // script removes them, not the entry's own uninstaller.
+                    var legacyApp = LegacyApps.ForUninstallName(displayName);
+
                     // Updates, components and entries with no removal must not be offered.
-                    if (IsTruthy(sub.GetValue("SystemComponent")) || IsTruthy(sub.GetValue("NoRemove")))
+                    if (legacyApp is null && (IsTruthy(sub.GetValue("SystemComponent")) || IsTruthy(sub.GetValue("NoRemove"))))
                     {
                         continue;
                     }
@@ -156,7 +160,7 @@ public sealed class WindowsInstalledAppService : IInstalledAppService
 
                     var uninstall = (sub.GetValue("UninstallString") as string)?.Trim();
                     var quiet = (sub.GetValue("QuietUninstallString") as string)?.Trim();
-                    if (string.IsNullOrWhiteSpace(uninstall) && string.IsNullOrWhiteSpace(quiet))
+                    if (legacyApp is null && string.IsNullOrWhiteSpace(uninstall) && string.IsNullOrWhiteSpace(quiet))
                     {
                         continue;
                     }
@@ -177,7 +181,8 @@ public sealed class WindowsInstalledAppService : IInstalledAppService
                         Kind: InstalledAppKind.Win32,
                         UninstallString: uninstall,
                         QuietUninstallString: quiet,
-                        IconPath: InstalledAppText.IconPath(sub.GetValue("DisplayIcon") as string)));
+                        IconPath: InstalledAppText.IconPath(sub.GetValue("DisplayIcon") as string),
+                        Legacy: legacyApp));
                 }
                 catch
                 {
@@ -205,6 +210,12 @@ public sealed class WindowsInstalledAppService : IInstalledAppService
         if (app.Kind == InstalledAppKind.Appx)
         {
             await UninstallAppxAsync(app, cancellationToken);
+            return;
+        }
+
+        if (app.Legacy is { } script)
+        {
+            await legacy.RemoveAsync(script, cancellationToken);
             return;
         }
 

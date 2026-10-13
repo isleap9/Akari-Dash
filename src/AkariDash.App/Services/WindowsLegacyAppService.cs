@@ -1,68 +1,79 @@
 using System.Diagnostics;
-using System.Reflection;
 using AkariDash.Core.Apps;
 
 namespace AkariDash.App.Services;
 
 /// <summary>
-/// Runs AkariOS-Ultimate's own removal and install scripts for each legacy app. They ship inside the
-/// app (Scripts\*.ps1, embedded) and run in Windows PowerShell, elevated as Akari-Dash already is.
+/// Removes legacy apps with AkariOS-Ultimate's own scripts (see <see cref="EmbeddedScripts"/>), and
+/// reinstalls them with the installers AkariOS-Ultimate downloads from its AkariOS-Files release.
 /// </summary>
 public sealed class WindowsLegacyAppService : ILegacyAppService
 {
+    private static readonly HttpClient Http = new();
+
+    private static string MicrosoftX86 => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microsoft");
+
     public bool IsInstalled(LegacyApp app) => app.Id switch
     {
-        "edge" => File.Exists(Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), @"Microsoft\Edge\Application\msedge.exe")),
-        _ => throw new ArgumentOutOfRangeException(nameof(app), app.Id, "Not a legacy app."),
+        "edge" => File.Exists(Path.Combine(MicrosoftX86, @"Edge\Application\msedge.exe")),
+        "webview" => Directory.Exists(Path.Combine(MicrosoftX86, @"EdgeWebView\Application")),
+        _ => throw Unknown(app),
     };
 
-    public Task RemoveAsync(LegacyApp app, CancellationToken cancellationToken = default) =>
-        RunScriptAsync(app, app.Id switch { "edge" => "RemoveEdge.ps1", _ => throw Unknown(app) }, "remove", cancellationToken);
-
-    public Task InstallAsync(LegacyApp app, CancellationToken cancellationToken = default) =>
-        RunScriptAsync(app, app.Id switch { "edge" => "InstallEdge.ps1", _ => throw Unknown(app) }, "install", cancellationToken);
-
-    private static ArgumentOutOfRangeException Unknown(LegacyApp app) => new(nameof(app), app.Id, "Not a legacy app.");
-
-    private static async Task RunScriptAsync(LegacyApp app, string script, string verb, CancellationToken cancellationToken)
+    public async Task RemoveAsync(LegacyApp app, CancellationToken cancellationToken = default)
     {
-        var path = Path.Combine(Path.GetTempPath(), $"AkariDash-{Guid.NewGuid():N}-{script}");
-        await using (var source = Assembly.GetExecutingAssembly().GetManifestResourceStream($"AkariDash.App.Scripts.{script}")
-            ?? throw new InvalidOperationException($"{script} is missing from this build."))
-        await using (var target = File.Create(path))
+        var script = app.Id switch
         {
-            await source.CopyToAsync(target, cancellationToken);
-        }
+            "edge" => "RemoveEdge.ps1",
+            "webview" => "RemoveWebView.ps1",
+            _ => throw Unknown(app),
+        };
 
+        var errors = await EmbeddedScripts.RunAsync(script, cancellationToken);
+
+        // The scripts carry on past what fails, as AkariOS-Ultimate's do, so the result is read off the
+        // machine rather than the exit code.
+        if (IsInstalled(app))
+        {
+            throw new InvalidOperationException($"Could not uninstall {app.Name}.{FirstLine(errors)}");
+        }
+    }
+
+    public async Task InstallAsync(LegacyApp app, CancellationToken cancellationToken = default)
+    {
+        var installer = Path.Combine(Path.GetTempPath(), $"AkariDash-{Guid.NewGuid():N}-{Path.GetFileName(app.Installer.LocalPath)}");
         try
         {
-            using var process = Process.Start(new ProcessStartInfo("powershell.exe")
+            try
             {
-                ArgumentList = { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path },
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            }) ?? throw new InvalidOperationException("Windows PowerShell did not start.");
-
-            var errors = process.StandardError.ReadToEndAsync(cancellationToken);
-            await process.StandardOutput.ReadToEndAsync(cancellationToken);
-            await process.WaitForExitAsync(cancellationToken);
-
-            // The scripts carry on past what fails, as AkariOS-Ultimate's do, so the result is read off
-            // the machine rather than the exit code.
-            var installed = new WindowsLegacyAppService().IsInstalled(app);
-            if (verb == "remove" ? installed : !installed)
+                await using var download = await Http.GetStreamAsync(app.Installer, cancellationToken);
+                await using var file = File.Create(installer);
+                await download.CopyToAsync(file, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                var detail = (await errors).Trim();
-                throw new InvalidOperationException(
-                    $"Could not {verb} {app.Name}.{(detail.Length == 0 ? string.Empty : $" {detail.Split('\n')[0].Trim()}")}");
+                throw new InvalidOperationException($"Could not download {app.Name}'s installer: {ex.Message}", ex);
+            }
+
+            using (var process = Process.Start(new ProcessStartInfo(installer) { UseShellExecute = false })
+                ?? throw new InvalidOperationException($"{app.Name}'s installer did not start."))
+            {
+                await process.WaitForExitAsync(cancellationToken);
+            }
+
+            if (!IsInstalled(app))
+            {
+                throw new InvalidOperationException($"{app.Name}'s installer finished, but {app.Name} is not installed.");
             }
         }
         finally
         {
-            File.Delete(path);
+            File.Delete(installer);
         }
     }
+
+    private static ArgumentOutOfRangeException Unknown(LegacyApp app) => new(nameof(app), app.Id, "Not a legacy app.");
+
+    private static string FirstLine(string text) =>
+        text.Trim() is { Length: > 0 } trimmed ? $" {trimmed.Split('\n')[0].Trim()}" : string.Empty;
 }

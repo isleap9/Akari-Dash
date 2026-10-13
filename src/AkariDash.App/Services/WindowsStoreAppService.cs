@@ -145,17 +145,21 @@ public sealed class WindowsStoreAppService : IStoreAppService
             }
         }
 
-        if (await TryRegisterFromDiskAsync(app.PackageName, cancellationToken))
+        if (!await TryRegisterFromDiskAsync(app.PackageName, cancellationToken))
         {
-            return;
+            if (app.StoreId is null)
+            {
+                throw new InvalidOperationException($"\"{app.Name}\" is no longer on this PC and the Microsoft Store no longer offers it.");
+            }
+
+            await InstallFromStoreAsync(app, cancellationToken);
         }
 
-        if (app.StoreId is null)
+        // AkariOS-Ultimate's Install Store runs its Store settings straight after the Store comes back.
+        if (string.Equals(app.PackageName, "Microsoft.WindowsStore", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException($"\"{app.Name}\" is no longer on this PC and the Microsoft Store no longer offers it.");
+            await EmbeddedScripts.RunAsync("StoreSettings.ps1", cancellationToken);
         }
-
-        await InstallFromStoreAsync(app, cancellationToken);
     }
 
     // AkariOS-Ultimate's Install all UWP apps: register the package again from the files Windows kept,

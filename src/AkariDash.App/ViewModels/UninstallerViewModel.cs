@@ -104,6 +104,9 @@ public sealed partial class UninstallerViewModel : ViewModelBase, INavigationAwa
         Title = "Uninstaller";
     }
 
+    /// <summary>Raised after an uninstall, so Restoration and Store apps catch up.</summary>
+    public event EventHandler? Changed;
+
     public ObservableCollection<InstalledAppEntryViewModel> Filtered { get; } = [];
 
     [ObservableProperty]
@@ -261,9 +264,13 @@ public sealed partial class UninstallerViewModel : ViewModelBase, INavigationAwa
         }
 
         var names = string.Join(Environment.NewLine, selected.Select(entry => $"    {entry.Name}"));
+        var warnings = string.Concat(selected
+            .Select(entry => entry.Model.Legacy?.Warning)
+            .OfType<string>()
+            .Select(warning => $"{Environment.NewLine}{Environment.NewLine}{warning}"));
         var confirmed = await _dialogs.ConfirmAsync(
             $"Uninstall {selected.Count} app{(selected.Count == 1 ? string.Empty : "s")}?",
-            $"This cannot be undone. The following will be removed:{Environment.NewLine}{Environment.NewLine}{names}",
+            $"{(selected.All(entry => entry.Model.Legacy is not null) ? string.Empty : "This cannot be undone. ")}The following will be removed:{Environment.NewLine}{Environment.NewLine}{names}{warnings}",
             "Uninstall",
             "Cancel");
 
@@ -311,6 +318,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase, INavigationAwa
             }
 
             await LoadAsync();
+            Changed?.Invoke(this, EventArgs.Empty);
         }
         finally
         {

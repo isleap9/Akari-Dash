@@ -12,7 +12,8 @@ public enum InstalledAppKind
 /// <paramref name="IconPath"/> is the file its icon comes from — a Store package's logo image, or the
 /// program file a Win32 entry's DisplayIcon names — or <see langword="null"/> when it has none.
 /// <paramref name="PackageFamilyName"/> is a Store package's family name, which is what keeps it from
-/// coming back (see <see cref="AppxDeprovisioning"/>).
+/// coming back (see <see cref="AppxDeprovisioning"/>). <paramref name="Legacy"/> is set on a program the
+/// Uninstaller removes with AkariOS-Ultimate's script rather than its own uninstaller (see <see cref="LegacyApps"/>).
 /// </summary>
 public sealed record InstalledApp(
     string Id,
@@ -24,4 +25,5 @@ public sealed record InstalledApp(
     string? UninstallString = null,
     string? QuietUninstallString = null,
     string? IconPath = null,
-    string? PackageFamilyName = null);
+    string? PackageFamilyName = null,
+    LegacyApp? Legacy = null);
