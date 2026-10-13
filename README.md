@@ -96,8 +96,13 @@ Vocabulary: [`CONTEXT.md`](CONTEXT.md). Decisions: [`docs/adr/`](docs/adr/).
 
 ## Credits
 
-Tweak values come from Akari-OS and AkariOS-Ultimate and from Winhance
-up to its last MIT-licensed commit. No code is copied; see [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
+- **[FR33THY](https://github.com/FR33THYFR33THY)**: AkariOS and AkariOS-Ultimate are built around his
+  Windows tweaks, and so are many of Akari Dash's. More of them are on the way in future releases.
+  Thank you.
+- **Winhance**, up to its last MIT-licensed commit: the values behind several Tweaks.
+
+No code is copied from either; every Tweak is rewritten as Akari Dash's own. See
+[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
 
 ## License
 
