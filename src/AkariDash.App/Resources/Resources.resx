@@ -42,6 +42,18 @@
   <data name="Home.Ram" xml:space="preserve">
     <value>Memory</value>
   </data>
+  <data name="Home.Motherboard" xml:space="preserve">
+    <value>Motherboard</value>
+  </data>
+  <data name="Home.Storage" xml:space="preserve">
+    <value>Storage</value>
+  </data>
+  <data name="Home.Display" xml:space="preserve">
+    <value>Display</value>
+  </data>
+  <data name="Home.QuickLinks" xml:space="preserve">
+    <value>Jump to</value>
+  </data>
   <data name="Home.RetiredTitle" xml:space="preserve">
     <value>Changes from Tweaks no longer in Akari-Dash</value>
   </data>

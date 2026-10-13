@@ -17,6 +17,7 @@ public sealed class WindowsMachine : IMachine
     private const string DisplayClassKey = @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
     private const string CurrentVersionKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
     private const string ProcessorKey = @"HARDWARE\DESCRIPTION\System\CentralProcessor\0";
+    private const string BiosKey = @"HARDWARE\DESCRIPTION\System\BIOS";
 
     public MachineValue? Read(MachineLocation location) => location switch
     {
@@ -152,27 +153,46 @@ public sealed class WindowsMachine : IMachine
         Gpus: Try(GpuNames) ?? [],
         InstalledRamKilobytes: Try(InstalledRamKilobytes),
         RunningAs: Try(() => WindowsIdentity.GetCurrent().Name),
-        SignedIn: Try(SignedInUser));
+        SignedIn: Try(SignedInUser),
+        BoardMaker: Try(() => ReadLocalMachineValue(BiosKey, "BaseBoardManufacturer") as string),
+        BoardModel: Try(() => ReadLocalMachineValue(BiosKey, "BaseBoardProduct") as string),
+        Disks: Try(Disks),
+        Displays: Try(Displays));
 
-    // WMI lists only adapters that are present, unlike the Display class key, which keeps a subkey
-    // for every card ever installed. Adapters that are not PCI devices (the Remote Display
-    // Adapter, virtual displays for streaming) are not graphics cards and are left out.
-    private static List<string> GpuNames()
+    private static List<DiskFact> Disks() =>
+        QueryWmi("SELECT Model, Size FROM Win32_DiskDrive", disk =>
+            WmiProperty(disk, "Model") is string model
+                ? new DiskFact(model, ulong.TryParse(Convert.ToString(WmiProperty(disk, "Size"), CultureInfo.InvariantCulture), out var size) ? size : null)
+                : null);
+
+    // The mode each graphics card is drawing now, as Win32_VideoController reports it.
+    private static List<DisplayFact> Displays() =>
+        QueryWmi("SELECT PNPDeviceID, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate FROM Win32_VideoController", adapter =>
+            IsGraphicsCard(adapter) &&
+            WmiProperty(adapter, "CurrentHorizontalResolution") is { } width &&
+            WmiProperty(adapter, "CurrentVerticalResolution") is { } height
+                ? new DisplayFact(
+                    Convert.ToInt32(width, CultureInfo.InvariantCulture),
+                    Convert.ToInt32(height, CultureInfo.InvariantCulture),
+                    WmiProperty(adapter, "CurrentRefreshRate") is { } hz ? Convert.ToInt32(hz, CultureInfo.InvariantCulture) : null)
+                : null);
+
+    // Runs a WMI query in root\cimv2 and keeps what select makes of each object (null skips it).
+    private static List<T> QueryWmi<T>(string query, Func<object, T?> select)
+        where T : class
     {
-        var names = new List<string>();
+        var results = new List<T>();
 
         dynamic locator = Activator.CreateInstance(Type.GetTypeFromProgID("WbemScripting.SWbemLocator", throwOnError: true)!)!;
         dynamic? services = null;
         try
         {
             services = locator.ConnectServer(".", @"root\cimv2");
-            foreach (var adapter in services.ExecQuery("SELECT Name, PNPDeviceID FROM Win32_VideoController"))
+            foreach (var item in services.ExecQuery(query))
             {
-                if (WmiProperty(adapter, "PNPDeviceID") is string deviceId &&
-                    deviceId.StartsWith(@"PCI\", StringComparison.OrdinalIgnoreCase) &&
-                    WmiProperty(adapter, "Name") is string name)
+                if (select((object)item) is T result)
                 {
-                    names.Add(name);
+                    results.Add(result);
                 }
             }
         }
@@ -187,8 +207,19 @@ public sealed class WindowsMachine : IMachine
             }
         }
 
-        return names;
+        return results;
     }
+
+    // WMI lists only adapters that are present, unlike the Display class key, which keeps a subkey
+    // for every card ever installed. Adapters that are not PCI devices (the Remote Display
+    // Adapter, virtual displays for streaming) are not graphics cards and are left out.
+    private static List<string> GpuNames() =>
+        QueryWmi("SELECT Name, PNPDeviceID FROM Win32_VideoController", adapter =>
+            IsGraphicsCard(adapter) ? WmiProperty(adapter, "Name") as string : null);
+
+    private static bool IsGraphicsCard(object adapter) =>
+        WmiProperty(adapter, "PNPDeviceID") is string deviceId &&
+        deviceId.StartsWith(@"PCI\", StringComparison.OrdinalIgnoreCase);
 
     // The installed memory comes from the firmware's memory tables, which many VMs leave empty;
     // then the memory Windows can use is the next best thing. Also used by the svchost split Tweak.

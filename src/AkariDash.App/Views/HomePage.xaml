@@ -4,76 +4,50 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:AkariDash.App.ViewModels">
 
-    <ScrollViewer>
-        <StackPanel Padding="24" Spacing="16">
+    <Page.Resources>
+        <!-- A round theme button in the fan; it sits on the palette button until the fan opens. -->
+        <Style x:Key="ThemeFanButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="44" />
+            <Setter Property="Height" Value="44" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="22" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+    </Page.Resources>
 
-            <TextBlock
-                TextWrapping="Wrap"
-                Opacity="0.8"
-                Text="{x:Bind Strings.Get('Home.Greeting')}" />
+    <Grid>
+        <ScrollViewer>
+            <StackPanel Padding="32,28,32,96" Spacing="28">
 
-            <StackPanel
-                Margin="0,12,0,0"
-                Orientation="Horizontal"
-                Spacing="12">
-                <Button
-                    Content="{x:Bind Strings.Get('Home.ApplyAllRecommended')}"
-                    Style="{StaticResource AccentButtonStyle}"
-                    Command="{Binding ApplyAllRecommendedCommand}" />
-                <Button Content="{x:Bind Strings.Get('Home.OpenSettings')}" Command="{Binding OpenSettingsCommand}" />
-                <Button Content="{x:Bind Strings.Get('Home.About')}" Command="{Binding ShowAboutCommand}" />
-            </StackPanel>
-
-            <StackPanel
-                Margin="0,12,0,0"
-                Padding="16"
-                Spacing="12"
-                CornerRadius="8"
-                Visibility="{x:Bind ViewModel.HasRetiredTweaks, Mode=OneWay}"
-                BorderThickness="1"
-                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-                <TextBlock
-                    Text="{x:Bind Strings.Get('Home.RetiredTitle')}"
-                    Style="{StaticResource SubtitleTextBlockStyle}" />
-                <TextBlock
-                    TextWrapping="Wrap"
-                    Opacity="0.8"
-                    Text="{x:Bind Strings.Get('Home.RetiredMessage')}" />
-                <ItemsControl ItemsSource="{x:Bind ViewModel.RetiredTweaks}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:RetiredTweakViewModel">
-                            <Grid Margin="0,8,0,0" ColumnSpacing="16">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="{x:Bind Id}" FontWeight="SemiBold" />
-                                    <TextBlock Text="{x:Bind Changes}" TextWrapping="Wrap" Opacity="0.8" IsTextSelectionEnabled="True" />
-                                </StackPanel>
-                                <Button
-                                    Grid.Column="1"
-                                    VerticalAlignment="Center"
-                                    Content="Undo"
-                                    Command="{x:Bind UndoCommand}" />
-                            </Grid>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </StackPanel>
-
-            <StackPanel
-                Margin="0,12,0,0"
-                Padding="16"
-                Spacing="12"
-                CornerRadius="8"
-                BorderThickness="1"
-                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-                <TextBlock
-                    Text="{x:Bind Strings.Get('Home.ThisPc')}"
-                    Style="{StaticResource SubtitleTextBlockStyle}" />
+                <!-- Hero: the name, the version, what Akari-Dash is for, and the main actions. -->
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Akari Dash" FontSize="36" FontWeight="Bold" />
+                    <TextBlock
+                        Text="{x:Bind ViewModel.Version}"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock
+                        Margin="0,6,0,0"
+                        TextWrapping="Wrap"
+                        Opacity="0.8"
+                        Text="{x:Bind Strings.Get('Home.Greeting')}" />
+                    <StackPanel
+                        Margin="0,12,0,0"
+                        Orientation="Horizontal"
+                        Spacing="12">
+                        <Button
+                            Content="{x:Bind Strings.Get('Home.ApplyAllRecommended')}"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Command="{Binding ApplyAllRecommendedCommand}" />
+                        <Button Content="{x:Bind Strings.Get('Home.OpenSettings')}" Command="{Binding OpenSettingsCommand}" />
+                        <Button Content="{x:Bind Strings.Get('Home.About')}" Command="{Binding ShowAboutCommand}" />
+                    </StackPanel>
+                </StackPanel>
 
                 <InfoBar
                     IsOpen="{Binding RunsAsOtherAccount}"
@@ -82,32 +56,193 @@
                     Title="{x:Bind Strings.Get('Home.OtherAccountTitle')}"
                     Message="{Binding OtherAccountWarning}" />
 
-                <Grid ColumnSpacing="24" RowSpacing="8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
+                <StackPanel
+                    Padding="16"
+                    Spacing="12"
+                    CornerRadius="8"
+                    Visibility="{x:Bind ViewModel.HasRetiredTweaks, Mode=OneWay}"
+                    BorderThickness="1"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                    <TextBlock
+                        Text="{x:Bind Strings.Get('Home.RetiredTitle')}"
+                        Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <TextBlock
+                        TextWrapping="Wrap"
+                        Opacity="0.8"
+                        Text="{x:Bind Strings.Get('Home.RetiredMessage')}" />
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.RetiredTweaks}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:RetiredTweakViewModel">
+                                <Grid Margin="0,8,0,0" ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="{x:Bind Id}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{x:Bind Changes}" TextWrapping="Wrap" Opacity="0.8" IsTextSelectionEnabled="True" />
+                                    </StackPanel>
+                                    <Button
+                                        Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Content="Undo"
+                                        Command="{x:Bind UndoCommand}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
 
-                    <TextBlock Grid.Row="0" Opacity="0.8" Text="{x:Bind Strings.Get('Home.Os')}" />
-                    <TextBlock Grid.Row="0" Grid.Column="1" TextWrapping="Wrap" IsTextSelectionEnabled="True" Text="{Binding Os}" />
+                <!-- This PC: one card per fact, after Vain Toolbox's hardware cards. -->
+                <StackPanel Spacing="12">
+                    <TextBlock
+                        Text="{x:Bind Strings.Get('Home.ThisPc')}"
+                        Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <ItemsRepeater ItemsSource="{x:Bind ViewModel.Hardware}">
+                        <ItemsRepeater.Layout>
+                            <UniformGridLayout
+                                MinItemWidth="260"
+                                MinItemHeight="112"
+                                MinRowSpacing="12"
+                                MinColumnSpacing="12"
+                                ItemsStretch="Fill" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="vm:HardwareFact">
+                                <Border
+                                    Padding="16"
+                                    CornerRadius="8"
+                                    BorderThickness="1"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                                    <!-- Icon and label share a row, so a value that wraps to two
+                                         lines still fits the card's fixed height. -->
+                                    <StackPanel Spacing="8">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon
+                                                FontSize="18"
+                                                VerticalAlignment="Center"
+                                                Glyph="{x:Bind Glyph}"
+                                                Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                            <TextBlock
+                                                VerticalAlignment="Center"
+                                                Text="{x:Bind Label}"
+                                                Style="{StaticResource CaptionTextBlockStyle}"
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        </StackPanel>
+                                        <TextBlock
+                                            Text="{x:Bind Value}"
+                                            TextWrapping="Wrap"
+                                            MaxLines="2"
+                                            TextTrimming="CharacterEllipsis"
+                                            IsTextSelectionEnabled="True"
+                                            ToolTipService.ToolTip="{x:Bind Value}" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </StackPanel>
 
-                    <TextBlock Grid.Row="1" Opacity="0.8" Text="{x:Bind Strings.Get('Home.Cpu')}" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" TextWrapping="Wrap" IsTextSelectionEnabled="True" Text="{Binding Cpu}" />
+                <!-- Quick links to the pages most people start with. -->
+                <StackPanel Spacing="12">
+                    <TextBlock
+                        Text="{x:Bind Strings.Get('Home.QuickLinks')}"
+                        Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <ItemsRepeater ItemsSource="{x:Bind ViewModel.QuickLinks}">
+                        <ItemsRepeater.Layout>
+                            <UniformGridLayout
+                                MinItemWidth="260"
+                                MinItemHeight="88"
+                                MinRowSpacing="12"
+                                MinColumnSpacing="12"
+                                ItemsStretch="Fill" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="vm:QuickLink">
+                                <Button
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch"
+                                    HorizontalContentAlignment="Left"
+                                    Padding="16,12"
+                                    CornerRadius="8"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    Command="{x:Bind Open}">
+                                    <Grid ColumnSpacing="14">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <FontIcon
+                                            FontSize="22"
+                                            VerticalAlignment="Center"
+                                            Glyph="{x:Bind Glyph}"
+                                            Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                            <TextBlock Text="{x:Bind Label}" FontWeight="SemiBold" />
+                                            <TextBlock
+                                                Text="{x:Bind Subtitle}"
+                                                TextTrimming="CharacterEllipsis"
+                                                Style="{StaticResource CaptionTextBlockStyle}"
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </StackPanel>
 
-                    <TextBlock Grid.Row="2" Opacity="0.8" Text="{x:Bind Strings.Get('Home.Gpu')}" />
-                    <TextBlock Grid.Row="2" Grid.Column="1" TextWrapping="Wrap" IsTextSelectionEnabled="True" Text="{Binding Gpu}" />
-
-                    <TextBlock Grid.Row="3" Opacity="0.8" Text="{x:Bind Strings.Get('Home.Ram')}" />
-                    <TextBlock Grid.Row="3" Grid.Column="1" TextWrapping="Wrap" IsTextSelectionEnabled="True" Text="{Binding Ram}" />
-                </Grid>
             </StackPanel>
+        </ScrollViewer>
 
-        </StackPanel>
-    </ScrollViewer>
+        <!-- Theme picker, after Vain Toolbox's: the palette button fans out into one round button per
+             theme along a quarter circle, and turns into a close button while open. -->
+        <Grid
+            Width="56"
+            Height="56"
+            Margin="0,0,28,28"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Bottom">
+            <Button x:Name="LightThemeButton" Style="{StaticResource ThemeFanButtonStyle}" Click="OnThemeButtonClick"
+                    ToolTipService.ToolTip="Light" AutomationProperties.Name="Light theme">
+                <Button.OpacityTransition><ScalarTransition /></Button.OpacityTransition>
+                <Button.TranslationTransition><Vector3Transition /></Button.TranslationTransition>
+                <FontIcon FontSize="18" Glyph="&#xE706;" />
+            </Button>
+            <Button x:Name="AkariThemeButton" Style="{StaticResource ThemeFanButtonStyle}" Click="OnThemeButtonClick"
+                    ToolTipService.ToolTip="Akari (black and white)" AutomationProperties.Name="Akari theme">
+                <Button.OpacityTransition><ScalarTransition /></Button.OpacityTransition>
+                <Button.TranslationTransition><Vector3Transition /></Button.TranslationTransition>
+                <FontIcon FontSize="18" Glyph="&#xE708;" />
+            </Button>
+            <Button x:Name="SystemThemeButton" Style="{StaticResource ThemeFanButtonStyle}" Click="OnThemeButtonClick"
+                    ToolTipService.ToolTip="System default" AutomationProperties.Name="System default theme">
+                <Button.OpacityTransition><ScalarTransition /></Button.OpacityTransition>
+                <Button.TranslationTransition><Vector3Transition /></Button.TranslationTransition>
+                <FontIcon FontSize="18" Glyph="&#xE7F4;" />
+            </Button>
+            <Button x:Name="DarkThemeButton" Style="{StaticResource ThemeFanButtonStyle}" Click="OnThemeButtonClick"
+                    ToolTipService.ToolTip="Dark" AutomationProperties.Name="Dark theme">
+                <Button.OpacityTransition><ScalarTransition /></Button.OpacityTransition>
+                <Button.TranslationTransition><Vector3Transition /></Button.TranslationTransition>
+                <FontIcon FontSize="18" Glyph="&#xE734;" />
+            </Button>
+
+            <Button
+                Width="56"
+                Height="56"
+                Padding="0"
+                CornerRadius="28"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                ToolTipService.ToolTip="Theme"
+                AutomationProperties.Name="Theme"
+                Click="OnThemeFanClick">
+                <FontIcon x:Name="ThemeFanGlyph" FontSize="20" Glyph="&#xE790;" />
+            </Button>
+        </Grid>
+    </Grid>
 </Page>

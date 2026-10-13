@@ -13,6 +13,10 @@ namespace AkariDash.Core.Machine;
 /// <param name="InstalledRamKilobytes">The physically installed memory.</param>
 /// <param name="RunningAs">The account Akari-Dash is running as (<c>DOMAIN\user</c>).</param>
 /// <param name="SignedIn">The user signed in to the session Akari-Dash runs in (<c>DOMAIN\user</c>).</param>
+/// <param name="BoardMaker">The motherboard's manufacturer, as the firmware names it.</param>
+/// <param name="BoardModel">The motherboard's model, as the firmware names it.</param>
+/// <param name="Disks">Every physical disk, with its size.</param>
+/// <param name="Displays">What each graphics card is drawing now: resolution and refresh rate.</param>
 public sealed record PcFacts(
     string? ProductName,
     string? DisplayVersion,
@@ -22,8 +26,18 @@ public sealed record PcFacts(
     IReadOnlyList<string> Gpus,
     ulong? InstalledRamKilobytes,
     string? RunningAs,
-    string? SignedIn)
+    string? SignedIn,
+    string? BoardMaker = null,
+    string? BoardModel = null,
+    IReadOnlyList<DiskFact>? Disks = null,
+    IReadOnlyList<DisplayFact>? Displays = null)
 {
     /// <summary>A PC Windows could report nothing about.</summary>
     public static PcFacts Unknown { get; } = new(null, null, null, null, null, [], null, null, null);
 }
+
+/// <summary>A physical disk: its model name and its size in bytes.</summary>
+public sealed record DiskFact(string Model, ulong? Bytes);
+
+/// <summary>A display mode a graphics card is drawing: width and height in pixels, and refresh rate in Hz.</summary>
+public sealed record DisplayFact(int Width, int Height, int? RefreshRate);

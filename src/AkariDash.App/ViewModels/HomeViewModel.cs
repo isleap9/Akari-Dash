@@ -49,17 +49,34 @@ public partial class HomeViewModel : ViewModelBase
 
         var pc = new ThisPc(facts);
         var notAvailable = strings.Get("Home.NotAvailable");
-        Os = pc.Os ?? notAvailable;
-        Cpu = pc.Cpu ?? notAvailable;
-        Gpu = pc.Gpu ?? notAvailable;
-        Ram = pc.Ram ?? notAvailable;
+        Hardware =
+        [
+            new(strings.Get("Home.Os"), "", pc.Os ?? notAvailable),
+            new(strings.Get("Home.Cpu"), "", pc.Cpu ?? notAvailable),
+            new(strings.Get("Home.Gpu"), "", pc.Gpu ?? notAvailable),
+            new(strings.Get("Home.Ram"), "", pc.Ram ?? notAvailable),
+            new(strings.Get("Home.Motherboard"), "", pc.Motherboard ?? notAvailable),
+            new(strings.Get("Home.Storage"), "", pc.Storage ?? notAvailable),
+            new(strings.Get("Home.Display"), "", pc.Display ?? notAvailable),
+        ];
         RunsAsOtherAccount = pc.RunsAsOtherAccount;
         OtherAccountWarning = pc.RunsAsOtherAccount
             ? string.Format(strings.Get("Home.OtherAccountWarning"), pc.RunningAs, pc.SignedIn)
             : string.Empty;
 
+        QuickLinks = ShellPages.Main
+            .Where(item => QuickLinkPages.Contains(item.PageType))
+            .Select(item => new QuickLink(item.Label, item.Glyph, item.Subtitle, new RelayCommand(() => _navigation.NavigateTo(item.PageType!))))
+            .ToList();
+
         LoadRetiredTweaks();
     }
+
+    private static readonly Type[] QuickLinkPages =
+    [
+        typeof(GamingPage), typeof(ServicesPage), typeof(PrivacyPage),
+        typeof(SecurityPage), typeof(UpdatePage), typeof(UwpAppsPage),
+    ];
 
     /// <summary>Tweaks Akari-Dash applied that this version no longer has, so they can still be undone (#20).</summary>
     public ObservableCollection<RetiredTweakViewModel> RetiredTweaks { get; } = [];
@@ -121,14 +138,14 @@ public partial class HomeViewModel : ViewModelBase
         }
     }
 
+    /// <summary>The hero's line under the name, e.g. <c>Version 1.0.0</c>.</summary>
+    public string Version => $"Version {App.AppVersion}";
+
     // This PC: a snapshot taken when Home opens, never refreshed (no live monitoring, ADR-0002).
-    public string Os { get; }
+    public IReadOnlyList<HardwareFact> Hardware { get; }
 
-    public string Cpu { get; }
-
-    public string Gpu { get; }
-
-    public string Ram { get; }
+    /// <summary>Shortcuts to the pages most people start with, taken from the sidebar's own list.</summary>
+    public IReadOnlyList<QuickLink> QuickLinks { get; }
 
     /// <summary>Akari-Dash runs elevated as someone other than the signed-in user.</summary>
     public bool RunsAsOtherAccount { get; }
@@ -268,3 +285,9 @@ public partial class HomeViewModel : ViewModelBase
         Environment.NewLine + Environment.NewLine + heading +
         string.Concat(lines.Select(line => Environment.NewLine + "    " + line));
 }
+
+/// <summary>One card in This PC: what it is, its icon, and what Windows reports.</summary>
+public sealed record HardwareFact(string Label, string Glyph, string Value);
+
+/// <summary>A Home shortcut to one of the sidebar's pages.</summary>
+public sealed record QuickLink(string Label, string Glyph, string Subtitle, IRelayCommand Open);

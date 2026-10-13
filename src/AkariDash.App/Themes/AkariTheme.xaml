@@ -12,10 +12,11 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Default">
-            <!-- Vain Toolbox's surfaces. -->
+            <!-- Vain Toolbox's surfaces. The page surface and cards let a little of the galaxy
+                 behind them (MainWindow's stars) through. -->
             <SolidColorBrush x:Key="AkariWindowBackgroundBrush" Color="#FF0A0A0A" />
-            <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="#FF0F0F0F" />
-            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#FF151515" />
+            <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="#B30F0F0F" />
+            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#D9151515" />
             <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="#FF121212" />
             <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#FF262626" />
             <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="#FF262626" />

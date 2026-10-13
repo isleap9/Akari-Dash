@@ -86,31 +86,7 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>Navigation items for the shell NavigationView (top of the pane).</summary>
-    public IReadOnlyList<NavigationItem> NavItems { get; } =
-    [
-        new("Home", "\uE80F", typeof(HomePage), Subtitle: "Your gaming PC, tuned and reversible"),
-
-        NavigationItem.Header("Performance"),
-        new("Gaming", "\uE7FC", typeof(GamingPage), Subtitle: "Latency, GPU scheduling and the visual effects games pay for"),
-        new("Drivers", "\uE7F8", typeof(DriversPage), Subtitle: "Work in progress"),
-        new("Network", "\uE968", typeof(NetworkPage), Subtitle: "Work in progress"),
-        new("Services", "\uE9F5", typeof(ServicesPage), Subtitle: "Background services and scheduled tasks"),
-
-        NavigationItem.Header("Windows"),
-        new("Privacy", "\uE72E", typeof(PrivacyPage), Subtitle: "Telemetry, tracking, suggestions and Windows AI"),
-        new("Security", "\uEA18", typeof(SecurityPage), Subtitle: "Defender, virtualization-based security and mitigations"),
-        new("Windows Update", "\uE777", typeof(UpdatePage), Subtitle: "When updates arrive, what comes with them and how loudly"),
-        new("Notifications", "\uEA8F", typeof(NotificationsPage), Subtitle: "Toasts, tips and what Windows says while you play"),
-        new("Windows", "\uE771", typeof(WindowsPage), Subtitle: "Theme, system behaviour and the rest of Windows"),
-        new("Customize", "\uE790", typeof(CustomizePage), Subtitle: "Start menu, taskbar and File Explorer"),
-
-        NavigationItem.Header("Apps"),
-        new("UWP Apps", "\uE74D", typeof(UwpAppsPage), Subtitle: "Remove Windows apps for good, and bring them back"),
-        new("Downloads", "\uE896", typeof(DownloadsPage), Subtitle: "Work in progress"),
-
-        NavigationItem.Header("Advanced"),
-        new("GPUs", "\uE950", typeof(GpusPage), Subtitle: "Work in progress"),
-    ];
+    public IReadOnlyList<NavigationItem> NavItems => ShellPages.Main;
 
     /// <summary>The page each Category's Tweaks live on, so a search result knows where to go.</summary>
     private static readonly Dictionary<Category, Type> PagesByCategory = new()
@@ -183,10 +159,7 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>Navigation items pinned to the bottom of the pane (footer).</summary>
-    public IReadOnlyList<NavigationItem> FooterNavItems { get; } =
-    [
-        new("Settings", "\uE713", typeof(SettingsPage), Subtitle: "Theme and about"),
-    ];
+    public IReadOnlyList<NavigationItem> FooterNavItems => ShellPages.Footer;
 
     /// <summary>Applies an application theme to this window's content and title bar.</summary>
     public void ApplyTheme(AppTheme theme)
@@ -283,11 +256,11 @@ public sealed partial class MainWindow : Window
         try
         {
             var workArea = DisplayArea.GetFromWindowId(appWindow.Id, DisplayAreaFallback.Nearest).WorkArea;
-            // Most of the screen, so a page's tabs and tables have room on any monitor: 85% of the
-            // width and 88% of the height of the work area, but never under the old 1150 x 800 where
-            // the screen has room for that.
-            var width = Math.Min(Math.Max(1150, workArea.Width * 85 / 100), workArea.Width - 40);
-            var height = Math.Min(Math.Max(800, workArea.Height * 88 / 100), workArea.Height - 40);
+            // About two thirds of the screen, so a page's tabs and tables have room without the window
+            // taking over a 1920 x 1080 screen (about 1300 x 850 there): 68% of the width and 82% of
+            // the height of the work area, but never under 1100 x 720 where the screen has room.
+            var width = Math.Min(Math.Max(1100, workArea.Width * 68 / 100), workArea.Width - 40);
+            var height = Math.Min(Math.Max(720, workArea.Height * 82 / 100), workArea.Height - 40);
             appWindow.Resize(new SizeInt32((int)width, (int)height));
 
             appWindow.Move(new PointInt32(

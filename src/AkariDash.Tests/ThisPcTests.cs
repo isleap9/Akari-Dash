@@ -109,4 +109,54 @@ public class ThisPcTests
         Assert.Equal(Typical, machine.DescribePc());
         Assert.Equal(Typical, new DryRunMachine(machine).DescribePc());
     }
+
+    [Fact]
+    public void Shows_the_motherboard_storage_and_display()
+    {
+        var pc = new ThisPc(Typical with
+        {
+            BoardMaker = "ASUSTeK COMPUTER INC.",
+            BoardModel = "ROG STRIX B550-F GAMING",
+            Disks = [new DiskFact("Samsung SSD 980 PRO 1TB", 1_000_204_886_016), new DiskFact("ST2000DM008", 2_000_398_934_016)],
+            Displays = [new DisplayFact(2560, 1440, 165)],
+        });
+
+        Assert.Equal("ASUSTeK COMPUTER INC. ROG STRIX B550-F GAMING", pc.Motherboard);
+        Assert.Equal("Samsung SSD 980 PRO 1TB (1 TB), ST2000DM008 (2 TB)", pc.Storage);
+        Assert.Equal("2560 × 1440 @ 165 Hz", pc.Display);
+    }
+
+    [Fact]
+    public void Leaves_out_the_placeholders_firmware_puts_in_place_of_a_board_name()
+    {
+        Assert.Equal("Gigabyte B450M", new ThisPc(Typical with { BoardMaker = "Gigabyte", BoardModel = "B450M" }).Motherboard);
+        Assert.Equal("MSI", new ThisPc(Typical with { BoardMaker = "MSI", BoardModel = "To be filled by O.E.M." }).Motherboard);
+        Assert.Null(new ThisPc(Typical with { BoardMaker = "Default string", BoardModel = "  " }).Motherboard);
+    }
+
+    [Fact]
+    public void Shows_small_disks_in_gigabytes_and_a_disk_of_unknown_size_by_name()
+    {
+        var pc = new ThisPc(Typical with { Disks = [new DiskFact("Virtual disk", 64_424_509_440), new DiskFact("USB stick", null)] });
+
+        Assert.Equal("Virtual disk (64 GB), USB stick", pc.Storage);
+    }
+
+    [Fact]
+    public void Shows_each_display_mode_once_and_leaves_out_a_refresh_rate_Windows_does_not_know()
+    {
+        var pc = new ThisPc(Typical with { Displays = [new DisplayFact(1920, 1080, 60), new DisplayFact(1920, 1080, 60), new DisplayFact(1024, 768, 1)] });
+
+        Assert.Equal("1920 × 1080 @ 60 Hz, 1024 × 768", pc.Display);
+    }
+
+    [Fact]
+    public void New_facts_Windows_cannot_report_are_not_available()
+    {
+        var pc = new ThisPc(PcFacts.Unknown);
+
+        Assert.Null(pc.Motherboard);
+        Assert.Null(pc.Storage);
+        Assert.Null(pc.Display);
+    }
 }

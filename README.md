@@ -36,5 +36,5 @@ dotnet test src/AkariDash.Tests/AkariDash.Tests.csproj
 
 # The app requires administrator: launch the built exe (accept the UAC prompt),
 # or run `dotnet run` from an elevated terminal.
-.\src\AkariDash.App\bin\Phase1\net10.0-windows10.0.26100.0\win-x64\AkariDash.App.exe
+& ".\src\AkariDash.App\bin\Phase1\net10.0-windows10.0.26100.0\win-x64\Akari Dash.exe"
 ```

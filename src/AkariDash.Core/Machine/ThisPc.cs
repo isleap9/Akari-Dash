@@ -28,6 +28,26 @@ public sealed class ThisPc(PcFacts facts)
         ? $"{Math.Round(kilobytes / (1024.0 * 1024.0), 1).ToString("0.#", CultureInfo.InvariantCulture)} GB"
         : null;
 
+    /// <summary>Maker and model, e.g. <c>ASUSTeK COMPUTER INC. ROG STRIX B550-F GAMING</c>.</summary>
+    public string? Motherboard { get; } = DescribeBoard(facts);
+
+    /// <summary>Every disk with its size, e.g. <c>Samsung SSD 980 PRO 1TB (1 TB)</c>, comma-separated.</summary>
+    public string? Storage { get; } = (facts.Disks ?? [])
+        .Select(disk => Tidy(disk.Model) is { } model
+            ? disk.Bytes is { } bytes ? $"{model} ({DescribeSize(bytes)})" : model
+            : null)
+        .OfType<string>()
+        .ToList() is { Count: > 0 } disks ? string.Join(", ", disks) : null;
+
+    /// <summary>What each card draws now, once each, e.g. <c>2560 × 1440 @ 165 Hz</c>.</summary>
+    public string? Display { get; } = (facts.Displays ?? [])
+        .Where(display => display.Width > 0 && display.Height > 0)
+        .Select(display => display.RefreshRate is > 1 and var hz
+            ? $"{display.Width} × {display.Height} @ {hz} Hz"
+            : $"{display.Width} × {display.Height}")
+        .Distinct()
+        .ToList() is { Count: > 0 } displays ? string.Join(", ", displays) : null;
+
     public string? RunningAs { get; } = facts.RunningAs;
 
     public string? SignedIn { get; } = facts.SignedIn;
@@ -55,6 +75,24 @@ public sealed class ThisPc(PcFacts facts)
         var parts = new[] { name, Tidy(facts.DisplayVersion), build }.OfType<string>().ToList();
         return parts.Count == 0 ? null : string.Join(" ", parts);
     }
+
+    // Board makers leave these placeholders in the firmware instead of a name.
+    private static readonly string[] FirmwarePlaceholders =
+        ["To be filled by O.E.M.", "Default string", "System manufacturer", "System Product Name", "Not Applicable"];
+
+    private static string? DescribeBoard(PcFacts facts)
+    {
+        var parts = new[] { Tidy(facts.BoardMaker), Tidy(facts.BoardModel) }
+            .Where(part => part is not null && !FirmwarePlaceholders.Contains(part, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+        return parts.Count == 0 ? null : string.Join(" ", parts);
+    }
+
+    // Decimal units, as disk makers label them: a "1 TB" drive reports 1,000,204,886,016 bytes.
+    private static string DescribeSize(ulong bytes) =>
+        bytes >= 1_000_000_000_000
+            ? $"{Math.Round(bytes / 1e12, 1).ToString("0.#", CultureInfo.InvariantCulture)} TB"
+            : $"{Math.Round(bytes / 1e9).ToString("0", CultureInfo.InvariantCulture)} GB";
 
     private static string? Tidy(string? text) =>
         string.IsNullOrWhiteSpace(text) ? null : string.Join(" ", text.Split(' ', StringSplitOptions.RemoveEmptyEntries));
