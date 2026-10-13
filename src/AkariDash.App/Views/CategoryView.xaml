@@ -191,7 +191,23 @@
             Title="{x:Bind ViewModel.PendingTitle, Mode=OneWay}"
             Message="{x:Bind ViewModel.PendingMessage, Mode=OneWay}" />
 
-        <ItemsControl ItemsSource="{x:Bind ViewModel.Groups, Mode=OneWay}">
+        <!-- The session's first apply waits for a restore point, so say something is happening. -->
+        <StackPanel
+            Orientation="Horizontal"
+            Spacing="12"
+            Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay}">
+            <ProgressRing
+                Width="20"
+                Height="20"
+                IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+            <TextBlock
+                VerticalAlignment="Center"
+                Text="{x:Bind ViewModel.BusyMessage, Mode=OneWay}" />
+        </StackPanel>
+
+        <ItemsControl
+            IsEnabled="{x:Bind ViewModel.IsIdle, Mode=OneWay}"
+            ItemsSource="{x:Bind ViewModel.Groups, Mode=OneWay}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:TweakGroupViewModel">
                     <StackPanel Margin="0,0,0,24" Spacing="8">

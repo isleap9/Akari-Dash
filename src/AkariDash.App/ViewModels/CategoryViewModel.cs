@@ -18,6 +18,7 @@ public sealed class CategoryViewModel(
     private string? _pendingTitle;
     private string? _pendingMessage;
     private bool _busy;
+    private string? _busyMessage;
 
     /// <summary>The Category this page shows; set by the page when it is created.</summary>
     public Category Category { get; set; }
@@ -27,6 +28,32 @@ public sealed class CategoryViewModel(
     /// navigation parameter, so going to the page any other way simply has none.
     /// </summary>
     public string? HighlightedTweakId { get; private set; }
+
+    /// <summary>
+    /// An apply or an Undo is running. The session's first apply waits for a System Restore point,
+    /// which can take a minute, so the page says so rather than looking stuck.
+    /// </summary>
+    public bool IsBusy
+    {
+        get => _busy;
+        private set
+        {
+            if (SetProperty(ref _busy, value))
+            {
+                OnPropertyChanged(nameof(IsIdle));
+            }
+        }
+    }
+
+    /// <summary>Nothing is running, so the rows can be used.</summary>
+    public bool IsIdle => !IsBusy;
+
+    /// <summary>What is being done, shown beside the progress ring.</summary>
+    public string? BusyMessage
+    {
+        get => _busyMessage;
+        private set => SetProperty(ref _busyMessage, value);
+    }
 
     public IReadOnlyList<TweakGroupViewModel> Groups
     {
@@ -135,7 +162,7 @@ public sealed class CategoryViewModel(
     }
 
     // async void: called from the toggle's binding setter, and never throws (errors go to the info bar).
-    private async void ChooseOption(DeclaredTweak tweak, TweakOption option) => await RunAsync(tweak, async () =>
+    private async void ChooseOption(DeclaredTweak tweak, TweakOption option) => await RunAsync(tweak, "Applying", async () =>
     {
         var changes = engine.Preview(tweak, option);
         if (changes.Count == 0)
@@ -190,7 +217,7 @@ public sealed class CategoryViewModel(
         }
     });
 
-    private async void Undo(DeclaredTweak tweak) => await RunAsync(tweak, async () =>
+    private async void Undo(DeclaredTweak tweak) => await RunAsync(tweak, "Undoing", async () =>
     {
         var confirmed = await dialogs.ConfirmAsync(
             $"Undo {tweak.Title}",
@@ -212,15 +239,19 @@ public sealed class CategoryViewModel(
     });
 
     /// <summary>Runs one user action at a time, reports any failure, then re-reads every row.</summary>
-    private async Task RunAsync(DeclaredTweak tweak, Func<Task> action)
+    /// <param name="doing">What is being done, for the progress line: "Applying" or "Undoing".</param>
+    private async Task RunAsync(DeclaredTweak tweak, string doing, Func<Task> action)
     {
         // Ignore clicks while a dialog is open; the Refresh after it resets every toggle.
-        if (_busy)
+        if (IsBusy)
         {
             return;
         }
 
-        _busy = true;
+        // The dialog comes first and the user may cancel it, so the progress line only says what is
+        // being done; the restore-point wait that makes this slow is announced in the info bar.
+        BusyMessage = $"{doing} {tweak.Title}...";
+        IsBusy = true;
         try
         {
             // Leave the binding setter before rebuilding the rows that hold the toggle.
@@ -235,7 +266,8 @@ public sealed class CategoryViewModel(
         finally
         {
             // Re-read so the toggle shows the Live State, not the click.
-            _busy = false;
+            IsBusy = false;
+            BusyMessage = null;
             Refresh();
         }
     }
