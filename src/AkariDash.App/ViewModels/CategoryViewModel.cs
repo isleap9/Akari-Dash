@@ -22,6 +22,12 @@ public sealed class CategoryViewModel(
     /// <summary>The Category this page shows; set by the page when it is created.</summary>
     public Category Category { get; set; }
 
+    /// <summary>
+    /// The Tweak the shell's search sent the user to, pointed out until the next refresh. It is the
+    /// navigation parameter, so going to the page any other way simply has none.
+    /// </summary>
+    public string? HighlightedTweakId { get; private set; }
+
     public IReadOnlyList<TweakGroupViewModel> Groups
     {
         get => _groups;
@@ -50,7 +56,11 @@ public sealed class CategoryViewModel(
 
     public bool HasPending => PendingTitle is not null;
 
-    public void OnNavigatedTo(object? parameter) => Refresh();
+    public void OnNavigatedTo(object? parameter)
+    {
+        HighlightedTweakId = parameter as string;
+        Refresh();
+    }
 
     public void OnNavigatedFrom()
     {
@@ -69,7 +79,10 @@ public sealed class CategoryViewModel(
                     isApplied: engine.IsApplied(tweak),
                     ChooseOption,
                     Undo,
-                    Refresh)).ToList()))
+                    Refresh)
+                {
+                    IsHighlighted = tweak.Id == HighlightedTweakId,
+                }).ToList()))
             .ToList();
 
         ShowPending(engine.Pending);

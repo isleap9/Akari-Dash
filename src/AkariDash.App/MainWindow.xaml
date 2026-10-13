@@ -5,6 +5,10 @@
     xmlns:local="using:AkariDash.App">
 
     <Grid x:Name="RootElement" Background="Transparent">
+        <Grid.KeyboardAccelerators>
+            <KeyboardAccelerator Key="F" Modifiers="Control" Invoked="OnFindInvoked" />
+        </Grid.KeyboardAccelerators>
+
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -45,6 +49,30 @@
             SelectionChanged="OnNavSelectionChanged"
             MenuItemsSource="{x:Bind NavItems}"
             FooterMenuItemsSource="{x:Bind FooterNavItems}">
+
+            <!-- Searches every Tweak on every page, by title, Group, Option or the value it writes.
+                 Picking one goes to its page and scrolls it into view. -->
+            <NavigationView.AutoSuggestBox>
+                <AutoSuggestBox
+                    x:Name="SearchBox"
+                    QueryIcon="Find"
+                    PlaceholderText="Search Tweaks"
+                    TextChanged="OnSearchTextChanged"
+                    SuggestionChosen="OnSearchSuggestionChosen"
+                    QuerySubmitted="OnSearchQuerySubmitted">
+                    <AutoSuggestBox.ItemTemplate>
+                        <DataTemplate x:DataType="local:SearchResult">
+                            <StackPanel Margin="0,4">
+                                <TextBlock Text="{x:Bind Title}" />
+                                <TextBlock
+                                    Text="{x:Bind Detail}"
+                                    Opacity="0.7"
+                                    Style="{StaticResource CaptionTextBlockStyle}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </AutoSuggestBox.ItemTemplate>
+                </AutoSuggestBox>
+            </NavigationView.AutoSuggestBox>
 
             <NavigationView.MenuItemTemplate>
                 <DataTemplate x:DataType="local:NavigationItem">

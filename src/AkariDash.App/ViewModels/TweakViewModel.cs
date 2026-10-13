@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Microsoft.UI.Xaml;
 using CommunityToolkit.Mvvm.Input;
 using AkariDash.Core.Machine;
 using AkariDash.Core.Tweaks;
@@ -216,6 +217,15 @@ public sealed partial class TweakViewModel : ViewModelBase
 
     /// <summary>Undo is offered only on Tweaks Akari-Dash has applied.</summary>
     public bool IsApplied { get; }
+
+    /// <summary>
+    /// Whether the search sent the user to this row. Set while the page is being built, before the
+    /// rows are bound, so the row draws its outline and scrolls itself into view as it loads.
+    /// </summary>
+    public bool IsHighlighted { get; init; }
+
+    /// <summary>The outline that points the row out when the search sent the user to it.</summary>
+    public Thickness HighlightThickness => new(IsHighlighted ? 2 : 0);
 
     /// <summary>Why the Tweak cannot be used on this PC, when it is Unavailable.</summary>
     public string? UnavailableReason { get; }

@@ -2,10 +2,12 @@ using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using AkariDash.App.Services;
 using AkariDash.App.Views;
+using AkariDash.Core.Tweaks;
 using AkariDash.Framework;
 using AkariDash.Framework.Messaging;
 using AkariDash.Framework.Navigation;
@@ -85,6 +87,72 @@ public sealed partial class MainWindow : Window
         new("Windows", "\uE771", typeof(WindowsPage)),
         new("Security", "\uEA18", typeof(SecurityPage)),
     ];
+
+    /// <summary>The page each Category's Tweaks live on, so a search result knows where to go.</summary>
+    private static readonly Dictionary<Category, Type> PagesByCategory = new()
+    {
+        [Category.Gaming] = typeof(GamingPage),
+        [Category.Privacy] = typeof(PrivacyPage),
+        [Category.Services] = typeof(ServicesPage),
+        [Category.Windows] = typeof(WindowsPage),
+        [Category.Security] = typeof(SecurityPage),
+    };
+
+    // Ctrl+F puts the caret in the search box, wherever the user is.
+    private void OnFindInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        NavView.IsPaneOpen = true;
+        SearchBox.Focus(FocusState.Programmatic);
+        args.Handled = true;
+    }
+
+    private void OnSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        // Only when the user typed: the control also raises this when it fills the box in itself.
+        if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput)
+        {
+            return;
+        }
+
+        sender.ItemsSource = TweakSearch.Find(sender.Text)
+            .Where(match => PagesByCategory.ContainsKey(match.Tweak.Category))
+            .Select(match => SearchResult.From(match, PagesByCategory[match.Tweak.Category]))
+            .ToList();
+    }
+
+    private void OnSearchSuggestionChosen(AutoSuggestBox sender, AutoSuggestBoxSuggestionChosenEventArgs args)
+    {
+        if (args.SelectedItem is SearchResult result)
+        {
+            GoTo(result);
+        }
+    }
+
+    // Enter with nothing picked goes to the best match, so searching never needs the mouse.
+    private void OnSearchQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+    {
+        if (args.ChosenSuggestion is SearchResult chosen)
+        {
+            GoTo(chosen);
+            return;
+        }
+
+        if (sender.ItemsSource is IReadOnlyList<SearchResult> { Count: > 0 } results)
+        {
+            GoTo(results[0]);
+        }
+    }
+
+    /// <summary>Goes to the Tweak's page, passing its id so the page can scroll to it.</summary>
+    private void GoTo(SearchResult result)
+    {
+        _navigation.NavigateTo(result.PageType, result.TweakId);
+        RefreshShellState();
+
+        // The query stays in the box, so the next search starts from a clean one.
+        SearchBox.Text = string.Empty;
+        SearchBox.ItemsSource = null;
+    }
 
     /// <summary>Navigation items pinned to the bottom of the pane (footer).</summary>
     public IReadOnlyList<NavigationItem> FooterNavItems { get; } =

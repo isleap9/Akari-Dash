@@ -20,4 +20,16 @@ public sealed partial class CategoryView : UserControl
         get => (CategoryViewModel)GetValue(ViewModelProperty);
         set => SetValue(ViewModelProperty, value);
     }
+
+    /// <summary>
+    /// Scrolls the Tweak the shell's search sent the user to into view, as its card loads. Every card
+    /// is asked, and only the one the search named answers, so no card has to be looked up by hand.
+    /// </summary>
+    private void OnTweakLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: TweakViewModel { IsHighlighted: true } } card)
+        {
+            card.StartBringIntoView(new BringIntoViewOptions { VerticalAlignmentRatio = 0.3f });
+        }
+    }
 }

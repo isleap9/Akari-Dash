@@ -13,7 +13,10 @@
                 ColumnSpacing="16"
                 CornerRadius="8"
                 Opacity="{x:Bind RowOpacity}"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                BorderThickness="{x:Bind HighlightThickness}"
+                Loaded="OnTweakLoaded">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
@@ -96,7 +99,10 @@
                 Spacing="12"
                 CornerRadius="8"
                 Opacity="{x:Bind RowOpacity}"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                BorderThickness="{x:Bind HighlightThickness}"
+                Loaded="OnTweakLoaded">
                 <StackPanel Spacing="4">
                     <TextBlock Text="{x:Bind Title}" Style="{StaticResource BodyStrongTextBlockStyle}" />
                     <TextBlock Text="{x:Bind Description}" TextWrapping="Wrap" Opacity="0.8" />
