@@ -38,8 +38,9 @@ public sealed class WindowsLegacyAppService : ILegacyAppService
         var errors = await EmbeddedScripts.RunAsync(app.RemoveScript, cancellationToken);
 
         // The scripts carry on past what fails, as AkariOS-Ultimate's do, so the result is read off the
-        // machine rather than the exit code.
-        if (Detect(app))
+        // machine rather than the exit code, and given time: mstsc /Uninstall and OneDriveSetup finish
+        // after the script has returned.
+        if (!await GoneWithinAsync(app, TimeSpan.FromSeconds(30), cancellationToken))
         {
             throw new InvalidOperationException($"Could not uninstall {app.Name}.{FirstLine(errors)}");
         }
@@ -57,6 +58,22 @@ public sealed class WindowsLegacyAppService : ILegacyAppService
         {
             throw new InvalidOperationException($"{app.Name}'s installer finished, but {app.Name} is not installed.{FirstLine(errors)}");
         }
+    }
+
+    private static async Task<bool> GoneWithinAsync(LegacyApp app, TimeSpan wait, CancellationToken cancellationToken)
+    {
+        var until = DateTime.UtcNow + wait;
+        while (Detect(app))
+        {
+            if (DateTime.UtcNow >= until)
+            {
+                return false;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+        }
+
+        return true;
     }
 
     private static bool HasUninstallEntry(LegacyApp app)
