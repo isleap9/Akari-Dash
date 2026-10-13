@@ -1,7 +1,7 @@
 # Akari-Dash
 
 A Windows desktop dashboard that optimizes a PC for gaming by applying, reading back, and undoing
-system changes. Vocabulary: [`CONTEXT.md`](CONTEXT.md). Decisions: [`docs/adr/`](docs/adr/).
+system changes, and that also installs and removes software and graphics drivers. Vocabulary: [`CONTEXT.md`](CONTEXT.md). Decisions: [`docs/adr/`](docs/adr/).
 
 Built from the WinUI-3-MVVM-Framework template: .NET 10, Windows App SDK, WinUI 3,
 CommunityToolkit.Mvvm, Microsoft.Extensions DI/Hosting/Logging, xUnit/Moq.

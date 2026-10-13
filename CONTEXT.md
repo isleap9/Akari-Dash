@@ -16,6 +16,10 @@ _Avoid_: Registry tweak, simple tweak
 A **Tweak** whose apply and read-back logic is hand-written because it cannot be expressed as data.
 _Avoid_: Custom tweak, native tweak, script tweak
 
+**Action**:
+Something Akari-Dash does once that it cannot undo: installing or removing an app, downloading and installing a driver, resetting a graphics driver. The mirror of a **Tweak** — no **Original Values**, no **Undo**, no **Recommended Option** — but it still reads back whether it has been done (is this app installed?), reports progress while it runs, keeps a log, and says plainly before it starts that it cannot be taken back. An Action never pretends to be a Tweak, and a change that *can* be undone is never an Action.
+_Avoid_: Task, job, operation, script, tool
+
 **Option**:
 One named state a **Tweak** can be put in; every Tweak has two or more, and an on/off Tweak is simply the two-Option case.
 _Avoid_: Value, mode, choice, toggle state
