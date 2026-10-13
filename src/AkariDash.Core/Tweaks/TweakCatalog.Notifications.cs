@@ -15,6 +15,12 @@ namespace AkariDash.Core.Tweaks;
 // Left out: Winhance greys a row out while the switch above it is off, and some of its rows wait on
 // a setting on another page. Every Tweak here reads and writes only its own values instead, and a
 // description says plainly when a larger switch above it has the last word.
+//
+// Known, and harmless: a sender Windows has not used yet has no key of its own, so switching that
+// row Off creates one, and Undo deletes the value but leaves the empty key behind. The VM check for
+// #30 saw exactly that for Windows.SystemToast.CapabilityAccess. A sender key with no Enabled value
+// is a sender that notifies, which is where the machine started, so behaviour is fully restored --
+// unlike the classic right-click menu on the Windows page, where the leftover key *is* the setting.
 public static partial class TweakCatalog
 {
     private const string PushNotifications = @"Software\Microsoft\Windows\CurrentVersion\PushNotifications";
