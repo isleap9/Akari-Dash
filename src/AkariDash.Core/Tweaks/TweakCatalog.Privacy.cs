@@ -91,7 +91,45 @@ public static partial class TweakCatalog
         AIInPaint(),
         AIInNotepad(),
         .. EdgeAITweaks(),
+        DeveloperMode(),
     ];
+
+    // #36 and the rest of #37, decided rather than left implied.
+    //
+    //   A Microsoft Office AI Group (#36) stays out. Office is not part of Windows, the catalog has
+    //   no Tweak over another vendor's app — Edge at least ships with Windows — and its policies are
+    //   per Office version in some keys, so each row would have to say which versions it reaches. On
+    //   the PCs Akari-Dash is for there is usually no Office at all, which would make it a Group of
+    //   six rows that change nothing on most machines. Decided 2026-10-13.
+    //
+    //   The lock screen master, DisableLockWorkstation, stays out. It is the one value from the MIT
+    //   snapshot our Privacy page does not write, and Winhance groups the three lock screen rows
+    //   under it — but it does not tidy the lock screen, it stops the PC locking at all: no Win+L, no
+    //   Lock on the Ctrl+Alt+Del screen. That is a hole, not a privacy setting, and filing it above
+    //   privacy.windows-spotlight would hide what it does behind where it sits. Our three rows work
+    //   without a master.
+    //
+    //   The PowerShell execution policy stays out. Microsoft says plainly it is not a security
+    //   boundary: it stops a script running by accident, not on purpose, and anything that wants
+    //   around it passes -ExecutionPolicy Bypass — as Akari-Dash's own VM report script does.
+    //   Tightening it breaks the user's own scripts for no safety gained, and loosening it is a Tweak
+    //   whose only effect is to make the PC easier to attack.
+    private static DeclaredTweak DeveloperMode()
+    {
+        // Microsoft's "Settings for developers": HKLM\...\AppModelUnlock\AllowDevelopmentWithoutDevLicense,
+        // DWORD, 1 enables Developer Mode. Absent is off, which is where Windows ships.
+        var target = new TweakTarget(
+            new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock", "AllowDevelopmentWithoutDevLicense"),
+            AbsentMeans: RegistryValue.DWord(0));
+
+        return SecurityGroupTweak(
+            "privacy.developer-mode",
+            "Developer Mode",
+            "Lets Windows install apps that are not signed and did not come from the Store, and brings with it the device portal and an SSH service other machines can deploy apps to this PC through. Microsoft's own documentation says a PC used for gaming, browsing and email has no reason to have it on. Off shuts the door again; it does not uninstall the developer package Windows added, which Settings > System > Advanced removes.",
+            [target],
+            [DWordOption(target, "off", "Off", 0), DWordOption(target, "on", "On", 1)],
+            activation: Activation.AfterRestart);
+    }
 
     private static DeclaredTweak DiagnosticData()
     {

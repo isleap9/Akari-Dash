@@ -173,4 +173,49 @@ public class PrivacyAITests
             TweakCatalog.All.SelectMany(tweak => tweak.Targets).Select(target => target.Location).OfType<RegistryLocation>(),
             location => location.Name == name);
     }
+
+    [Fact]
+    public void Developer_mode_writes_the_value_microsoft_documents_and_reads_off_when_absent()
+    {
+        // "Settings for developers": AppModelUnlock\AllowDevelopmentWithoutDevLicense, 1 enables it.
+        // Absent is off, which is where Windows ships, so a PC nobody has developed on reads Off and
+        // not Custom.
+        var tweak = TweakCatalog.All.Single(candidate => candidate.Id == "privacy.developer-mode");
+        var target = Assert.Single(tweak.Targets);
+        var location = (RegistryLocation)target.Location;
+
+        Assert.Equal("Security", tweak.Group);
+        Assert.Equal(Category.Privacy, tweak.Category);
+        Assert.Equal(RegistryHive.LocalMachine, location.Hive);
+        Assert.Equal(@"SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock", location.Key);
+        Assert.Equal("AllowDevelopmentWithoutDevLicense", location.Name);
+
+        Assert.Equal(RegistryValue.DWord(0), target.AbsentMeans);
+        Assert.Equal(["off", "on"], tweak.Options.Select(option => option.Id));
+        Assert.Equal(target.AbsentMeans, tweak.Options[0].Values[target]);
+        Assert.Equal(Activation.AfterRestart, tweak.Activation);
+    }
+
+    [Theory]
+    [InlineData("DisableLockWorkstation")]
+    [InlineData("ExecutionPolicy")]
+    public void The_privacy_strays_that_were_decided_against_really_are_absent(string name)
+    {
+        // #37, decided and recorded above DeveloperMode(): DisableLockWorkstation stops the PC
+        // locking rather than tidying the lock screen, and the PowerShell execution policy is not a
+        // security boundary.
+        Assert.DoesNotContain(
+            TweakCatalog.All.SelectMany(tweak => tweak.Targets).Select(target => target.Location).OfType<RegistryLocation>(),
+            location => location.Name == name);
+    }
+
+    [Fact]
+    public void No_tweak_reaches_into_office()
+    {
+        // #36, decided against: Office is not part of Windows and the catalog has no Tweak over
+        // another vendor's app.
+        Assert.DoesNotContain(
+            TweakCatalog.All.SelectMany(tweak => tweak.Targets).Select(target => target.Location).OfType<RegistryLocation>(),
+            location => location.Key.Contains(@"\Office", StringComparison.OrdinalIgnoreCase));
+    }
 }
