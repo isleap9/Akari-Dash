@@ -18,12 +18,6 @@ public sealed record NavigationItem(
     /// <summary>Whether picking this item navigates. False for a parent, which only expands.</summary>
     public bool IsPage => PageType is not null;
 
-    /// <summary>
-    /// Whether the branch starts open. A parent does, so its pages can be reached — and selected
-    /// from a search result — without opening it first.
-    /// </summary>
-    public bool StartsExpanded => Children is { Count: > 0 };
-
     /// <summary>This item and, after it, every item below it, however deep.</summary>
     public IEnumerable<NavigationItem> SelfAndDescendants()
     {

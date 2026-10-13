@@ -215,10 +215,20 @@ public sealed partial class MainWindow : Window
             .SelectMany(top => top.SelfAndDescendants())
             .FirstOrDefault(i => i.PageType == current);
 
-        if (item is not null && !ReferenceEquals(NavView.SelectedItem, item))
+        if (item is null || ReferenceEquals(NavView.SelectedItem, item))
         {
-            NavView.SelectedItem = item;
+            return;
         }
+
+        // Branches start closed, and a closed branch cannot show its selected child. So when the user
+        // lands on a page under one another way - a search result, mostly - open the branch first.
+        if (NavItems.FirstOrDefault(parent => parent.Children?.Contains(item) == true) is { } branch &&
+            NavView.ContainerFromMenuItem(branch) is NavigationViewItem { IsExpanded: false } container)
+        {
+            container.IsExpanded = true;
+        }
+
+        NavView.SelectedItem = item;
     }
 
     private void ConfigureWindow()
