@@ -143,9 +143,20 @@ public partial class App : Application
             applyTo: sp.GetRequiredService<DryRunMachine>()));
 #else
         // Real build (VM only): applies write to the machine; Original Values persist under ProgramData.
-        builder.Services.AddSingleton(sp => new TweakEngine(
-            sp.GetRequiredService<IMachine>(),
-            new FileOriginalValuesStore(FileOriginalValuesStore.DefaultFolder)));
+        builder.Services.AddSingleton(sp =>
+        {
+            var store = new FileOriginalValuesStore(FileOriginalValuesStore.DefaultFolder);
+
+            // A Tweak that moved to another Category took a new id with it; its record moves too,
+            // so the apply stays on the Tweak's own row instead of surfacing on Home as retired.
+            var logger = sp.GetRequiredService<ILogger<App>>();
+            foreach (var (from, to) in RenamedTweaks.Migrate(store))
+            {
+                logger.LogInformation("Original Values for {OldTweak} are now filed under {Tweak}", from, to);
+            }
+
+            return new TweakEngine(sp.GetRequiredService<IMachine>(), store);
+        });
 #endif
 
         // Persist settings under the app's own folder.
