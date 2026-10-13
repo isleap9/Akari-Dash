@@ -170,6 +170,7 @@ public partial class App : Application
         builder.Services.AddTransient<HomeViewModel>();
         builder.Services.AddTransient<SettingsViewModel>();
         builder.Services.AddTransient<CategoryViewModel>();
+        builder.Services.AddTransient<CustomizeViewModel>();
         builder.Services.AddTransient<UninstallerViewModel>();
         builder.Services.AddTransient<StoreAppsViewModel>();
         builder.Services.AddTransient<RestorationViewModel>();
