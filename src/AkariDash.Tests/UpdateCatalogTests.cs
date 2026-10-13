@@ -156,6 +156,23 @@ public class UpdateCatalogTests
     }
 
     [Fact]
+    public void The_paused_option_names_the_year_settings_will_show()
+    {
+        // Confirmed on the VM: Settings reads "Updates paused" and names the end date this Option
+        // writes. Someone who opens that page and finds 2051 should have read it here first, so the
+        // date and the description are not allowed to drift apart.
+        var policy = Find("update.policy");
+        var paused = OptionOf("update.policy", "akari-pause");
+        var ends = policy.Targets
+            .Select(target => paused.Values[target])
+            .OfType<RegistryValue>()
+            .Select(value => DateTimeOffset.Parse((string)value.Data))
+            .Max();
+
+        Assert.Contains(ends.Year.ToString(), policy.Description);
+    }
+
+    [Fact]
     public void The_policy_row_is_the_only_owner_of_the_pause_window_and_the_wsus_value()
     {
         // UseWUServer was left out as a row of its own: nobody picks it one at a time.

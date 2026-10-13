@@ -96,6 +96,12 @@ public static partial class TweakCatalog
         // begun. Fixed dates, not dates computed at apply time: AkariOS-Ultimate writes today and
         // today+365, which no Declared Tweak can express — a value that differs every apply could
         // never be read back as an Option, only ever as Custom.
+        //
+        // Checked on the VM (Windows 11 Pro 26300, 2026-10-13): with these six values and nothing else,
+        // Settings reads "Updates paused" with a Resume button and names 2051. So the five weeks
+        // Settings' own Pause updates list stops at is a limit on that list, not on a window written
+        // here, and FlightSettingsMaxPauseDays — which is what Winhance raised it with — is not needed.
+        // The date is visible to anyone who opens that page, so the description says it.
         const string PausedFrom = "2020-01-01T00:00:00Z";
         const string PausedUntil = "2051-12-31T00:00:00Z";
 
@@ -118,7 +124,7 @@ public static partial class TweakCatalog
         return new DeclaredTweak(
             Id: "update.policy",
             Title: "Windows Update policy",
-            Description: "How this PC updates, as one choice, and it sets the rows below it to match. Security updates only makes Windows ask before downloading anything and holds the next Windows version back a year and each month's fixes back a week. Paused stops updates outright until you undo this or press Resume in Settings, written the way AkariOS-Ultimate writes it — the six values Settings' own Pause updates page uses and nothing else, so that page keeps working and reads Paused. Disabled is the bluntest of the three: Windows stops looking for updates at all. Everything but Normal leaves this PC without security fixes for as long as it is set, and a PC that misses a month of them is a PC with known holes in it.",
+            Description: "How this PC updates, as one choice, and it sets the rows below it to match. Security updates only makes Windows ask before downloading anything and holds the next Windows version back a year and each month's fixes back a week. Paused stops updates outright, written the way AkariOS-Ultimate writes it — the six values Settings' own Pause updates page uses and nothing else, so that page keeps working and shows this PC paused until 2051. Resume there, or Undo here, ends it. Disabled is the bluntest of the three: Windows stops looking for updates at all. Everything but Normal leaves this PC without security fixes for as long as it is set, and a PC that misses a month of them is a PC with known holes in it.",
             Category: Category.Update,
             Group: "Update policy",
             Targets: targets,
