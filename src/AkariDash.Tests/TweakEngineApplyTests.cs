@@ -98,6 +98,48 @@ public class TweakEngineApplyTests
         Assert.Equal(RegistryValue.DWord(20), saved.OriginalValues.Single(original => original.Location == Third).Value);
     }
 
+    // A record saved by an older Akari-Dash covers only the targets the Tweak had then. Apply tops
+    // the record up now, but a machine that applied with the old build and undid with the new one
+    // would otherwise be left holding Akari-Dash's own value with nothing recorded for it, which is
+    // what the VM hit on privacy.activity-history: HKLM went back, HKCU kept the 0.
+    [Fact]
+    public void Undo_clears_a_value_it_wrote_without_recording_it()
+    {
+        var engine = Engine();
+
+        // The record an older build would have left: applied as "zero", knowing only First.
+        _store.Save("test", new AppliedTweak("zero", [new OriginalValue(First, RegistryValue.DWord(10))]));
+
+        // The newer build also writes Second and Third, as its Option says.
+        _machine.Write(Second, RegistryValue.DWord(0));
+        _machine.Write(Third, RegistryValue.DWord(0));
+
+        engine.Undo(Tweak);
+
+        Assert.Equal(RegistryValue.DWord(10), _machine.Read(First));
+        Assert.Null(_machine.Read(Second));
+        Assert.Null(_machine.Read(Third));
+        Assert.Null(_store.Get("test"));
+    }
+
+    // Only Akari-Dash's own write is cleared. A target holding something else belongs to whoever set
+    // it, so Undo leaves it alone rather than guessing.
+    [Fact]
+    public void Undo_leaves_an_unrecorded_value_alone_when_it_is_not_the_one_applied()
+    {
+        var engine = Engine();
+
+        _store.Save("test", new AppliedTweak("zero", [new OriginalValue(First, RegistryValue.DWord(10))]));
+        _machine.Write(Second, RegistryValue.DWord(7));
+        _machine.Write(Third, RegistryValue.DWord(0));
+
+        engine.Undo(Tweak);
+
+        Assert.Equal(RegistryValue.DWord(10), _machine.Read(First));
+        Assert.Equal(RegistryValue.DWord(7), _machine.Read(Second));
+        Assert.Null(_machine.Read(Third));
+    }
+
     [Fact]
     public void Tweak_never_applied_has_no_applied_option()
     {

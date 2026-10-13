@@ -175,9 +175,51 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
             return;
         }
 
-        WriteAll(_writes, tweak.Title, applied.OriginalValues.Select(original => (original.Location, original.Value)).ToList());
+        List<(MachineLocation Location, MachineValue? Value)> writes =
+            [.. applied.OriginalValues.Select(original => (original.Location, original.Value))];
+        writes.AddRange(LeftBehind(tweak, applied));
+
+        WriteAll(_writes, tweak.Title, writes);
         _store.Clear(tweak.Id);
         MarkChanged(tweak);
+    }
+
+    /// <summary>
+    /// Targets this Tweak writes that its record has no Original Value for, and that still hold
+    /// exactly what the record's own Option wrote, so Undo deletes them instead of walking away and
+    /// leaving Akari-Dash's value on the machine.
+    /// </summary>
+    /// <remarks>
+    /// A record written by an older Akari-Dash covers only the targets the Tweak had back then, so a
+    /// Tweak that has gained one since (as privacy.activity-history gained the user copy of its
+    /// policy) can hold a value with nothing recorded for it. Apply records every target now, which
+    /// stops it happening again, but a record saved before that cannot be mended after the fact.
+    ///
+    /// Only a value equal to what the last applied Option writes is touched: that is Akari-Dash's own
+    /// write, so "not there" is where it came from. A target holding anything else was set by someone
+    /// or something else and is left exactly as it is.
+    /// </remarks>
+    private IEnumerable<(MachineLocation Location, MachineValue? Value)> LeftBehind(DeclaredTweak tweak, AppliedTweak applied)
+    {
+        if (tweak.Options.SingleOrDefault(option => option.Id == applied.LastAppliedOptionId) is not { } option)
+        {
+            yield break;
+        }
+
+        foreach (var target in tweak.Targets)
+        {
+            if (applied.OriginalValues.Any(original => original.Location == target.Location)
+                || !option.Values.TryGetValue(target, out var written)
+                || written is null)
+            {
+                continue;
+            }
+
+            if (Equals(_writes.Read(target.Location), written))
+            {
+                yield return (target.Location, null);
+            }
+        }
     }
 
     /// <summary>
