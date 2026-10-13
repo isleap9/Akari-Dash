@@ -18,25 +18,42 @@ public static partial class TweakCatalog
         DiagnosticData(),
         FeedbackFrequency(),
         ImproveInkingAndTyping(),
+        ErrorReporting(),
         TailoredExperiences(),
         AutomaticAppInstalls(),
+        ContentDeliveryAllowed(),
+        SubscribedContent(),
+        FeatureSuggestions(),
+        TipsAfterUpdates(),
+        ManufacturersApps(),
+        SuggestedApps(),
+        SuggestedAppsHistory(),
         SuggestionsInSettings(),
         AdvertisingId(),
-        LockScreenTips(),
         AccountNotifications(),
+        OneDriveFolderBackup(),
+        WindowsSpotlight(),
+        LockScreenTips(),
+        LockScreenSlideshow(),
         ActivityHistory(),
+        TimelineSuggestions(),
         WebSearchInStart(),
         RecentItems(),
         AppLaunchTracking(),
         SearchHistory(),
         SearchHighlights(),
         CloudContentSearch(),
+        Cortana(),
         LanguageListForWebsites(),
         OnlineSpeechRecognition(),
+        NarratorOnlineServices(),
+        NarratorScripting(),
         InkingAndTypingDictionary(),
         AppAccess("location", "Location", "Lets Windows and apps find out where this PC is. Off also stops Find my device from locating it."),
         AppAccess("camera", "Camera", "Lets Windows and apps use the camera. Off stops video calls and streaming from seeing you.", "webcam"),
         AppAccess("microphone", "Microphone", "Lets Windows and apps use the microphone. Off stops voice chat, calls and streaming from hearing you."),
+        AppAccess("account-info", "Account info", "Lets apps read your name, picture and other details of the account you are signed in with.", "userAccountInformation"),
+        AppAccess("app-diagnostics", "App diagnostics", "Lets apps read diagnostic details about the other apps running on this PC, such as their name, user name and memory use.", "appDiagnostics"),
         Copilot(),
         RecallSnapshots(),
         ClickToDo(),
@@ -209,13 +226,17 @@ public static partial class TweakCatalog
             AbsentMeans: RegistryValue.DWord(1));
     }
 
-    /// <summary>An Off/On Tweak over one or more current-user DWORDs that Windows treats as on (1) when missing.</summary>
+    /// <summary>
+    /// An Off/On Tweak over one or more current-user DWORDs. Windows treats a missing value as
+    /// <paramref name="absentMeans"/>, which is on (1) for everything here except the lock screen
+    /// slideshow, which a fresh install leaves off.
+    /// </summary>
     private static DeclaredTweak OnByDefault(
         string id, string title, string description, string group, IEnumerable<(string Key, string Name)> values,
-        Activation activation = Activation.Immediately)
+        Activation activation = Activation.Immediately, int absentMeans = 1)
     {
         TweakTarget[] targets = values
-            .Select(value => new TweakTarget(new RegistryLocation(RegistryHive.CurrentUser, value.Key, value.Name), AbsentMeans: RegistryValue.DWord(1)))
+            .Select(value => new TweakTarget(new RegistryLocation(RegistryHive.CurrentUser, value.Key, value.Name), AbsentMeans: RegistryValue.DWord(absentMeans)))
             .ToArray();
 
         return new DeclaredTweak(
@@ -229,10 +250,15 @@ public static partial class TweakCatalog
             Activation: activation);
     }
 
-    /// <summary>A policy Tweak: "off" sets every policy value to 1; deleting them hands the choice back.</summary>
+    /// <summary>
+    /// A policy Tweak: "off" sets every policy value to <paramref name="offValue"/>; deleting them
+    /// hands the choice back. Policies that turn something off hold 1, except the ones named
+    /// "Allow..." (AllowCortana), which turn it off by holding 0.
+    /// </summary>
     private static DeclaredTweak OffByPolicy(
         string id, string title, string description, string group, IEnumerable<RegistryLocation> policies,
-        Activation activation = Activation.Immediately)
+        Activation activation = Activation.Immediately, int offValue = 1, string offLabel = "Off",
+        string handBackLabel = "Not blocked")
     {
         TweakTarget[] targets = policies.Select(policy => new TweakTarget(policy)).ToArray();
 
@@ -243,7 +269,7 @@ public static partial class TweakCatalog
             Category: Category.Privacy,
             Group: group,
             Targets: targets,
-            Options: [DWordOption(targets, "off", "Off", 1), Option(targets, "not-blocked", "Not blocked", null)],
+            Options: [DWordOption(targets, "off", offLabel, offValue), Option(targets, "not-blocked", handBackLabel, null)],
             Activation: activation);
     }
 
@@ -256,6 +282,21 @@ public static partial class TweakCatalog
             "Sends Microsoft samples of what you type and write by hand, to improve recognition and suggestions.",
             "Diagnostics & feedback",
             [(@"Software\Microsoft\Input\TIPC", "Enabled")]);
+
+    private static DeclaredTweak ErrorReporting() =>
+        // Winhance sets the Windows Error Reporting policy for the machine and the user. It is the
+        // policy behind the service on the Services page: with the policy set, nothing is reported
+        // even while the service runs. Deleting it hands the choice back to Windows.
+        OffByPolicy(
+            "privacy.error-reporting",
+            "Error reporting",
+            "Sends Microsoft a report when an app or Windows crashes, with what the program was doing at the time. Off keeps crashes to this PC, and Reliability Monitor shows less about them.",
+            "Diagnostics & feedback",
+            [
+                new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting", "Disabled"),
+                new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting", "Disabled"),
+            ],
+            handBackLabel: "As set in Windows");
 
     private static DeclaredTweak AdvertisingId() =>
         // Akari-Dash writes only the Settings toggle; Winhance also sets the AdvertisingInfo policies.
@@ -272,8 +313,119 @@ public static partial class TweakCatalog
             "privacy.lock-screen-tips",
             "Fun facts and tips on the lock screen",
             "Puts fun facts, tips and promotions from Microsoft on top of the lock screen picture.",
+            "Lock screen",
+            [(ContentDelivery, "RotatingLockScreenOverlayEnabled")]);
+
+    // The rest of the ContentDeliveryManager family, each value its own Tweak as Winhance (MIT) has
+    // them. Windows treats every one of them as on when it is missing, and reads them at sign-in.
+    private static DeclaredTweak ContentDeliveryAllowed() =>
+        OnByDefault(
+            "privacy.content-delivery",
+            "Content delivery",
+            "The one switch Windows checks before fetching any suggestion, promotion or lock screen picture from Microsoft. Off stops the lot at once, whatever the Tweaks below it are set to.",
             "Ads & suggestions",
-            [(@"Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager", "RotatingLockScreenOverlayEnabled")]);
+            [(ContentDelivery, "ContentDeliveryAllowed")],
+            Activation.AfterSignOut);
+
+    private static DeclaredTweak SubscribedContent() =>
+        OnByDefault(
+            "privacy.subscribed-content",
+            "Subscribed content",
+            "Lets Windows subscribe to the feed of promotions from Microsoft and its partners that most of the suggestions in Start, Settings and the lock screen are drawn from.",
+            "Ads & suggestions",
+            [(ContentDelivery, "SubscribedContentEnabled")],
+            Activation.AfterSignOut);
+
+    private static DeclaredTweak FeatureSuggestions() =>
+        OnByDefault(
+            "privacy.feature-suggestions",
+            "Feature suggestions",
+            "Lets Microsoft switch new Windows features on for this PC after setup, and advertise them to you.",
+            "Ads & suggestions",
+            [(ContentDelivery, "FeatureManagementEnabled")],
+            Activation.AfterSignOut);
+
+    private static DeclaredTweak TipsAfterUpdates() =>
+        OnByDefault(
+            "privacy.tips-after-updates",
+            "Tips and welcome messages",
+            "Shows Microsoft's tips, tricks and promotions as notifications, the ones that arrive after Windows has updated itself.",
+            "Ads & suggestions",
+            [(ContentDelivery, "SoftLandingEnabled")],
+            Activation.AfterSignOut);
+
+    private static DeclaredTweak ManufacturersApps() =>
+        OnByDefault(
+            "privacy.manufacturers-apps",
+            "The manufacturer's bundled apps",
+            "Lets Windows put the PC manufacturer's bundled apps back when it resets or refreshes this PC. Apps already installed stay where they are.",
+            "Ads & suggestions",
+            [(ContentDelivery, "OemPreInstalledAppsEnabled")],
+            Activation.AfterSignOut);
+
+    private static DeclaredTweak SuggestedApps() =>
+        OnByDefault(
+            "privacy.suggested-apps",
+            "Suggested apps in Start",
+            "Lets Windows add Microsoft's suggested apps to Start, and put them back when it resets this PC. Apps already installed stay where they are.",
+            "Ads & suggestions",
+            [(ContentDelivery, "PreInstalledAppsEnabled")],
+            Activation.AfterSignOut);
+
+    private static DeclaredTweak SuggestedAppsHistory() =>
+        OnByDefault(
+            "privacy.suggested-apps-history",
+            "Suggested apps history",
+            "Windows records whether it has ever put suggested apps on this PC, and uses that to decide what to install again later.",
+            "Ads & suggestions",
+            [(ContentDelivery, "PreInstalledAppsEverEnabled")],
+            Activation.AfterSignOut);
+
+    private static DeclaredTweak OneDriveFolderBackup() =>
+        // Winhance sets KFMBlockOptIn for the user and the machine; Microsoft documents it as
+        // "Prevent users from moving their Windows known folders to OneDrive".
+        OffByPolicy(
+            "privacy.onedrive-folder-backup",
+            "OneDrive folder backup prompts",
+            "Blocks OneDrive from asking to back up your Desktop, Documents and Pictures, and from moving them into OneDrive on its own. Folders already backed up stay as they are.",
+            "Ads & suggestions",
+            [
+                new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\OneDrive", "KFMBlockOptIn"),
+                new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Policies\Microsoft\OneDrive", "KFMBlockOptIn"),
+            ],
+            offLabel: "Blocked");
+
+    private static DeclaredTweak WindowsSpotlight() =>
+        // Winhance turns RotatingLockScreenEnabled off. Windows treats a missing value as on.
+        OnByDefault(
+            "privacy.windows-spotlight",
+            "Windows spotlight on the lock screen",
+            "Puts Microsoft's rotating lock screen pictures, and the tips and promotions that come with them, on the lock screen instead of your own picture.",
+            "Lock screen",
+            [(ContentDelivery, "RotatingLockScreenEnabled")],
+            Activation.AfterSignOut);
+
+    private static DeclaredTweak LockScreenSlideshow() =>
+        // Winhance turns SlideshowEnabled off. Unlike the rest of this family, a fresh install leaves
+        // it missing and off: the lock screen shows one picture rather than a slideshow.
+        OnByDefault(
+            "privacy.lock-screen-slideshow",
+            "Lock screen slideshow",
+            "Plays your own pictures as a slideshow on the lock screen, which means Windows reads those folders while the PC is locked.",
+            "Lock screen",
+            [(ContentDelivery, "SlideshowEnabled")],
+            Activation.AfterSignOut,
+            absentMeans: 0);
+
+    private static DeclaredTweak TimelineSuggestions() =>
+        // Winhance turns SubscribedContent-353698Enabled off: the suggestions in Task view.
+        OnByDefault(
+            "privacy.timeline-suggestions",
+            "Suggestions in Task view",
+            "Puts Microsoft's suggestions in Task view, next to the windows you actually have open.",
+            "Activity & search",
+            [(ContentDelivery, "SubscribedContent-353698Enabled")],
+            Activation.AfterSignOut);
 
     private static DeclaredTweak AccountNotifications() =>
         // Akari-OS and Winhance turn EnableAccountNotifications off.
@@ -321,6 +473,40 @@ public static partial class TweakCatalog
             "Searching from Start also looks through your OneDrive, Outlook and other Microsoft account or work or school content.",
             "Activity & search",
             [(SearchSettings, "IsMSACloudSearchEnabled"), (SearchSettings, "IsAADCloudSearchEnabled")]);
+
+    private static DeclaredTweak Cortana() =>
+        // Winhance sets AllowCortana for the machine and the user. Microsoft documents it the other
+        // way round from most policies: 0 is what blocks Cortana, and a missing value allows it.
+        OffByPolicy(
+            "privacy.cortana",
+            "Cortana",
+            "Blocks Cortana from running on this PC. Searching from Start is not affected: only the assistant itself is blocked.",
+            "Activity & search",
+            [
+                new RegistryLocation(RegistryHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\Windows Search", "AllowCortana"),
+                new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Policies\Microsoft\Windows\Windows Search", "AllowCortana"),
+            ],
+            Activation.AfterSignOut,
+            offValue: 0,
+            offLabel: "Blocked");
+
+    private static DeclaredTweak NarratorOnlineServices() =>
+        // Winhance turns Narrator's OnlineServicesEnabled off. Windows treats a missing value as on.
+        OnByDefault(
+            "privacy.narrator-online-services",
+            "Narrator online services",
+            "Lets Narrator use Microsoft's online voices and image descriptions, which sends what it reads out to Microsoft. Off keeps the voices that run on this PC.",
+            "Speech, inking & typing",
+            [(@"Software\Microsoft\Narrator\NoRoam", "OnlineServicesEnabled")]);
+
+    private static DeclaredTweak NarratorScripting() =>
+        // Winhance turns Narrator's ScriptingEnabled off. Windows treats a missing value as on.
+        OnByDefault(
+            "privacy.narrator-scripting",
+            "Narrator scripting",
+            "Lets apps run scripts that drive Narrator and read what it has on screen. Off stops those scripts; Narrator itself still works.",
+            "Speech, inking & typing",
+            [(@"Software\Microsoft\Narrator\NoRoam", "ScriptingEnabled")]);
 
     private static DeclaredTweak LanguageListForWebsites()
     {
