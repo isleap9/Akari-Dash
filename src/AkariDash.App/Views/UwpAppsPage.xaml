@@ -4,6 +4,11 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:AkariDash.App.ViewModels">
 
+    <Page.Resources>
+        <CollectionViewSource x:Name="DriverGroups" IsSourceGrouped="True" Source="{x:Bind ViewModel.Drivers.Groups}" />
+        <CollectionViewSource x:Name="DeviceGroups" IsSourceGrouped="True" Source="{x:Bind ViewModel.Devices.Groups}" />
+    </Page.Resources>
+
     <Grid Padding="24" RowSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -30,6 +35,21 @@
             <SelectorBarItem Text="Uninstaller">
                 <SelectorBarItem.Icon>
                     <FontIcon Glyph="&#xE74D;" />
+                </SelectorBarItem.Icon>
+            </SelectorBarItem>
+            <SelectorBarItem Text="Drivers">
+                <SelectorBarItem.Icon>
+                    <FontIcon Glyph="&#xE964;" />
+                </SelectorBarItem.Icon>
+            </SelectorBarItem>
+            <SelectorBarItem Text="Devices">
+                <SelectorBarItem.Icon>
+                    <FontIcon Glyph="&#xE772;" />
+                </SelectorBarItem.Icon>
+            </SelectorBarItem>
+            <SelectorBarItem Text="Drives">
+                <SelectorBarItem.Icon>
+                    <FontIcon Glyph="&#xEDA2;" />
                 </SelectorBarItem.Icon>
             </SelectorBarItem>
         </SelectorBar>
@@ -521,5 +541,349 @@
                 </ItemsRepeater>
             </ScrollViewer>
         </Grid>
+        <!-- Drivers: Vain Toolbox's Drivers tab, third-party driver packages grouped by class. -->
+        <Grid x:Name="DriversTab" Grid.Row="2" RowSpacing="12" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Button VerticalAlignment="Center" Content="Select all" Command="{x:Bind ViewModel.Drivers.SelectAllCommand}" />
+                <Button Grid.Column="2" VerticalAlignment="Center" ToolTipService.ToolTip="Before you delete a driver">
+                    <FontIcon FontSize="14" Glyph="&#xE7BA;" Foreground="{ThemeResource SystemFillColorCautionBrush}" />
+                    <Button.Flyout>
+                        <Flyout>
+                            <TextBlock
+                                MaxWidth="320"
+                                TextWrapping="Wrap"
+                                Text="A device whose driver is deleted stops working until Windows finds another. Windows refuses to delete a driver a connected device still needs; export a driver first to keep a copy you can install again." />
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+                <AutoSuggestBox
+                    Grid.Column="3"
+                    Width="240"
+                    VerticalAlignment="Center"
+                    QueryIcon="Find"
+                    PlaceholderText="Search drivers"
+                    Text="{x:Bind ViewModel.Drivers.SearchText, Mode=TwoWay}" />
+                <Button Grid.Column="4" VerticalAlignment="Center" ToolTipService.ToolTip="Refresh" Command="{x:Bind ViewModel.Drivers.LoadCommand}">
+                    <FontIcon FontSize="14" Glyph="&#xE72C;" />
+                </Button>
+            </Grid>
+
+            <Border
+                Grid.Row="1"
+                CornerRadius="8"
+                BorderThickness="1"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                <ListView
+                    Padding="0,0,16,0"
+                    SelectionMode="None"
+                    ItemsSource="{x:Bind DriverGroups.View}">
+                    <ListView.GroupStyle>
+                        <GroupStyle>
+                            <GroupStyle.HeaderTemplate>
+                                <DataTemplate x:DataType="vm:CleanupGroup">
+                                    <TextBlock Text="{x:Bind Name}" Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" />
+                                </DataTemplate>
+                            </GroupStyle.HeaderTemplate>
+                        </GroupStyle>
+                    </ListView.GroupStyle>
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CleanupRowViewModel">
+                            <Grid Padding="0,6" ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="3*" />
+                                    <ColumnDefinition Width="2*" />
+                                    <ColumnDefinition Width="1.2*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <CheckBox MinWidth="0" Padding="0" VerticalAlignment="Center" IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{x:Bind Detail}" Opacity="0.6" Style="{StaticResource CaptionTextBlockStyle}" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{x:Bind Provider}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="3" VerticalAlignment="Center" Text="{x:Bind Version}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="4" MinWidth="80" VerticalAlignment="Center" Text="{x:Bind Date}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </Border>
+
+            <Grid Grid.Row="2" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <TextBlock Opacity="0.8" Text="{x:Bind ViewModel.Drivers.StatusText, Mode=OneWay}" />
+                    <ProgressRing Width="16" Height="16" IsActive="{x:Bind ViewModel.Drivers.IsBusy, Mode=OneWay}" />
+                </StackPanel>
+                <Button Grid.Column="2" Content="Export selected" IsEnabled="{x:Bind ViewModel.Drivers.HasSelection, Mode=OneWay}" Command="{x:Bind ViewModel.Drivers.ExportSelectedCommand}" />
+                <Button
+                    Grid.Column="3"
+                    Content="Delete selected"
+                    IsEnabled="{x:Bind ViewModel.Drivers.HasSelection, Mode=OneWay}"
+                    Command="{x:Bind ViewModel.Drivers.DeleteSelectedCommand}"
+                    Background="{ThemeResource SystemFillColorCriticalBrush}"
+                    Foreground="White" />
+            </Grid>
+        </Grid>
+
+        <!-- Devices: Vain Toolbox's Devices tab, devices Windows remembers that are not connected. -->
+        <Grid x:Name="DevicesTab" Grid.Row="2" RowSpacing="12" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Button VerticalAlignment="Center" Content="Select all" Command="{x:Bind ViewModel.Devices.SelectAllCommand}" />
+                <AutoSuggestBox
+                    Grid.Column="2"
+                    Width="240"
+                    VerticalAlignment="Center"
+                    QueryIcon="Find"
+                    PlaceholderText="Search devices"
+                    Text="{x:Bind ViewModel.Devices.SearchText, Mode=TwoWay}" />
+                <Button Grid.Column="3" VerticalAlignment="Center" ToolTipService.ToolTip="Refresh" Command="{x:Bind ViewModel.Devices.LoadCommand}">
+                    <FontIcon FontSize="14" Glyph="&#xE72C;" />
+                </Button>
+            </Grid>
+
+            <Border
+                Grid.Row="1"
+                CornerRadius="8"
+                BorderThickness="1"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                <ListView
+                    Padding="0,0,16,0"
+                    SelectionMode="None"
+                    ItemsSource="{x:Bind DeviceGroups.View}">
+                    <ListView.GroupStyle>
+                        <GroupStyle>
+                            <GroupStyle.HeaderTemplate>
+                                <DataTemplate x:DataType="vm:CleanupGroup">
+                                    <TextBlock Text="{x:Bind Name}" Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" />
+                                </DataTemplate>
+                            </GroupStyle.HeaderTemplate>
+                        </GroupStyle>
+                    </ListView.GroupStyle>
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CleanupRowViewModel">
+                            <Grid Padding="0,6" ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <CheckBox MinWidth="0" Padding="0" VerticalAlignment="Center" IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{x:Bind Detail}" Opacity="0.6" Style="{StaticResource CaptionTextBlockStyle}" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" VerticalAlignment="Center" Opacity="0.7" Text="{x:Bind ClassName}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </Border>
+
+            <Grid Grid.Row="2" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <TextBlock Opacity="0.8" Text="{x:Bind ViewModel.Devices.StatusText, Mode=OneWay}" />
+                    <ProgressRing Width="16" Height="16" IsActive="{x:Bind ViewModel.Devices.IsBusy, Mode=OneWay}" />
+                </StackPanel>
+                <Button Grid.Column="2" Content="Clean up all" Command="{x:Bind ViewModel.Devices.CleanupAllCommand}" />
+                <Button
+                    Grid.Column="3"
+                    Content="Clean up selected"
+                    IsEnabled="{x:Bind ViewModel.Devices.HasSelection, Mode=OneWay}"
+                    Command="{x:Bind ViewModel.Devices.CleanupSelectedCommand}" />
+            </Grid>
+        </Grid>
+
+        <!-- Drives: Vain Toolbox's Drives tab, what fills a drive. Read-only. -->
+        <Grid x:Name="DrivesTab" Grid.Row="2" RowSpacing="12" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <ComboBox
+                    MinWidth="120"
+                    VerticalAlignment="Center"
+                    ItemsSource="{x:Bind ViewModel.Drives.Drives}"
+                    SelectedItem="{x:Bind ViewModel.Drives.SelectedDrive, Mode=TwoWay}"
+                    IsEnabled="{x:Bind ViewModel.Drives.IsIdle, Mode=OneWay}" />
+                <Button VerticalAlignment="Center" Command="{x:Bind ViewModel.Drives.ScanCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon FontSize="14" Glyph="&#xE721;" Visibility="{x:Bind ViewModel.Drives.IsIdle, Mode=OneWay}" />
+                        <ProgressRing Width="14" Height="14" IsActive="{x:Bind ViewModel.Drives.IsScanning, Mode=OneWay}" Visibility="{x:Bind ViewModel.Drives.IsScanning, Mode=OneWay}" />
+                        <TextBlock Text="Scan drive" Visibility="{x:Bind ViewModel.Drives.IsIdle, Mode=OneWay}" />
+                        <TextBlock Text="Stop" Visibility="{x:Bind ViewModel.Drives.IsScanning, Mode=OneWay}" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+
+            <Grid Grid.Row="1" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Padding="16,12" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                    <StackPanel Spacing="4">
+                        <TextBlock Opacity="0.7" Text="Scanned data" />
+                        <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="{x:Bind ViewModel.Drives.ScannedText, Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="1" Padding="16,12" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                    <StackPanel Spacing="4">
+                        <TextBlock Opacity="0.7" Text="Files" />
+                        <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="{x:Bind ViewModel.Drives.FilesText, Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="2" Padding="16,12" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                    <StackPanel Spacing="4">
+                        <TextBlock Opacity="0.7" Text="Scan time" />
+                        <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="{x:Bind ViewModel.Drives.TimeText, Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <StackPanel
+                Grid.Row="2"
+                Spacing="12"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Visibility="{x:Bind ViewModel.Drives.IsEmpty, Mode=OneWay}">
+                <FontIcon FontSize="36" Glyph="&#xEDA2;" Opacity="0.8" />
+                <TextBlock Opacity="0.8" Text="Select a drive and press Scan drive to see what fills it." />
+            </StackPanel>
+
+            <Grid Grid.Row="2" ColumnSpacing="12" Visibility="{x:Bind ViewModel.Drives.HasResult, Mode=OneWay}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Margin="16,10" Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" Text="BIGGEST FOLDERS" />
+                        <ListView Grid.Row="1" Padding="0,0,16,0" SelectionMode="None" ItemsSource="{x:Bind ViewModel.Drives.Folders}">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="vm:DiskEntryRow">
+                                    <Grid Padding="0,6" ColumnSpacing="10" ToolTipService.ToolTip="{x:Bind Path}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <FontIcon FontSize="16" Glyph="{x:Bind Glyph}" />
+                                        <StackPanel Grid.Column="1" Spacing="4">
+                                            <TextBlock Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" />
+                                            <ProgressBar Maximum="100" Value="{x:Bind Share}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                            <TextBlock HorizontalAlignment="Right" Text="{x:Bind Size}" />
+                                            <TextBlock HorizontalAlignment="Right" Opacity="0.6" Style="{StaticResource CaptionTextBlockStyle}" Text="{x:Bind Files}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
+                </Border>
+                <Border Grid.Column="1" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Margin="16,10" Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" Text="BIGGEST FILES (CLICK TO SHOW IN EXPLORER)" />
+                        <ListView
+                            x:Name="LargestFilesList"
+                            Grid.Row="1"
+                            Padding="0,0,16,0"
+                            SelectionMode="None"
+                            IsItemClickEnabled="True"
+                            ItemClick="OnLargestFileClick"
+                            ItemsSource="{x:Bind ViewModel.Drives.LargestFiles}">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="vm:DiskEntryRow">
+                                    <Grid Padding="0,6" ColumnSpacing="10" ToolTipService.ToolTip="{x:Bind Path}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <FontIcon FontSize="16" Glyph="{x:Bind Glyph}" />
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{x:Bind Path}" Opacity="0.6" Style="{StaticResource CaptionTextBlockStyle}" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{x:Bind Size}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+
     </Grid>
 </Page>
