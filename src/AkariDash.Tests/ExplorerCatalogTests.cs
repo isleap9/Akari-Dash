@@ -16,22 +16,25 @@ public class ExplorerCatalogTests
         (RegistryLocation)Assert.Single(tweak.Targets).Location;
 
     [Fact]
-    public void Explorer_page_is_ten_curated_rows_not_a_port_of_folder_options()
+    public void Explorer_page_is_thirteen_curated_rows_not_a_port_of_folder_options()
     {
         // ADR-0005: a port of Winhance's 48 Explorer values would have been 34 rows. This page is
-        // the six that moved off the Windows page and four that earned a place.
-        Assert.Equal(10, Explorer.Count);
+        // the six that moved off the Windows page, four that earned a place, and the three navigation
+        // pane entries the user asked for. Home is the one row on the machine's side of the registry.
+        Assert.Equal(13, Explorer.Count);
         Assert.All(Explorer, tweak =>
         {
             Assert.StartsWith("explorer.", tweak.Id);
-            Assert.All(tweak.Targets, target => Assert.Equal(RegistryHive.CurrentUser, target.Location switch
+            Assert.All(tweak.Targets, target => Assert.Equal(
+                tweak.Id == "explorer.nav-home" ? RegistryHive.LocalMachine : RegistryHive.CurrentUser,
+                target.Location switch
             {
                 RegistryLocation value => value.Hive,
                 RegistryKeyLocation key => key.Hive,
                 var other => throw new Xunit.Sdk.XunitException($"{other} is not a registry target"),
             }));
         });
-        Assert.Equal(["Explorer's Home", "Working with files"], Explorer.Select(tweak => tweak.Group).Distinct());
+        Assert.Equal(["Explorer's Home", "Working with files", "Navigation pane"], Explorer.Select(tweak => tweak.Group).Distinct());
     }
 
     [Fact]
@@ -185,7 +188,6 @@ public class ExplorerCatalogTests
     [InlineData("NavPaneShowAllCloudStates")]
     [InlineData("NavPaneExpandToCurrentFolder")]
     [InlineData("NavPaneShowAllFolders")]
-    [InlineData("System.IsPinnedToNameSpaceTree")]
     [InlineData("ShellState")]
     [InlineData("IconUnderline")]
     public void The_folder_options_checklist_is_left_out(string name)
@@ -199,6 +201,58 @@ public class ExplorerCatalogTests
                 RegistryBitLocation bit => bit.Name == name,
                 _ => false,
             });
+    }
+
+    [Theory]
+    [InlineData("{031E4825-7B94-4dc3-B131-E946B44C8DD5}")]
+    [InlineData("{F02C1A0D-BE21-4350-88B0-7367FC96EF3C}")]
+    public void Libraries_and_network_stay_out_of_the_navigation_pane_rows(string clsid)
+    {
+        // Only Home, Gallery and OneDrive were asked for; the rest of the pane is a checkbox list.
+        Assert.DoesNotContain(
+            TweakCatalog.All.SelectMany(tweak => tweak.Targets),
+            target => target.Location is RegistryLocation location && location.Key.Contains(clsid, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData("explorer.nav-gallery", "{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}")]
+    [InlineData("explorer.nav-onedrive", "{018D5C66-4533-4307-9B53-224DE2ED1FE6}")]
+    public void Gallery_and_onedrive_unpin_from_the_users_classes(string id, string clsid)
+    {
+        var tweak = Find(id);
+        var pinned = Location(tweak);
+
+        Assert.Equal($@"Software\Classes\CLSID\{clsid}", pinned.Key);
+        Assert.Equal("System.IsPinnedToNameSpaceTree", pinned.Name);
+        Assert.Equal(RegistryValue.DWord(1), tweak.Targets[0].AbsentMeans);
+        Assert.Equal(RegistryValue.DWord(0), tweak.Options.Single(option => option.Id == "hide").Values[tweak.Targets[0]]);
+    }
+
+    [Fact]
+    public void Hiding_home_deletes_its_namespace_key_and_undo_puts_it_back()
+    {
+        // Winhance's way: the key under the machine's Desktop\NameSpace is what lists Home at all.
+        var machine = new InMemoryMachine();
+        var tweak = Find("explorer.nav-home");
+        var key = Assert.IsType<RegistryKeyLocation>(tweak.Targets[0].Location);
+        Assert.Equal(RegistryHive.LocalMachine, key.Hive);
+        Assert.EndsWith(@"Explorer\Desktop\NameSpace\{f874310e-b6b7-47dc-bc84-b9e6b38f5903}", key.Key);
+
+        var show = tweak.Options.Single(option => option.Id == "show");
+        foreach (var target in tweak.Targets)
+        {
+            machine.Write(target.Location, show.Values[target]!);
+        }
+
+        var engine = new TweakEngine(machine);
+        Assert.Equal("show", Assert.IsType<LiveState.InOption>(engine.ReadLiveState(tweak)).Option.Id);
+
+        engine.Apply(tweak, tweak.Options.Single(option => option.Id == "hide"));
+        Assert.Null(machine.Read(key));
+
+        engine.Undo(tweak);
+        Assert.Equal(KeyPresence.Present, machine.Read(key));
+        Assert.Equal(RegistryValue.String("CLSID_MSGraphHomeFolder"), machine.Read(tweak.Targets[1].Location));
     }
 
     [Fact]

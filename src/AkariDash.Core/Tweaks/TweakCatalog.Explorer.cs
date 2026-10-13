@@ -31,6 +31,9 @@ namespace AkariDash.Core.Tweaks;
 //   The classic right-click menu is the single most asked-for Windows 11 change, and the user asked
 //   for it by name on 2026-10-13.
 //
+//   Home, Gallery and OneDrive in the navigation pane, asked for by the user on 2026-10-13: the
+//   three entries Windows 11 pins above This PC that a gaming PC mostly has no use for.
+//
 // Left out, and why. Nearly all of it is one checkbox in Folder Options > View, and a row whose
 // whole description would be "this is a checkbox in Folder Options" is a row Settings already has:
 //
@@ -45,8 +48,8 @@ namespace AkariDash.Core.Tweaks;
 //   ShowSuperHidden shows the protected operating system files. Windows itself warns before
 //   turning it on, and a row that invites someone to delete a boot file is not a kindness.
 //
-//   The navigation pane rows — NavPaneShowAllCloudStates, NavPaneExpandToCurrentFolder,
-//   NavPaneShowAllFolders, and the Libraries and Network CLSIDs under Software\Classes — are the
+//   The rest of the navigation pane — NavPaneShowAllCloudStates, NavPaneExpandToCurrentFolder,
+//   NavPaneShowAllFolders, and the Libraries and Network CLSIDs under Software\Classes — is the
 //   same checkbox list one level down.
 //
 //   Browse folders (a bit of CabinetState\Settings) and Click items as follows (a bit of ShellState
@@ -82,7 +85,54 @@ public static partial class TweakCatalog
             "Working with files", ExplorerAdvanced, "ShowSyncProviderNotifications"),
         ShortcutSuffix(),
         ClassicContextMenu(),
+
+        NavigationHome(),
+        NavigationPin("explorer.nav-gallery", "Gallery in the navigation pane",
+            "The Gallery entry on the left of File Explorer, a timeline of every photo and video on this PC.",
+            "{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}"),
+        NavigationPin("explorer.nav-onedrive", "OneDrive in the navigation pane",
+            "The OneDrive entry on the left of File Explorer. Hiding it leaves OneDrive installed and syncing; only the shortcut goes. A OneDrive update can pin it back, and this row then reads Drift.",
+            "{018D5C66-4533-4307-9B53-224DE2ED1FE6}"),
     ];
+
+    private static DeclaredTweak NavigationHome()
+    {
+        // Winhance's MIT snapshot hides Home by deleting its key under the machine's Desktop\NameSpace,
+        // and Show puts the key back with the name Windows gives it. AkariOS-Ultimate's other way, an
+        // IsPinnedToNameSpaceTree of 0 in the user's classes, is commented out there as broken by a
+        // Windows update. The key is the machine's, so this one row hides Home for every user.
+        const string home = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\{f874310e-b6b7-47dc-bc84-b9e6b38f5903}";
+        var key = new TweakTarget(new RegistryKeyLocation(RegistryHive.LocalMachine, home));
+        var name = new TweakTarget(new RegistryLocation(RegistryHive.LocalMachine, home, ""));
+
+        return new DeclaredTweak(
+            "explorer.nav-home",
+            "Home in the navigation pane",
+            "The Home entry at the top of File Explorer's left side, with recent and recommended files. Hidden for every user of this PC, not just you. Pair it with Open File Explorer to This PC, or Explorer opens to a page it no longer lists.",
+            Category.Explorer, "Navigation pane", [key, name],
+            [
+                new TweakOption("show", "Show", new Dictionary<TweakTarget, MachineValue?> { [key] = KeyPresence.Present, [name] = RegistryValue.String("CLSID_MSGraphHomeFolder") }),
+                new TweakOption("hide", "Hide", new Dictionary<TweakTarget, MachineValue?> { [key] = null, [name] = null }),
+            ],
+            Activation: Activation.AfterSignOut);
+    }
+
+    /// <summary>
+    /// A shell folder's pin in the navigation pane: System.IsPinnedToNameSpaceTree under its CLSID in
+    /// the user's classes, 0 to hide. AkariOS-Ultimate hides Gallery this way; OneDrive's entry is the
+    /// same kind of shell folder under its own CLSID.
+    /// </summary>
+    private static DeclaredTweak NavigationPin(string id, string title, string description, string clsid)
+    {
+        var pinned = new TweakTarget(
+            new RegistryLocation(RegistryHive.CurrentUser, $@"Software\Classes\CLSID\{clsid}", "System.IsPinnedToNameSpaceTree"),
+            AbsentMeans: RegistryValue.DWord(1));
+
+        return new DeclaredTweak(
+            id, title, description, Category.Explorer, "Navigation pane", [pinned],
+            [DWordOption(pinned, "show", "Show", 1), DWordOption(pinned, "hide", "Hide", 0)],
+            Activation: Activation.AfterSignOut);
+    }
 
     /// <summary>
     /// A Show/Hide Tweak over one current-user DWORD, where 1 shows and 0 hides. Explorer reads
