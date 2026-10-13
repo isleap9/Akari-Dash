@@ -11,6 +11,7 @@ public sealed class CategoryViewModel(
     TweakEngine engine,
     IDialogService dialogs,
     IInfoBarService infoBar,
+    IStatusService status,
     ILogger<CategoryViewModel> logger)
     : ViewModelBase, INavigationAware
 {
@@ -255,6 +256,7 @@ public sealed class CategoryViewModel(
         // being done; the restore-point wait that makes this slow is announced in the info bar.
         BusyMessage = $"{doing} {tweak.Title}...";
         IsBusy = true;
+        using var working = status.Begin($"{doing} {tweak.Title}");
         try
         {
             // Leave the binding setter before rebuilding the rows that hold the toggle.

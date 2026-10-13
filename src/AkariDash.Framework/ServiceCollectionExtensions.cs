@@ -33,6 +33,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IThemeService, ThemeService>();
         services.AddSingleton<IInfoBarService, InfoBarService>();
+        services.AddSingleton<IStatusService, StatusService>();
         services.AddSingleton<IWindowService, WindowService>();
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IFilePickerService, FilePickerService>();

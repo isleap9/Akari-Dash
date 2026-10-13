@@ -88,6 +88,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase, INavigationAwa
     private readonly IDialogService _dialogs;
     private readonly IInfoBarService _infoBar;
     private readonly ILogger<UninstallerViewModel> _logger;
+    private readonly IStatusService _status;
     private readonly List<InstalledAppEntryViewModel> _all = [];
     private bool _suppressSelectAll;
 
@@ -95,8 +96,10 @@ public sealed partial class UninstallerViewModel : ViewModelBase, INavigationAwa
         IInstalledAppService apps,
         IDialogService dialogs,
         IInfoBarService infoBar,
+        IStatusService status,
         ILogger<UninstallerViewModel> logger)
     {
+        _status = status;
         _apps = apps;
         _dialogs = dialogs;
         _infoBar = infoBar;
@@ -290,7 +293,10 @@ public sealed partial class UninstallerViewModel : ViewModelBase, INavigationAwa
                 try
                 {
                     _logger.LogInformation("Uninstalling {App} ({Kind})", entry.Model.Id, entry.Model.Kind);
-                    await _apps.UninstallAsync(entry.Model);
+                    using (_status.Begin($"Uninstalling {entry.Name}"))
+                    {
+                        await _apps.UninstallAsync(entry.Model);
+                    }
                     succeeded++;
                     _logger.LogInformation("Uninstalled {App}", entry.Model.Id);
                 }

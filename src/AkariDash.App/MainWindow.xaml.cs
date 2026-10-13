@@ -28,9 +28,11 @@ public sealed partial class MainWindow : Window
         IInfoBarService infoBar,
         IThemeService theme,
         IMessenger messenger,
+        IStatusService status,
         LocalizedStrings strings)
     {
         Strings = strings;
+        Status = status;
         InitializeComponent();
 
         _navigation = navigation;
@@ -67,6 +69,9 @@ public sealed partial class MainWindow : Window
 
     /// <summary>App name shown in the custom title bar.</summary>
     public string AppTitle => App.AppName;
+
+    /// <summary>The status bar's left side: Ready, or what is running with a progress bar.</summary>
+    public IStatusService Status { get; }
 
     /// <summary>The status bar's right-hand stamp.</summary>
     public string BuildStamp => $"WinUI 3 · .NET 10 · {App.AppName} {App.AppVersion}";

@@ -49,9 +49,12 @@ public sealed partial class RestorationViewModel : ViewModelBase
     private readonly ILegacyAppService _legacy;
     private readonly IInfoBarService _infoBar;
     private readonly ILogger<RestorationViewModel> _logger;
+    private readonly IStatusService _status;
 
-    public RestorationViewModel(IStoreAppService apps, ILegacyAppService legacy, IInfoBarService infoBar, ILogger<RestorationViewModel> logger)
+    public RestorationViewModel(
+        IStoreAppService apps, ILegacyAppService legacy, IInfoBarService infoBar, IStatusService status, ILogger<RestorationViewModel> logger)
     {
+        _status = status;
         _apps = apps;
         _legacy = legacy;
         _infoBar = infoBar;
@@ -123,7 +126,10 @@ public sealed partial class RestorationViewModel : ViewModelBase
         try
         {
             _logger.LogInformation("Restoring {App}", card.Id);
-            await card.Restore();
+            using (_status.Begin($"Restoring {card.Name}"))
+            {
+                await card.Restore();
+            }
             _infoBar.ShowSuccess("Restoration", $"{card.Name} is back.");
             await LoadAsync();
             Changed?.Invoke(this, EventArgs.Empty);

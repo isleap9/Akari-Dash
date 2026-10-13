@@ -166,7 +166,7 @@
             </Grid>
         </NavigationView>
 
-        <!-- Status bar: ready state on the left, build stamp on the right. -->
+        <!-- Status bar: Ready, or what is running now with a progress bar; the build stamp on the right. -->
         <Grid Grid.Row="2" Padding="16,6,16,6">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <Ellipse
@@ -176,10 +176,16 @@
                     VerticalAlignment="Center"
                     Fill="{ThemeResource SystemFillColorSuccessBrush}" />
                 <TextBlock
-                    Text="Ready"
+                    Text="{x:Bind Status.Text, Mode=OneWay}"
                     FontSize="11.5"
                     VerticalAlignment="Center"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <ProgressBar
+                    Width="160"
+                    Margin="12,0,0,0"
+                    VerticalAlignment="Center"
+                    IsIndeterminate="True"
+                    Visibility="{x:Bind Status.IsBusy, Mode=OneWay}" />
             </StackPanel>
             <TextBlock
                 HorizontalAlignment="Right"

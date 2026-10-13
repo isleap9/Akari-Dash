@@ -81,10 +81,13 @@ public sealed partial class StoreAppsViewModel : ViewModelBase
     private readonly IDialogService _dialogs;
     private readonly IInfoBarService _infoBar;
     private readonly ILogger<StoreAppsViewModel> _logger;
+    private readonly IStatusService _status;
     private readonly List<StoreAppRowViewModel> _all = [];
 
-    public StoreAppsViewModel(IStoreAppService apps, IDialogService dialogs, IInfoBarService infoBar, ILogger<StoreAppsViewModel> logger)
+    public StoreAppsViewModel(
+        IStoreAppService apps, IDialogService dialogs, IInfoBarService infoBar, IStatusService status, ILogger<StoreAppsViewModel> logger)
     {
+        _status = status;
         _apps = apps;
         _dialogs = dialogs;
         _infoBar = infoBar;
@@ -230,7 +233,10 @@ public sealed partial class StoreAppsViewModel : ViewModelBase
                 {
                     StatusText = $"Removing {row.DisplayName}...";
                     _logger.LogInformation("Removing {Package}", row.Model.FullName);
-                    await _apps.RemoveAsync(row.Model);
+                    using (_status.Begin($"Removing {row.DisplayName}"))
+                    {
+                        await _apps.RemoveAsync(row.Model);
+                    }
                 }
                 catch (Exception ex)
                 {
