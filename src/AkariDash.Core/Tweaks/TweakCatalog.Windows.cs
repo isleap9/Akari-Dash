@@ -7,8 +7,8 @@ namespace AkariDash.Core.Tweaks;
 // as of its last MIT commit (4dc441a0; see THIRD-PARTY-NOTICES.md). All are a matter of taste, so
 // none has a Recommended Option.
 //
-// Left out: the classic right-click menu works by a registry key existing, and Undo can only delete
-// the value it wrote, which leaves the key and so the classic menu behind. Hiding Start's Recommended
+// Left out: the classic right-click menu used to be listed here because Undo could only delete values;
+// it ships on the File Explorer page now that the engine can delete a key. Hiding Start's Recommended
 // section needs the device to pretend to be a school PC (IsEducationEnvironment), which changes more
 // than Start. The Copilot taskbar button is gone in current Windows; privacy.copilot covers Copilot.
 // EnableAutoTray (show all notification area icons), which Akari-OS sets, made no visible difference

@@ -35,12 +35,4 @@ public class WindowsCatalogTests
             Assert.Contains(tweak.Options, option =>
                 tweak.Targets.All(target => target.AbsentMeans is { } absent && Equals(option.Values[target], absent))));
     }
-
-    [Fact]
-    public void Classic_context_menu_is_left_out_because_undo_cannot_remove_its_key()
-    {
-        Assert.DoesNotContain(
-            TweakCatalog.All.SelectMany(tweak => tweak.Targets),
-            target => target.Location is RegistryLocation { Key: var key } && key.Contains("86ca1aa0-34aa-4e8b-a509-50c905bae2a2"));
-    }
 }

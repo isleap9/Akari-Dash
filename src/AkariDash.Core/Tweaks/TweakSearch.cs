@@ -121,6 +121,7 @@ public static class TweakSearch
         {
             RegistryLocation registry => registry.Name,
             RegistryEntryLocation entry => entry.Entry,
+            RegistryKeyLocation key => key.Key[(key.Key.LastIndexOf('\\') + 1)..],
             RegistryBitLocation bit => bit.Name,
             ServiceLocation service => service.ServiceName,
             ScheduledTaskLocation task => task.Path,

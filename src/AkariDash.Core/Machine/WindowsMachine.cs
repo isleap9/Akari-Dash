@@ -26,6 +26,7 @@ public sealed class WindowsMachine : IMachine
         RegistryBitLocation bit => bit.ReadFrom(ReadRegistryValue(bit.Value)),
         BootSettingLocation boot => ReadBootSetting(boot),
         RegistryEntryLocation entry => entry.ReadFrom(ReadRegistryValue(entry.Value)),
+        RegistryKeyLocation key => ReadRegistryKey(key),
         _ => throw Unsupported(location),
     };
 
@@ -51,6 +52,9 @@ public sealed class WindowsMachine : IMachine
             case (BootSettingLocation boot, BootSettingValue setting):
                 RunBcdedit("/set", "{current}", boot.Name, setting.Text);
                 break;
+            case (RegistryKeyLocation key, KeyPresence):
+                CreateRegistryKey(key);
+                break;
             default:
                 throw new ArgumentException($"{location} cannot hold {value.GetType().Name}.", nameof(value));
         }
@@ -65,6 +69,10 @@ public sealed class WindowsMachine : IMachine
         else if (location is RegistryEntryLocation entry)
         {
             WriteRegistryEntry(entry, null);
+        }
+        else if (location is RegistryKeyLocation key)
+        {
+            DeleteRegistryKey(key);
         }
         else if (location is BootSettingLocation boot)
         {
@@ -430,6 +438,27 @@ public sealed class WindowsMachine : IMachine
         using var baseKey = RegistryKey.OpenBaseKey(location.Hive, RegistryView.Registry64);
         using var key = baseKey.CreateSubKey(location.Key, writable: true);
         key.SetValue(location.Name, value.Data, value.Kind);
+    }
+
+    private static KeyPresence? ReadRegistryKey(RegistryKeyLocation location)
+    {
+        using var baseKey = RegistryKey.OpenBaseKey(location.Hive, RegistryView.Registry64);
+        using var key = baseKey.OpenSubKey(location.Key);
+        return key is null ? null : KeyPresence.Present;
+    }
+
+    private static void CreateRegistryKey(RegistryKeyLocation location)
+    {
+        using var baseKey = RegistryKey.OpenBaseKey(location.Hive, RegistryView.Registry64);
+        using var key = baseKey.CreateSubKey(location.Key, writable: false);
+    }
+
+    // The whole tree: the key's presence is the setting, and a subkey left behind (the Windows 10
+    // menu's InprocServer32) would keep it in force. A missing key is already deleted.
+    private static void DeleteRegistryKey(RegistryKeyLocation location)
+    {
+        using var baseKey = RegistryKey.OpenBaseKey(location.Hive, RegistryView.Registry64);
+        baseKey.DeleteSubKeyTree(location.Key, throwOnMissingSubKey: false);
     }
 
     private static void DeleteRegistryValue(RegistryLocation location)

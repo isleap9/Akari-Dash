@@ -16,15 +16,20 @@ public class ExplorerCatalogTests
         (RegistryLocation)Assert.Single(tweak.Targets).Location;
 
     [Fact]
-    public void Explorer_page_is_nine_curated_rows_not_a_port_of_folder_options()
+    public void Explorer_page_is_ten_curated_rows_not_a_port_of_folder_options()
     {
         // ADR-0005: a port of Winhance's 48 Explorer values would have been 34 rows. This page is
-        // the six that moved off the Windows page and three that earned a place.
-        Assert.Equal(9, Explorer.Count);
+        // the six that moved off the Windows page and four that earned a place.
+        Assert.Equal(10, Explorer.Count);
         Assert.All(Explorer, tweak =>
         {
             Assert.StartsWith("explorer.", tweak.Id);
-            Assert.Equal(RegistryHive.CurrentUser, Location(tweak).Hive);
+            Assert.All(tweak.Targets, target => Assert.Equal(RegistryHive.CurrentUser, target.Location switch
+            {
+                RegistryLocation value => value.Hive,
+                RegistryKeyLocation key => key.Hive,
+                var other => throw new Xunit.Sdk.XunitException($"{other} is not a registry target"),
+            }));
         });
         Assert.Equal(["Explorer's Home", "Working with files"], Explorer.Select(tweak => tweak.Group).Distinct());
     }
@@ -38,13 +43,13 @@ public class ExplorerCatalogTests
     [Fact]
     public void A_missing_value_reads_as_an_option_rather_than_custom()
     {
-        // The shortcut suffix has no AbsentMeans because absent is its own Option: "Add it" deletes.
+        // The shortcut suffix and the classic menu have no AbsentMeans because absent is their own
+        // Option: "Add it" and "Windows 11 menu" delete.
         foreach (var tweak in Explorer)
         {
-            var target = Assert.Single(tweak.Targets);
             Assert.True(
-                tweak.Options.Any(option => option.Values[target] is null) ||
-                tweak.Options.Any(option => Equals(option.Values[target], target.AbsentMeans)),
+                tweak.Options.Any(option => tweak.Targets.All(target =>
+                    option.Values[target] is null || Equals(option.Values[target], target.AbsentMeans))),
                 $"{tweak.Id} reads as Custom on a fresh Windows");
         }
     }
@@ -100,6 +105,64 @@ public class ExplorerCatalogTests
         var tweak = Find(id);
         Assert.Equal(name, Location(tweak).Name);
         Assert.Equal(RegistryValue.DWord(1), Assert.Single(tweak.Targets).AbsentMeans);
+    }
+
+    [Fact]
+    public void The_classic_menu_creates_the_clsid_key_and_its_empty_handler()
+    {
+        var tweak = Find("explorer.classic-context-menu");
+        var classic = tweak.Options.Single(option => option.Id == "classic");
+        var windows11 = tweak.Options.Single(option => option.Id == "windows-11");
+
+        var key = Assert.IsType<RegistryKeyLocation>(tweak.Targets[0].Location);
+        Assert.Equal(@"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}", key.Key);
+        var handler = Assert.IsType<RegistryLocation>(tweak.Targets[1].Location);
+        Assert.Equal($@"{key.Key}\InprocServer32", handler.Key);
+        Assert.Equal("", handler.Name);
+
+        Assert.Equal(KeyPresence.Present, classic.Values[tweak.Targets[0]]);
+        Assert.Equal(RegistryValue.String(""), classic.Values[tweak.Targets[1]]);
+        Assert.All(tweak.Targets, target => Assert.Null(windows11.Values[target]));
+        Assert.Equal(Activation.AfterSignOut, tweak.Activation);
+    }
+
+    [Fact]
+    public void Undoing_the_classic_menu_takes_the_whole_key_away_not_just_its_value()
+    {
+        // Winhance's revert deletes only the value, which leaves InprocServer32 behind and the classic
+        // menu with it. AkariOS-Ultimate's deletes the key, and so does Undo.
+        var machine = new InMemoryMachine();
+        var engine = new TweakEngine(machine);
+        var tweak = Find("explorer.classic-context-menu");
+        var key = (RegistryKeyLocation)tweak.Targets[0].Location;
+
+        Assert.Equal("windows-11", Assert.IsType<LiveState.InOption>(engine.ReadLiveState(tweak)).Option.Id);
+
+        engine.Apply(tweak, tweak.Options.Single(option => option.Id == "classic"));
+        Assert.Equal(KeyPresence.Present, machine.Read(key));
+        Assert.Equal("classic", Assert.IsType<LiveState.InOption>(engine.ReadLiveState(tweak)).Option.Id);
+
+        engine.Undo(tweak);
+        Assert.Null(machine.Read(key));
+        Assert.Null(machine.Read(new RegistryKeyLocation(key.Hive, $@"{key.Key}\InprocServer32")));
+        Assert.Equal("windows-11", Assert.IsType<LiveState.InOption>(engine.ReadLiveState(tweak)).Option.Id);
+    }
+
+    [Fact]
+    public void A_pc_that_already_had_the_classic_menu_keeps_it_after_undo()
+    {
+        // The key existed before Akari-Dash came along, so it is the machine's own and Undo puts it back.
+        var machine = new InMemoryMachine();
+        var tweak = Find("explorer.classic-context-menu");
+        machine.Write(tweak.Targets[1].Location, RegistryValue.String(""));
+
+        var engine = new TweakEngine(machine);
+        engine.Apply(tweak, tweak.Options.Single(option => option.Id == "windows-11"));
+        Assert.Null(machine.Read(tweak.Targets[0].Location));
+
+        engine.Undo(tweak);
+        Assert.Equal(KeyPresence.Present, machine.Read(tweak.Targets[0].Location));
+        Assert.Equal(RegistryValue.String(""), machine.Read(tweak.Targets[1].Location));
     }
 
     [Theory]

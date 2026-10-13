@@ -8,8 +8,8 @@ namespace AkariDash.Core.Tweaks;
 //
 // Winhance's MIT snapshot has 48 Explorer values and a port of it would have been 34 rows. That is
 // not 34 decisions, it is Folder Options' Advanced tab with our paint on it, so it is not what this
-// page is. Nine rows ship: six that were already on the Windows page and moved here with their
-// Original Values, and three that earn a place because a person setting up a gaming PC actually
+// page is. Ten rows ship: six that were already on the Windows page and moved here with their
+// Original Values, and four that earn a place because a person setting up a gaming PC actually
 // wants them. Everything else is in the list at the bottom of this comment, with a test for each
 // asserting it is absent, so declining stays visible instead of looking like an oversight.
 //
@@ -17,7 +17,7 @@ namespace AkariDash.Core.Tweaks;
 // (4dc441a0; see THIRD-PARTY-NOTICES.md), which is still what says how a setting is written. Taste
 // again, so no Recommended Option.
 //
-// The three that earned their place:
+// The four that earned their place:
 //
 //   Sync provider notifications is the advertising strip OneDrive puts inside File Explorer, above
 //   the file list, offering backups and Microsoft 365. It is an ad in a file manager.
@@ -27,6 +27,9 @@ namespace AkariDash.Core.Tweaks;
 //
 //   The "- Shortcut" suffix is the one piece of Explorer naming people go looking for a tool to fix.
 //   One binary value, cleanly undone by deleting it.
+//
+//   The classic right-click menu is the single most asked-for Windows 11 change, and the user asked
+//   for it by name on 2026-10-13.
 //
 // Left out, and why. Nearly all of it is one checkbox in Folder Options > View, and a row whose
 // whole description would be "this is a checkbox in Folder Options" is a row Settings already has:
@@ -50,10 +53,10 @@ namespace AkariDash.Core.Tweaks;
 //   with IconUnderline) are expressible — the engine does single bits of a binary value — but they
 //   are Windows 95 settings that nobody has changed in twenty years.
 //
-//   The classic right-click menu, Take ownership, Open with Terminal and the Photo Viewer
-//   associations all work by a registry key or a whole tree existing. Undo can only delete the value
-//   it wrote, so it would leave the key behind and the change with it. The Windows page said this
-//   about the classic menu first; it is true of all four.
+//   Take ownership and the Photo Viewer associations work by whole trees of keys holding commands
+//   and file types, which is more than a key existing. (The classic right-click menu used to be in
+//   this list for the same reason; it ships now, because RegistryKeyLocation lets Undo take a key
+//   away. Open in Terminal is a value, not a key, and is out for being a developer's setting.)
 //
 //   LongPathsEnabled stays on the Windows page under System. It is not an Explorer setting; it is a
 //   machine-wide limit that happens to be most visible in Explorer.
@@ -78,6 +81,7 @@ public static partial class TweakCatalog
         ExplorerToggle("explorer.sync-notifications", "OneDrive adverts in Explorer", "The strip above the file list where OneDrive offers backups, Microsoft 365 and other things to buy. Windows calls these sync provider notifications.",
             "Working with files", ExplorerAdvanced, "ShowSyncProviderNotifications"),
         ShortcutSuffix(),
+        ClassicContextMenu(),
     ];
 
     /// <summary>
@@ -144,6 +148,30 @@ public static partial class TweakCatalog
             "Shows files and folders that are marked hidden, such as AppData — which is where most games keep their saves, configs and crash logs.",
             Category.Explorer, "Working with files", [hidden],
             [DWordOption(hidden, "show", "Show", 1), DWordOption(hidden, "hide", "Hide", 2)],
+            Activation: Activation.AfterSignOut);
+    }
+
+    private static DeclaredTweak ClassicContextMenu()
+    {
+        // Akari-OS's reg.reg, AkariOS-Ultimate and Winhance's MIT snapshot all turn it on the same way:
+        // an empty InprocServer32 under this CLSID in the user's classes, which overrides the Windows 11
+        // menu's handler. What brings the Windows 11 menu back is the key going away, so AkariOS-
+        // Ultimate's revert deletes the whole {86ca1aa0-...} key, and that is what Undo does here when
+        // the key did not exist before. (Winhance's revert only deletes the value and leaves the key,
+        // which is the half-undo that kept this row out until the engine could delete a key.)
+        const string clsid = @"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}";
+        var key = new TweakTarget(new RegistryKeyLocation(RegistryHive.CurrentUser, clsid));
+        var handler = new TweakTarget(new RegistryLocation(RegistryHive.CurrentUser, $@"{clsid}\InprocServer32", ""));
+
+        return new DeclaredTweak(
+            "explorer.classic-context-menu",
+            "Classic right-click menu",
+            "Puts back the Windows 10 right-click menu, with every option in one list, instead of the shorter Windows 11 one where most of them are behind Show more options. Applies to the desktop and File Explorer.",
+            Category.Explorer, "Working with files", [key, handler],
+            [
+                new TweakOption("windows-11", "Windows 11 menu", new Dictionary<TweakTarget, MachineValue?> { [key] = null, [handler] = null }),
+                new TweakOption("classic", "Classic (Windows 10) menu", new Dictionary<TweakTarget, MachineValue?> { [key] = KeyPresence.Present, [handler] = RegistryValue.String("") }),
+            ],
             Activation: Activation.AfterSignOut);
     }
 

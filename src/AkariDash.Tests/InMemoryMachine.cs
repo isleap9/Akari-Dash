@@ -79,6 +79,8 @@ public sealed class InMemoryMachine : IMachine
         {
             RegistryBitLocation bit => bit.ReadFrom(_values.GetValueOrDefault(bit.Value)),
             RegistryEntryLocation entry => entry.ReadFrom(_values.GetValueOrDefault(entry.Value)),
+            // Like the registry, a key exists when it was created or when anything is stored under it.
+            RegistryKeyLocation key => _values.ContainsKey(key) || _values.Keys.Any(other => IsUnder(other, key)) ? KeyPresence.Present : null,
             _ => _values.GetValueOrDefault(location),
         };
 
@@ -98,7 +100,7 @@ public sealed class InMemoryMachine : IMachine
             return;
         }
 
-        if (location is not (RegistryLocation or BootSettingLocation) && !_values.ContainsKey(location))
+        if (location is not (RegistryLocation or RegistryKeyLocation or BootSettingLocation) && !_values.ContainsKey(location))
         {
             throw new InvalidOperationException($"{location} does not exist.");
         }
@@ -115,12 +117,36 @@ public sealed class InMemoryMachine : IMachine
             return;
         }
 
+        // Like the registry, deleting a key takes everything under it with it.
+        if (location is RegistryKeyLocation key)
+        {
+            foreach (var under in _values.Keys.Where(other => other == key || IsUnder(other, key)).ToList())
+            {
+                _values.Remove(under);
+            }
+
+            return;
+        }
+
         if (location is not (RegistryLocation or BootSettingLocation) && Read(location) is not null)
         {
             throw new NotSupportedException($"{location} cannot be deleted.");
         }
 
         _values.Remove(location);
+    }
+
+    private static bool IsUnder(MachineLocation location, RegistryKeyLocation key)
+    {
+        var (hive, path) = location switch
+        {
+            RegistryLocation value => (value.Hive, value.Key),
+            RegistryKeyLocation other => (other.Hive, other.Key),
+            _ => ((Microsoft.Win32.RegistryHive?)null, string.Empty),
+        };
+
+        return hive == key.Hive &&
+            (path.Equals(key.Key, StringComparison.OrdinalIgnoreCase) || path.StartsWith(key.Key + @"\", StringComparison.OrdinalIgnoreCase));
     }
 
     private void SetEntry(RegistryEntryLocation entry, string? text)
