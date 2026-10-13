@@ -22,6 +22,11 @@
                     <FontIcon Glyph="&#xE777;" />
                 </SelectorBarItem.Icon>
             </SelectorBarItem>
+            <SelectorBarItem Text="Features">
+                <SelectorBarItem.Icon>
+                    <FontIcon Glyph="&#xEA86;" />
+                </SelectorBarItem.Icon>
+            </SelectorBarItem>
             <SelectorBarItem Text="Uninstaller">
                 <SelectorBarItem.Icon>
                     <FontIcon Glyph="&#xE74D;" />
@@ -232,6 +237,141 @@
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>
             </ScrollViewer>
+        </Grid>
+
+        <!-- Features: Vain Toolbox's Features tab, Windows features and optional features (capabilities),
+             with AkariOS-Ultimate's UWP Features and Legacy Features removal as Remove all. -->
+        <Grid x:Name="FeaturesTab" Grid.Row="2" RowSpacing="12" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="1" VerticalAlignment="Center" ToolTipService.ToolTip="Before you change a feature">
+                    <FontIcon FontSize="14" Glyph="&#xE7BA;" Foreground="{ThemeResource SystemFillColorCautionBrush}" />
+                    <Button.Flyout>
+                        <Flyout>
+                            <StackPanel MaxWidth="320" Spacing="6">
+                                <TextBlock Text="Important" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <TextBlock
+                                    TextWrapping="Wrap"
+                                    Text="Turning a feature off can turn off what depends on it, and most changes need a restart. Adding an optional feature downloads it from Windows Update." />
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+                <ComboBox
+                    Grid.Column="2"
+                    MinWidth="170"
+                    VerticalAlignment="Center"
+                    ItemsSource="{x:Bind vm:FeaturesViewModel.Filters}"
+                    SelectedIndex="{x:Bind ViewModel.Features.FilterIndex, Mode=TwoWay}" />
+                <AutoSuggestBox
+                    Grid.Column="3"
+                    Width="220"
+                    VerticalAlignment="Center"
+                    QueryIcon="Find"
+                    PlaceholderText="Search features"
+                    Text="{x:Bind ViewModel.Features.SearchText, Mode=TwoWay}" />
+                <Button
+                    Grid.Column="4"
+                    VerticalAlignment="Center"
+                    ToolTipService.ToolTip="Refresh"
+                    Command="{x:Bind ViewModel.Features.RefreshCommand}">
+                    <FontIcon FontSize="14" Glyph="&#xE72C;" />
+                </Button>
+                <Button
+                    Grid.Column="5"
+                    VerticalAlignment="Center"
+                    Content="Remove all (AkariOS-Ultimate)"
+                    Command="{x:Bind ViewModel.Features.RemoveAllCommand}"
+                    Background="{ThemeResource SystemFillColorCriticalBrush}"
+                    Foreground="White" />
+            </Grid>
+
+            <Border
+                Grid.Row="1"
+                CornerRadius="8"
+                BorderThickness="1"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid Padding="16,10,32,10" Opacity="0.7">
+                        <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="FEATURE" />
+                        <TextBlock HorizontalAlignment="Right" Style="{StaticResource CaptionTextBlockStyle}" Text="STATE" />
+                    </Grid>
+                    <ListView
+                        Grid.Row="1"
+                        Padding="0,0,16,0"
+                        SelectionMode="None"
+                        ItemsSource="{x:Bind ViewModel.Features.Filtered, Mode=OneWay}">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Padding" Value="4,0" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:FeatureRowViewModel">
+                                <Grid Padding="8,8" ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind DisplayName}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{x:Bind Name}" Opacity="0.6" Style="{StaticResource CaptionTextBlockStyle}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock
+                                            Text="{x:Bind KeptText}"
+                                            Visibility="{x:Bind IsKept}"
+                                            Opacity="0.6"
+                                            TextWrapping="Wrap"
+                                            Style="{StaticResource CaptionTextBlockStyle}" />
+                                    </StackPanel>
+                                    <ProgressRing Grid.Column="1" Width="16" Height="16" IsActive="{x:Bind IsWorking, Mode=OneWay}" />
+                                    <!-- Vain Toolbox's segmented pair: the state the feature is in reads as pressed. -->
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <ToggleButton
+                                            MinWidth="84"
+                                            CornerRadius="4,0,0,4"
+                                            Content="{x:Bind OffLabel}"
+                                            IsChecked="{x:Bind IsOff, Mode=OneWay}"
+                                            Command="{x:Bind TurnOffCommand}"
+                                            CommandParameter="{x:Bind}" />
+                                        <ToggleButton
+                                            MinWidth="84"
+                                            CornerRadius="0,4,4,0"
+                                            Content="{x:Bind OnLabel}"
+                                            IsChecked="{x:Bind IsOn, Mode=OneWay}"
+                                            Command="{x:Bind TurnOnCommand}"
+                                            CommandParameter="{x:Bind}" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+            </Border>
+
+            <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="12">
+                <TextBlock Opacity="0.8" Text="{x:Bind ViewModel.Features.StatusText, Mode=OneWay}" />
+                <ProgressRing Width="16" Height="16" IsActive="{x:Bind ViewModel.Features.IsBusy, Mode=OneWay}" />
+            </StackPanel>
         </Grid>
 
         <!-- Uninstaller: unchanged from the page it used to be. -->
