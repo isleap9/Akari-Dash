@@ -6,7 +6,7 @@ namespace AkariDash.Core.Apps;
 /// </summary>
 public interface IStoreAppService
 {
-    /// <summary>Every Store package installed for any user, apps, system packages and frameworks alike.</summary>
+    /// <summary>Every Store package this account has, apps, system packages and frameworks alike.</summary>
     Task<IReadOnlyList<StoreApp>> ListAsync(CancellationToken cancellationToken = default);
 
     /// <summary>

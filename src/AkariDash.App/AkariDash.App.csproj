@@ -21,6 +21,11 @@
     </Content>
   </ItemGroup>
 
+  <!-- AkariOS-Ultimate's removal and install scripts for the Legacy apps tab, read back by name. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Scripts\*.ps1" LogicalName="AkariDash.App.Scripts.%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\AkariDash.Core\AkariDash.Core.csproj" />
     <ProjectReference Include="..\AkariDash.Framework\AkariDash.Framework.csproj" />

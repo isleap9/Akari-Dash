@@ -24,6 +24,11 @@
                     <FontIcon Glyph="&#xE777;" />
                 </SelectorBarItem.Icon>
             </SelectorBarItem>
+            <SelectorBarItem Text="Legacy apps">
+                <SelectorBarItem.Icon>
+                    <FontIcon Glyph="&#xE7EF;" />
+                </SelectorBarItem.Icon>
+            </SelectorBarItem>
             <SelectorBarItem Text="Uninstaller">
                 <SelectorBarItem.Icon>
                     <FontIcon Glyph="&#xE74D;" />
@@ -173,7 +178,8 @@
         </Grid>
 
         <!-- Restoration: FSOS-X's cards, for every curated app that is not installed. Every card is
-             as tall as the first one measured, so the height leaves room for a three-line description. -->
+             as tall as the first one measured, and that one changes while scrolling, so every card has
+             the same fixed height, with room for a three-line description. -->
         <Grid x:Name="RestorationTab" Grid.Row="2" RowSpacing="12" Visibility="Collapsed">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -203,6 +209,7 @@
                     <ItemsRepeater.ItemTemplate>
                         <DataTemplate x:DataType="vm:RestorableAppViewModel">
                             <Grid
+                                Height="186"
                                 Padding="18,16"
                                 RowSpacing="10"
                                 CornerRadius="8"
@@ -225,6 +232,61 @@
                                 <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10">
                                     <Button Content="Restore" Command="{x:Bind RestoreCommand}" CommandParameter="{x:Bind}" />
                                     <ProgressRing Width="16" Height="16" IsActive="{x:Bind IsRestoring, Mode=OneWay}" />
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- Legacy apps: AkariOS-Ultimate's removals for what the other tabs cannot take away. -->
+        <Grid x:Name="LegacyAppsTab" Grid.Row="2" RowSpacing="12" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock
+                TextWrapping="Wrap"
+                Opacity="0.8"
+                Text="Built-in Windows programs whose own uninstaller refuses, removed the way AkariOS-Ultimate removes them. Install puts each one back." />
+            <ScrollViewer Grid.Row="1" Padding="0,0,16,0">
+                <ItemsRepeater ItemsSource="{x:Bind ViewModel.LegacyApps.Apps}">
+                    <ItemsRepeater.Layout>
+                        <StackLayout Spacing="8" />
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="vm:LegacyAppViewModel">
+                            <Grid
+                                Padding="18,16"
+                                ColumnSpacing="16"
+                                CornerRadius="8"
+                                BorderThickness="1"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon FontSize="24" VerticalAlignment="Center" Glyph="&#xE7EF;" />
+                                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock Text="{x:Bind Name}" />
+                                    <TextBlock Text="{x:Bind Status, Mode=OneWay}" Opacity="0.6" Style="{StaticResource CaptionTextBlockStyle}" />
+                                    <TextBlock Text="{x:Bind Description}" TextWrapping="Wrap" Opacity="0.85" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                    <ProgressRing Width="16" Height="16" IsActive="{x:Bind IsWorking, Mode=OneWay}" />
+                                    <Button
+                                        Content="Remove"
+                                        Visibility="{x:Bind IsInstalled, Mode=OneWay}"
+                                        Command="{x:Bind RemoveCommand}"
+                                        CommandParameter="{x:Bind}" />
+                                    <Button
+                                        Content="Install"
+                                        Visibility="{x:Bind IsMissing, Mode=OneWay}"
+                                        Command="{x:Bind InstallCommand}"
+                                        CommandParameter="{x:Bind}" />
                                 </StackPanel>
                             </Grid>
                         </DataTemplate>

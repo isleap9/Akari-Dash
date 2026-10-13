@@ -20,16 +20,10 @@ public sealed class WindowsStoreAppService : IStoreAppService
     private static List<StoreApp> List()
     {
         var apps = new Dictionary<string, StoreApp>(StringComparer.OrdinalIgnoreCase);
-        IEnumerable<Package> found;
-        try
-        {
-            // Every user's packages, as Get-AppxPackage -AllUsers lists them; this user's if that is refused.
-            found = new PackageManager().FindPackages();
-        }
-        catch
-        {
-            found = new PackageManager().FindPackagesForUser(string.Empty);
-        }
+        // This account's packages. Every user's (FindPackages) also returns a package removed for all of
+        // them until Windows has cleaned it off the disk, so a removal looked as if it had not happened.
+        // Restoration still searches every user's, which is where a copy to register again is found.
+        IEnumerable<Package> found = new PackageManager().FindPackagesForUser(string.Empty);
 
         foreach (var package in found)
         {

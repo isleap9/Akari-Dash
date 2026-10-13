@@ -173,11 +173,13 @@ public partial class App : Application
         builder.Services.AddTransient<UninstallerViewModel>();
         builder.Services.AddTransient<StoreAppsViewModel>();
         builder.Services.AddTransient<RestorationViewModel>();
+        builder.Services.AddTransient<LegacyAppsViewModel>();
         builder.Services.AddTransient<UwpAppsViewModel>();
 
         // Uninstaller (an Action backend, ADR-0004): lists and removes Store and Win32 apps.
         builder.Services.AddSingleton<IInstalledAppService, WindowsInstalledAppService>();
         builder.Services.AddSingleton<IStoreAppService, WindowsStoreAppService>();
+        builder.Services.AddSingleton<ILegacyAppService, WindowsLegacyAppService>();
 
         // Navigation: pages are created through the DI container.
         builder.Services.AddSingleton<INavigationService>(sp =>
