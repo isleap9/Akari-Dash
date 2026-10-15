@@ -4,177 +4,147 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:AkariDash.App.ViewModels">
 
-    <!-- The Drivers page: a section per graphics card in the PC, each naming the card and its driver
-         versions, with the rows that install, configure and debloat its driver. Every row is an
-         Action: it asks first, runs through one queue, and the heading reads the machine back after.
-         The page title and subtitle come from the shell, as they do for every other page. -->
+    <!-- The Drivers page: AkariOS-Ultimate's Graphics category, one row per entry, drawn as AkariOS
+         draws a row (Akari.ps1 New-Row): a dot for a Toggle, the name and description, the risk, and
+         the buttons - Optimize and Default for a Toggle, one button for an Action, and Options for a
+         Group, which opens one row per choice. The page title and subtitle come from the shell. -->
     <Grid Padding="24" RowSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <StackPanel Spacing="12">
-            <StackPanel Orientation="Horizontal" Spacing="12">
-                <TextBlock Opacity="0.8" Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
-                <ProgressRing Width="16" Height="16" IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
-            </StackPanel>
-
-            <!-- A DDU clean spans restarts, so the page says where it is: waiting (restart or take it
-                 back), or done (install the driver now). -->
-            <Grid
-                Padding="16,12"
-                ColumnSpacing="16"
-                CornerRadius="8"
-                BorderThickness="1"
-                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                Visibility="{x:Bind ViewModel.HasReset, Mode=OneWay}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="{x:Bind ViewModel.ResetText, Mode=OneWay}" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                    <Button
-                        Style="{StaticResource AccentButtonStyle}"
-                        Content="Restart now"
-                        Command="{x:Bind ViewModel.RestartNowCommand}"
-                        Visibility="{x:Bind ViewModel.IsResetPending, Mode=OneWay}" />
-                    <Button
-                        Content="Cancel the clean"
-                        Command="{x:Bind ViewModel.CancelResetCommand}"
-                        Visibility="{x:Bind ViewModel.IsResetPending, Mode=OneWay}" />
-                    <Button
-                        Content="Dismiss"
-                        Command="{x:Bind ViewModel.DismissResetCommand}"
-                        Visibility="{x:Bind ViewModel.HasResetResult, Mode=OneWay}" />
-                </StackPanel>
-            </Grid>
+        <StackPanel Orientation="Horizontal" Spacing="12">
+            <TextBlock Opacity="0.8" Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
+            <ProgressRing Width="16" Height="16" IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
         </StackPanel>
 
-        <!-- Review Focus 3: with no PCI graphics card there is nothing to install for, and no rows. -->
-        <StackPanel
-            Grid.Row="1"
-            Spacing="8"
-            Visibility="{x:Bind ViewModel.HasNoGraphicsCard, Mode=OneWay}">
-            <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="No graphics card found" />
-            <TextBlock
-                Opacity="0.8"
-                TextWrapping="Wrap"
-                Text="Windows has no NVIDIA, AMD or Intel graphics card with a driver in this PC — only a basic display adapter, or none. There is no driver here for this page to install." />
-        </StackPanel>
+        <ScrollViewer Grid.Row="1" Padding="0,0,16,0">
+            <ItemsRepeater ItemsSource="{x:Bind ViewModel.Entries, Mode=OneWay}">
+                <ItemsRepeater.Layout>
+                    <StackLayout Spacing="6" />
+                </ItemsRepeater.Layout>
+                <ItemsRepeater.ItemTemplate>
+                    <DataTemplate x:DataType="vm:GraphicsEntryViewModel">
+                        <Border
+                            Padding="12,9"
+                            CornerRadius="5"
+                            BorderThickness="1"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="22" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
 
-        <ScrollViewer
-            Grid.Row="1"
-            Padding="0,0,16,0"
-            Visibility="{x:Bind ViewModel.HasGraphicsCard, Mode=OneWay}">
-            <StackPanel Spacing="24">
-                <ItemsRepeater ItemsSource="{x:Bind ViewModel.Sections, Mode=OneWay}">
-                    <ItemsRepeater.Layout>
-                        <StackLayout Spacing="24" />
-                    </ItemsRepeater.Layout>
-                    <ItemsRepeater.ItemTemplate>
-                        <DataTemplate x:DataType="vm:DriverSectionViewModel">
-                            <StackPanel Spacing="8">
-                                <StackPanel Spacing="2">
-                                    <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="{x:Bind Heading, Mode=OneWay}" />
-                                    <TextBlock Opacity="0.7" Text="{x:Bind VersionLine, Mode=OneWay}" />
-                                </StackPanel>
+                                    <!-- The state dot, on Toggles only: filled once Optimize ran, empty after
+                                         Default, faint when neither has been pressed. -->
+                                    <Grid
+                                        Width="9"
+                                        Height="9"
+                                        HorizontalAlignment="Left"
+                                        VerticalAlignment="Center"
+                                        Opacity="{x:Bind DotOpacity, Mode=OneWay}"
+                                        Visibility="{x:Bind IsToggle}">
+                                        <Ellipse Stroke="{ThemeResource TextFillColorSecondaryBrush}" StrokeThickness="1.5" />
+                                        <Ellipse Fill="{ThemeResource TextFillColorPrimaryBrush}" Visibility="{x:Bind IsOptimized, Mode=OneWay}" />
+                                    </Grid>
 
-                                <ItemsRepeater ItemsSource="{x:Bind Rows}">
-                                    <ItemsRepeater.Layout>
-                                        <StackLayout Spacing="4" />
-                                    </ItemsRepeater.Layout>
-                                    <ItemsRepeater.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:DriverRowViewModel">
-                                            <Grid
-                                                Padding="16,12"
-                                                ColumnSpacing="16"
-                                                CornerRadius="8"
-                                                BorderThickness="1"
-                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock FontWeight="Medium" Text="{x:Bind Name}" />
+                                        <TextBlock
+                                            Opacity="0.7"
+                                            Style="{StaticResource CaptionTextBlockStyle}"
+                                            TextWrapping="Wrap"
+                                            Text="{x:Bind Description}" />
+                                    </StackPanel>
 
-                                                <StackPanel Spacing="4">
-                                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                                        <TextBlock FontWeight="SemiBold" Text="{x:Bind Title}" />
+                                    <!-- The risk, coloured as AkariOS colours it. -->
+                                    <Grid Grid.Column="2" Margin="12,0" VerticalAlignment="Center">
+                                        <Border Padding="7,1" CornerRadius="3" BorderThickness="1" BorderBrush="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{x:Bind IsSafe}">
+                                            <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{x:Bind Risk}" />
+                                        </Border>
+                                        <Border Padding="7,1" CornerRadius="3" BorderThickness="1" BorderBrush="{ThemeResource SystemFillColorCautionBrush}" Visibility="{x:Bind IsCaution}">
+                                            <TextBlock FontSize="12" Foreground="{ThemeResource SystemFillColorCautionBrush}" Text="{x:Bind Risk}" />
+                                        </Border>
+                                        <Border Padding="7,1" CornerRadius="3" BorderThickness="1" BorderBrush="{ThemeResource SystemFillColorCriticalBrush}" Visibility="{x:Bind IsAdvanced}">
+                                            <TextBlock FontSize="12" Foreground="{ThemeResource SystemFillColorCriticalBrush}" Text="{x:Bind Risk}" />
+                                        </Border>
+                                    </Grid>
+
+                                    <StackPanel Grid.Column="3" VerticalAlignment="Center" Orientation="Horizontal" Spacing="6">
+                                        <ProgressRing Width="16" Height="16" IsActive="{x:Bind IsWorking, Mode=OneWay}" />
+
+                                        <!-- Toggle: Optimize (the accent button once it ran) and Default. -->
+                                        <StackPanel
+                                            Orientation="Horizontal"
+                                            Spacing="6"
+                                            Visibility="{x:Bind IsToggle}"
+                                            ToolTipService.ToolTip="{x:Bind UnavailableReason}">
+                                            <Button
+                                                Content="Optimize"
+                                                Style="{StaticResource AccentButtonStyle}"
+                                                IsEnabled="{x:Bind IsAvailable}"
+                                                Command="{x:Bind OptimizeCommand}"
+                                                Visibility="{x:Bind IsOptimized, Mode=OneWay}" />
+                                            <Button
+                                                Content="Optimize"
+                                                IsEnabled="{x:Bind IsAvailable}"
+                                                Command="{x:Bind OptimizeCommand}"
+                                                Visibility="{x:Bind IsNotOptimized, Mode=OneWay}" />
+                                            <Button Content="Default" IsEnabled="{x:Bind IsAvailable}" Command="{x:Bind DefaultCommand}" />
+                                        </StackPanel>
+
+                                        <!-- Action: its one button. -->
+                                        <Button Content="{x:Bind Button}" Command="{x:Bind RunCommand}" Visibility="{x:Bind IsAction}" />
+
+                                        <!-- Group: Options opens the choices below. -->
+                                        <Button Content="Options" Command="{x:Bind ToggleOptionsCommand}" Visibility="{x:Bind IsGroup}" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <StackPanel Margin="22,12,0,0" Visibility="{x:Bind IsExpanded, Mode=OneWay}">
+                                    <Border Margin="0,0,0,10" BorderThickness="0,1,0,0" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" />
+                                    <ItemsRepeater ItemsSource="{x:Bind Options}">
+                                        <ItemsRepeater.Layout>
+                                            <StackLayout Spacing="8" />
+                                        </ItemsRepeater.Layout>
+                                        <ItemsRepeater.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:GraphicsOptionViewModel">
+                                                <Grid ColumnSpacing="12">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock Text="{x:Bind Name}" />
                                                         <TextBlock
-                                                            VerticalAlignment="Center"
-                                                            Opacity="0.6"
+                                                            Opacity="0.7"
                                                             Style="{StaticResource CaptionTextBlockStyle}"
-                                                            Text="{x:Bind RiskLabel}" />
+                                                            TextWrapping="Wrap"
+                                                            Text="{x:Bind Description}" />
                                                     </StackPanel>
-                                                    <TextBlock
-                                                        Opacity="0.8"
-                                                        Style="{StaticResource CaptionTextBlockStyle}"
-                                                        TextWrapping="Wrap"
-                                                        Text="{x:Bind Description}" />
-
-                                                    <!-- A Debloat row takes its file from the drop folder: no picker
-                                                         opens in an elevated app. -->
-                                                    <StackPanel
-                                                        Margin="0,6,0,0"
-                                                        Orientation="Horizontal"
-                                                        Spacing="8"
-                                                        Visibility="{x:Bind IsDebloat}">
-                                                        <ComboBox
-                                                            MinWidth="320"
-                                                            PlaceholderText="No installer in the folder yet"
-                                                            DisplayMemberPath="Name"
-                                                            ItemsSource="{x:Bind Installers}"
-                                                            SelectedItem="{Binding SelectedInstaller, Mode=TwoWay}" />
-                                                    </StackPanel>
-                                                </StackPanel>
-
-                                                <StackPanel
-                                                    Grid.Column="1"
-                                                    VerticalAlignment="Center"
-                                                    Orientation="Horizontal"
-                                                    Spacing="8">
-                                                    <ProgressRing Width="16" Height="16" IsActive="{x:Bind IsWorking, Mode=OneWay}" />
-                                                    <TextBlock
-                                                        VerticalAlignment="Center"
-                                                        Opacity="0.6"
-                                                        Style="{StaticResource CaptionTextBlockStyle}"
-                                                        Text="{x:Bind StateText, Mode=OneWay}" />
                                                     <Button
-                                                        Content="{x:Bind ActionLabel}"
-                                                        IsEnabled="{x:Bind IsRunnable, Mode=OneWay}"
+                                                        Grid.Column="1"
+                                                        VerticalAlignment="Center"
+                                                        Content="{x:Bind Button}"
+                                                        IsEnabled="{x:Bind IsAvailable}"
+                                                        ToolTipService.ToolTip="{x:Bind UnavailableReason}"
                                                         Command="{x:Bind RunCommand}" />
-                                                </StackPanel>
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsRepeater.ItemTemplate>
-                                </ItemsRepeater>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsRepeater.ItemTemplate>
+                                    </ItemsRepeater>
+                                </StackPanel>
                             </StackPanel>
-                        </DataTemplate>
-                    </ItemsRepeater.ItemTemplate>
-                </ItemsRepeater>
-
-                <!-- Where a downloaded driver goes, for the Debloat rows. -->
-                <StackPanel Spacing="6">
-                    <TextBlock FontWeight="SemiBold" Text="Drivers you downloaded" />
-                    <TextBlock
-                        Opacity="0.8"
-                        Style="{StaticResource CaptionTextBlockStyle}"
-                        TextWrapping="Wrap"
-                        Text="Put a driver installer from NVIDIA, AMD or Intel in this folder, then press Refresh. Each card's last row lists the installers that are its own vendor's." />
-                    <TextBlock
-                        Opacity="0.6"
-                        Style="{StaticResource CaptionTextBlockStyle}"
-                        IsTextSelectionEnabled="True"
-                        Text="{x:Bind ViewModel.InboxFolder}" />
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Button Content="Open folder" Command="{x:Bind ViewModel.OpenInboxCommand}" />
-                        <Button Content="Refresh" Command="{x:Bind ViewModel.RefreshInboxCommand}" />
-                    </StackPanel>
-                </StackPanel>
-            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsRepeater.ItemTemplate>
+            </ItemsRepeater>
         </ScrollViewer>
     </Grid>
 </Page>

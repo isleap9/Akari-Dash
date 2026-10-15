@@ -4,28 +4,39 @@ using AkariDash.Core.Drivers;
 using AkariDash.Core.Machine;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
-using SharpCompress.Archives.SevenZip;
 
 namespace AkariDash.App.Services;
 
 /// <summary>
-/// Finds, downloads, unpacks, installs and configures a graphics driver. An Action backend
-/// (ADR-0004): an install runs once and cannot be undone. Everything that decides anything - the
-/// sources, the command lines, the strip lists, the settings - is data in Core; this class only does
-/// the network, process, archive and registry work. In the Phase 1 build every write refuses.
+/// Does the work behind AkariOS-Ultimate's Graphics entries: finds, downloads, unpacks (with 7-Zip,
+/// as AkariOS does), installs and configures a graphics driver, cleans it with DDU through the
+/// safe-mode companion, and runs the settings, DirectX and C++ entries. Everything that decides
+/// anything is data in Core; this class only does the network, process and registry work. In the
+/// Phase 1 build every write refuses.
 /// </summary>
 public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) : IDriverService
 {
     private const string DisplayClassKey = @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
+    private const string DisplayClassGuid = "{4d36e968-e325-11ce-bfc1-08002be10318}";
     private const string ServicesKey = @"SYSTEM\CurrentControlSet\Services";
+    private const string RunOnceKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce";
+    private const string MsiKey = @"Device Parameters\Interrupt Management\MessageSignaledInterruptProperties";
 
     // AMD answers the default .NET client with a refusal, so this looks like a browser (Graphics.ps1:228-232).
     private static readonly HttpClient Http = CreateClient();
 
     public bool IsDryRun => BuildInfo.IsDryRunOnly;
 
-    private static string WorkFolder(GpuVendor vendor) =>
-        Path.Combine(Path.GetTempPath(), "Akari-Dash", "drivers", vendor.ToString().ToLowerInvariant());
+    private static string WorkFolder(GpuVendor? vendor) =>
+        Path.Combine(Path.GetTempPath(), "Akari-Dash", "drivers", vendor?.ToString().ToLowerInvariant() ?? "tools");
+
+    private static string ResetFolder => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Akari-Dash", "driver-reset");
+
+    private static string DduFolder => Path.Combine(ResetFolder, "ddu");
+
+    private static string StagedFolder(GpuVendor vendor) =>
+        Path.Combine(ResetFolder, "staged", vendor.ToString().ToLowerInvariant());
 
     public async Task<AvailableDriver?> LatestAsync(GpuVendor vendor, CancellationToken cancellationToken = default)
     {
@@ -78,58 +89,72 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
         return Task.FromResult<InstalledDriver?>(null);
     }
 
+    public string Describe(IReadOnlyList<DriverExtra> steps) =>
+        string.Join(Environment.NewLine, steps.Select(step => step.Describe()));
+
     public string Describe(DriverRow row, string? installerPath = null)
     {
+        var vendor = row.Vendor.DisplayName();
         var text = new StringBuilder();
-        if (row.Kind is DriverStepKind.Clean or DriverStepKind.CleanManual)
+        switch (row.Kind)
         {
-            text.AppendLine(row.Vendor == GpuVendor.Intel
-                ? $"Check that an Intel installer is waiting in {DriverInbox.Folder}"
-                : $"Download the latest {row.Vendor.DisplayName()} driver to {StagedFolder(row.Vendor)}, so it is there after the clean");
-            text.AppendLine($"Download DDU from {DriverClean.DduDownload} and unpack it to {DduFolder}");
-            text.AppendLine($"Write DDU's settings to {DriverClean.DduSettingsFile}, read-only");
-            text.AppendLine($"Write {DriverResetState.DefaultPath}");
-            text.AppendLine($@"Set HKLM\{RunOnceKey}\{DriverClean.RunOnceValueName} = {DriverClean.RunOnceCommand(Path.Combine(AppContext.BaseDirectory, DriverClean.CompanionExecutable), DriverResetState.DefaultPath)}");
-            text.AppendLine("Run bcdedit /set {current} safeboot minimal, then offer to restart");
-            text.AppendLine(row.Kind == DriverStepKind.Clean
-                ? "In safe mode: bcdedit /deletevalue {current} safeboot, then " + DriverInstallCommand.Describe(DriverClean.DduExecutable, DriverClean.Arguments(row.Vendor)) + ", then restart"
-                : "In safe mode: bcdedit /deletevalue {current} safeboot, then open DDU for you, then restart once it closes");
-            return text.ToString().TrimEnd();
-        }
+            case DriverStepKind.Clean or DriverStepKind.CleanManual:
+                text.AppendLine("Download the latest driver for each card in the PC, so it is there after the clean");
+                text.AppendLine(new EnsureSevenZip().Describe());
+                text.AppendLine($"Download DDU from {DriverClean.DduDownload} and unpack it with 7-Zip to {DduFolder}");
+                text.AppendLine($"Write DDU's settings to {DriverClean.DduSettingsFile}, read-only");
+                text.AppendLine($@"Set HKLM\SOFTWARE\{DriverClean.SearchOrderConfig.KeyPath}\SearchOrderConfig = 0");
+                text.AppendLine($@"Set HKLM\{RunOnceKey}\{DriverClean.RunOnceValueName} = {DriverClean.RunOnceCommand(Path.Combine(AppContext.BaseDirectory, DriverClean.CompanionExecutable), DriverResetState.DefaultPath)}");
+                text.AppendLine("Run bcdedit /set {current} safeboot minimal, then restart");
+                text.AppendLine(row.Kind == DriverStepKind.Clean
+                    ? "In safe mode: bcdedit /deletevalue {current} safeboot, then " + DriverInstallCommand.Describe(DriverClean.DduExecutable, DriverClean.Arguments) + ", then restart"
+                    : "In safe mode: bcdedit /deletevalue {current} safeboot, then open DDU, then restart once it closes");
+                return text.ToString().TrimEnd();
 
-        if (row.Kind == DriverStepKind.Debloat)
-        {
-            var plan = installerPath is null ? null : DriverDebloat.Plan(row.Vendor, Path.GetFileName(installerPath));
-            if (plan is null)
-            {
-                return $"Refuse: {Path.GetFileName(installerPath ?? "(no file)")} is not a {row.Vendor.DisplayName()} driver installer.";
-            }
+            case DriverStepKind.Install:
+                text.AppendLine(row.Vendor == GpuVendor.Intel
+                    ? $"Open {DriverLookup.Endpoint(row.Vendor)}"
+                    : $"Download the latest {vendor} driver installer and open it");
+                return text.ToString().TrimEnd();
 
-            text.AppendLine($"Unpack {installerPath}");
-            if (plan.RemoveAfterExtracting.Count > 0)
-            {
-                text.AppendLine($"Remove {plan.RemoveAfterExtracting.Count} extras: {string.Join(", ", plan.RemoveAfterExtracting)}");
-            }
+            case DriverStepKind.Debloat:
+                var plan = installerPath is null ? null : DriverDebloat.Plan(row.Vendor, Path.GetFileName(installerPath));
+                if (plan is null)
+                {
+                    return $"Refuse: {Path.GetFileName(installerPath ?? "(no file)")} is not a {vendor} driver installer.";
+                }
 
-            if (plan.TurnOffInConfig.Count > 0)
-            {
-                text.AppendLine($"Switch off the components in: {string.Join(", ", plan.TurnOffInConfig)}");
-            }
+                text.AppendLine(new EnsureSevenZip().Describe());
+                text.AppendLine($"Unpack {installerPath} with 7-Zip");
+                if (plan.RemoveAfterExtracting.Count > 0)
+                {
+                    text.AppendLine($"Remove {plan.RemoveAfterExtracting.Count} extras: {string.Join(", ", plan.RemoveAfterExtracting)}");
+                }
 
-            text.AppendLine("Run " + DriverInstallCommand.Describe(plan.Setup, plan.SetupArguments));
-        }
-        else if (DriverInstallCommand.IsUnattended(row.Vendor))
-        {
-            text.AppendLine($"Download the latest {row.Vendor.DisplayName()} driver and unpack it");
-            text.AppendLine("Run " + DriverInstallCommand.Describe("setup.exe", DriverInstallCommand.Install(row, "setup.exe")));
-        }
-        else if (row.Vendor == GpuVendor.Amd)
-        {
-            text.AppendLine("Download AMD's installer and open it, then wait for it to finish");
-        }
-        else
-        {
-            text.AppendLine($"Open {DriverLookup.Endpoint(row.Vendor)}");
+                if (plan.TurnOffInConfig.Count > 0)
+                {
+                    text.AppendLine($"Switch off the components in: {string.Join(", ", plan.TurnOffInConfig)}");
+                }
+
+                text.AppendLine("Run " + DriverInstallCommand.Describe(plan.Setup, plan.SetupArguments));
+                if (plan.AfterSetup is { } after)
+                {
+                    text.AppendLine("Run " + DriverInstallCommand.Describe(after, plan.AfterSetupArguments ?? []));
+                }
+
+                break;
+
+            default:
+                text.AppendLine(row.Vendor switch
+                {
+                    GpuVendor.Nvidia => "Install 7-Zip, download the latest NVIDIA driver, unpack it and run "
+                        + DriverInstallCommand.Describe("setup.exe", DriverInstallCommand.Install(row, "setup.exe")),
+                    GpuVendor.Amd => "Download AMD's installer, open it and wait for it to finish",
+                    _ => installerPath is null
+                        ? $"Open {DriverLookup.Endpoint(row.Vendor)} (no Intel installer in {DriverInbox.Folder})"
+                        : $"Open {installerPath} and wait for it to finish",
+                });
+                break;
         }
 
         foreach (var extra in DriverExtras.For(row.Vendor, row.Kind))
@@ -149,44 +174,60 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
         return text.ToString().TrimEnd();
     }
 
+    public string? DroppedInstaller(GpuVendor vendor) =>
+        Directory.Exists(DriverInbox.Folder)
+            ? DriverInbox.Installers(Directory.EnumerateFiles(DriverInbox.Folder))
+                .FirstOrDefault(file => DriverDebloat.Plan(vendor, Path.GetFileName(file)) is not null)
+            : null;
+
     public async Task<DriverStepOutcome> InstallAsync(
         DriverRow row,
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        RefuseDryRun(row);
+        RefuseDryRun(row.Title, Describe(row));
         var vendor = row.Vendor;
 
-        if (!DriverInstallCommand.IsUnattended(vendor))
+        if (row.Kind == DriverStepKind.Install)
         {
-            return await HandOffAsync(row, progress, cancellationToken);
+            return await OpenInstallerAsync(vendor, progress, cancellationToken);
         }
 
-        progress?.Report($"Finding the latest {vendor.DisplayName()} driver…");
+        if (vendor == GpuVendor.Amd)
+        {
+            return await RunAmdInstallerAsync(row, progress, cancellationToken);
+        }
+
+        if (vendor == GpuVendor.Intel)
+        {
+            return await RunIntelInstallerAsync(row, progress, cancellationToken);
+        }
+
+        // NVIDIA, as AkariOS: 7-Zip, the latest driver unpacked, setup -s -noreboot -noeula -clean.
+        await EnsureSevenZipAsync(progress, cancellationToken);
+        progress?.Report("Finding the latest NVIDIA driver…");
         var latest = await LatestAsync(vendor, cancellationToken);
         var staged = Staged(vendor, latest);
         if (latest is null && staged is null)
         {
             throw new InvalidOperationException(
-                $"Could not find the latest {vendor.DisplayName()} driver: {vendor.DisplayName()}'s driver source did not answer with one. Nothing was changed.");
+                "Could not find the latest NVIDIA driver: NVIDIA's driver source did not answer with one. Nothing was changed.");
         }
 
         var folder = FreshFolder(vendor);
         try
         {
-            // A clean staged the driver before it removed the old one; that copy is used first.
             var installer = staged ?? await DownloadAsync(latest!.DownloadUrl, folder, progress, cancellationToken);
-            var name = Path.GetFileName(installer);
             var unpacked = Path.Combine(folder, "unpacked");
-            progress?.Report($"Unpacking {name}…");
-            await Task.Run(() => Unpack(installer, unpacked), cancellationToken);
+            progress?.Report($"Unpacking {Path.GetFileName(installer)}…");
+            await UnpackAsync(installer, unpacked, cancellationToken);
 
-            progress?.Report($"Installing {name}…");
+            progress?.Report($"Installing {Path.GetFileName(installer)}…");
             var outcome = await RunSetupAsync(
                 row, Path.Combine(unpacked, "setup.exe"), DriverInstallCommand.Install(row, "setup.exe"), cancellationToken);
             TryDelete(StagedFolder(vendor));
 
-            return AppliesSettings(row) ? await ConfigureAsync(row, outcome, progress, cancellationToken) : outcome;
+            return await ConfigureAsync(row, outcome, progress, cancellationToken);
         }
         finally
         {
@@ -205,28 +246,20 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
             ?? throw new InvalidOperationException(
                 $"{Path.GetFileName(installerPath)} is not a {row.Vendor.DisplayName()} driver installer, so nothing was done with it.");
 
-        RefuseDryRun(row);
+        RefuseDryRun(row.Title, Describe(row, installerPath));
+        await EnsureSevenZipAsync(progress, cancellationToken);
 
         var folder = FreshFolder(row.Vendor);
         try
         {
             var unpacked = Path.Combine(folder, "unpacked");
             progress?.Report($"Unpacking {Path.GetFileName(installerPath)}…");
-            await Task.Run(() => Unpack(installerPath, unpacked), cancellationToken);
+            await UnpackAsync(installerPath, unpacked, cancellationToken);
 
             progress?.Report("Removing the extras…");
             foreach (var entry in plan.RemoveAfterExtracting)
             {
-                var path = Inside(unpacked, entry);
-                if (Directory.Exists(path))
-                {
-                    Directory.Delete(path, recursive: true);
-                }
-                else if (File.Exists(path))
-                {
-                    File.Delete(path);
-                }
-
+                RemoveIfThere(Inside(unpacked, entry));
                 logger.LogInformation("Debloat: removed {Entry}", entry);
             }
 
@@ -272,17 +305,19 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
     }
 
     /// <summary>
-    /// Sets up a DDU clean and leaves the PC to restart into it. Everything a way back needs is put
-    /// on disk first - DDU, and the replacement driver - so if any of it cannot be fetched the run
-    /// stops here, with the old driver still in place. Only then are RunOnce and safe mode set.
+    /// AkariOS's driver clean, with a way back staged first: the latest driver for each card is put
+    /// on disk before anything is removed, so if it cannot be fetched the run stops here with the old
+    /// driver still in place. Then DDU, its settings, Windows Update's driver search off, RunOnce,
+    /// safe mode, and the restart.
     /// </summary>
     public async Task<DriverStepOutcome> CleanAsync(
-        DriverRow row,
+        bool manual,
+        IReadOnlySet<GpuVendor> cards,
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        RefuseDryRun(row);
-        var vendor = row.Vendor;
+        var title = manual ? "DDU: Manual" : "DDU: Auto";
+        RefuseDryRun(title, Describe(new DriverRow("ddu", GpuVendor.Nvidia, manual ? DriverStepKind.CleanManual : DriverStepKind.Clean, title, title, DriverRisk.Advanced)));
 
         var companion = Path.Combine(AppContext.BaseDirectory, DriverClean.CompanionExecutable);
         if (!File.Exists(companion))
@@ -290,21 +325,29 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
             throw new InvalidOperationException($"{DriverClean.CompanionExecutable} is missing from the app's folder, so nothing was changed. Reinstall Akari Dash.");
         }
 
-        if (ReadReset() is { Stage: DriverResetStage.Scheduled })
+        foreach (var card in cards.Where(card => card != GpuVendor.Intel))
         {
-            throw new InvalidOperationException("A DDU clean is already waiting for the next restart. Restart, or cancel it first.");
+            await StageAsync(card, progress, cancellationToken);
         }
 
-        // The way back, first.
-        await StageReplacementAsync(vendor, progress, cancellationToken);
+        await EnsureSevenZipAsync(progress, cancellationToken);
 
         progress?.Report("Downloading DDU…");
-        TryDelete(DduFolder);
+        if (Directory.Exists(DduFolder))
+        {
+            RemoveIfThere(DduFolder);
+        }
+
         Directory.CreateDirectory(ResetFolder);
         var download = await DownloadAsync(DriverClean.DduDownload, ResetFolder, progress, cancellationToken);
-        var ddu = await UnpackDduAsync(download, cancellationToken);
+        await UnpackAsync(download, DduFolder, cancellationToken);
         TryDelete(download);
 
+        var program = Directory.EnumerateFiles(DduFolder, DriverClean.DduExecutable, SearchOption.AllDirectories).FirstOrDefault()
+            ?? throw new InvalidOperationException($"DDU did not unpack to {DduFolder} (no {DriverClean.DduExecutable}), so nothing was changed.");
+        var ddu = Path.GetDirectoryName(program)!;
+
+        // Read-only, as AkariOS leaves it, so DDU cannot write its own choices back over these.
         var settings = Path.Combine(ddu, DriverClean.DduSettingsFile);
         Directory.CreateDirectory(Path.GetDirectoryName(settings)!);
         if (File.Exists(settings))
@@ -312,14 +355,15 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
             File.SetAttributes(settings, FileAttributes.Normal);
         }
 
-        // Read-only, as AkariOS leaves it, so DDU cannot write its own choices back over ours.
         await File.WriteAllTextAsync(settings, DriverClean.DduSettingsXml, cancellationToken);
         File.SetAttributes(settings, FileAttributes.ReadOnly);
 
-        var state = new DriverResetState(vendor, row.Kind == DriverStepKind.CleanManual, ddu, DateTimeOffset.Now, DriverResetStage.Scheduled);
+        Write(null, DriverClean.SearchOrderConfig);
+
+        var state = new DriverResetState(manual, ddu, DateTimeOffset.Now, DriverResetStage.Scheduled);
         await File.WriteAllTextAsync(DriverResetState.DefaultPath, state.ToJson(), cancellationToken);
 
-        progress?.Report("Setting the next restart to safe mode…");
+        progress?.Report("Setting the next start to safe mode…");
         using (var runOnce = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64).CreateSubKey(RunOnceKey, writable: true))
         {
             runOnce.SetValue(DriverClean.RunOnceValueName, DriverClean.RunOnceCommand(companion, DriverResetState.DefaultPath), RegistryValueKind.String);
@@ -332,11 +376,41 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
             RemoveRunOnce();
             TryDelete(DriverResetState.DefaultPath);
             throw new InvalidOperationException(
-                $"Could not set the next restart to safe mode (bcdedit {(bcd is null ? "did not start" : $"exit code {bcd.ExitCode}")}), so nothing was changed.");
+                $"Could not set the next start to safe mode (bcdedit {(bcd is null ? "did not start" : $"exit code {bcd.ExitCode}")}), so nothing was changed.");
         }
 
-        logger.LogInformation("DDU clean of {Vendor} scheduled ({Mode}); DDU in {Folder}", vendor, state.Manual ? "manual" : "auto", ddu);
+        logger.LogInformation("DDU clean scheduled ({Mode}); DDU in {Folder}; restarting", manual ? "manual" : "auto", ddu);
+        progress?.Report("Restarting…");
+        Process.Start(new ProcessStartInfo("shutdown.exe", "/r /t 5") { UseShellExecute = false, CreateNoWindow = true })?.Dispose();
         return DriverStepOutcome.CleanScheduled;
+    }
+
+    public async Task<bool> RunStepsAsync(
+        IReadOnlyList<DriverExtra> steps,
+        IProgress<string>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        RefuseDryRun("This entry", Describe(steps));
+
+        var allApplied = true;
+        foreach (var step in steps)
+        {
+            progress?.Report(step.Describe() + "…");
+            try
+            {
+                if (!await RunExtraAsync(null, step, null, cancellationToken))
+                {
+                    allApplied = false;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                allApplied = false;
+                logger.LogError(ex, "Could not {Step}", step.Describe());
+            }
+        }
+
+        return allApplied;
     }
 
     public DriverResetState? ReadReset()
@@ -354,19 +428,6 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
         }
     }
 
-    public async Task CancelResetAsync(CancellationToken cancellationToken = default)
-    {
-        if (IsDryRun)
-        {
-            return;
-        }
-
-        RemoveRunOnce();
-        var bcd = await ProcessRunner.RunAsync("bcdedit.exe", ["/deletevalue", "{current}", "safeboot"], cancellationToken);
-        logger.LogInformation("Cancelled the DDU clean (bcdedit exit code {ExitCode})", bcd?.ExitCode);
-        ForgetReset();
-    }
-
     public void ForgetReset()
     {
         if (IsDryRun)
@@ -375,198 +436,75 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
         }
 
         TryDelete(DriverResetState.DefaultPath);
-        if (Directory.Exists(DduFolder))
-        {
-            foreach (var file in Directory.EnumerateFiles(DduFolder, "*", SearchOption.AllDirectories))
-            {
-                File.SetAttributes(file, FileAttributes.Normal);
-            }
-        }
-
-        TryDelete(DduFolder);
-    }
-
-    public void RestartNow()
-    {
-        if (IsDryRun)
-        {
-            return;
-        }
-
-        logger.LogInformation("Restarting for the DDU clean");
-        Process.Start(new ProcessStartInfo("shutdown.exe", "/r /t 5") { UseShellExecute = false, CreateNoWindow = true });
-    }
-
-    private const string RunOnceKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce";
-
-    private static string ResetFolder => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Akari-Dash", "driver-reset");
-
-    private static string DduFolder => Path.Combine(ResetFolder, "ddu");
-
-    private static string StagedFolder(GpuVendor vendor) =>
-        Path.Combine(ResetFolder, "staged", vendor.ToString().ToLowerInvariant());
-
-    /// <summary>The driver a clean staged for this vendor: the one matching the latest version, or any when the source cannot be asked.</summary>
-    private static string? Staged(GpuVendor vendor, AvailableDriver? latest)
-    {
-        var folder = StagedFolder(vendor);
-        if (!Directory.Exists(folder))
-        {
-            return null;
-        }
-
-        var files = Directory.EnumerateFiles(folder, "*.exe").ToList();
-        return latest is null
-            ? files.FirstOrDefault()
-            : files.FirstOrDefault(file => Path.GetFileName(file).Contains(latest.Version, StringComparison.OrdinalIgnoreCase));
-    }
-
-    /// <summary>
-    /// Puts the replacement driver on disk before anything is removed. NVIDIA's and AMD's come from
-    /// their sources; Intel publishes none, so its installer must already be in the drop folder.
-    /// </summary>
-    /// <summary>The newest installer in the drop folder that is this vendor's own, or <see langword="null"/>.</summary>
-    private static string? DroppedInstaller(GpuVendor vendor) =>
-        Directory.Exists(DriverInbox.Folder)
-            ? DriverInbox.Installers(Directory.EnumerateFiles(DriverInbox.Folder))
-                .FirstOrDefault(file => DriverDebloat.Plan(vendor, Path.GetFileName(file)) is not null)
-            : null;
-
-    private async Task StageReplacementAsync(GpuVendor vendor, IProgress<string>? progress, CancellationToken cancellationToken)
-    {
-        if (vendor == GpuVendor.Intel)
-        {
-            var dropped = DroppedInstaller(vendor);
-            if (dropped is null)
-            {
-                throw new InvalidOperationException(
-                    $"Intel publishes no driver we can fetch, so put the Intel installer (gfx_win_....exe) in {DriverInbox.Folder} first. Nothing was changed.");
-            }
-
-            logger.LogInformation("The Intel driver waiting after the clean is {Installer}", dropped);
-            return;
-        }
-
-        progress?.Report($"Finding the latest {vendor.DisplayName()} driver…");
-        var latest = await LatestAsync(vendor, cancellationToken)
-            ?? throw new InvalidOperationException(
-                $"Could not find the latest {vendor.DisplayName()} driver, so the old one was not removed. Nothing was changed.");
-
-        if (Staged(vendor, latest) is { } already)
-        {
-            logger.LogInformation("Already staged: {Installer}", already);
-            return;
-        }
-
-        TryDelete(StagedFolder(vendor));
-        Directory.CreateDirectory(StagedFolder(vendor));
-        await DownloadAsync(latest.DownloadUrl, StagedFolder(vendor), progress, cancellationToken);
-    }
-
-    /// <summary>
-    /// DDU ships as a Nullsoft self-extractor, which unpacks itself silently with its own /S and /D
-    /// switches (/D must come last and unquoted). Returns the folder DDU's program landed in.
-    /// </summary>
-    private async Task<string> UnpackDduAsync(string download, CancellationToken cancellationToken)
-    {
-        Directory.CreateDirectory(DduFolder);
-        var run = await ProcessRunner.RunAsync(download, ["/S", $"/D={DduFolder}"], cancellationToken)
-            ?? throw new InvalidOperationException("DDU's download could not be started to unpack it, so nothing was changed.");
-        logger.LogInformation("DDU unpacked with exit code {ExitCode}", run.ExitCode);
-
-        var program = Directory.EnumerateFiles(DduFolder, DriverClean.DduExecutable, SearchOption.AllDirectories).FirstOrDefault()
-            ?? throw new InvalidOperationException($"DDU did not unpack to {DduFolder} (no {DriverClean.DduExecutable}), so nothing was changed.");
-        return Path.GetDirectoryName(program)!;
-    }
-
-    private void RemoveRunOnce()
-    {
         try
         {
-            using var runOnce = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64).OpenSubKey(RunOnceKey, writable: true);
-            runOnce?.DeleteValue(DriverClean.RunOnceValueName, throwOnMissingValue: false);
+            RemoveIfThere(DduFolder);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Could not remove the RunOnce value {Name}", DriverClean.RunOnceValueName);
+            logger.LogWarning(ex, "Could not tidy away {Path}", DduFolder);
         }
     }
 
-    private static bool AppliesSettings(DriverRow row) => row.Kind is DriverStepKind.InstallAndConfigure or DriverStepKind.Debloat;
-
-    private void RefuseDryRun(DriverRow row)
+    private void RefuseDryRun(string title, string plan)
     {
         if (!IsDryRun)
         {
             return;
         }
 
-        // Phase 1 is safe to launch on any PC because it installs nothing. Say what a real run
-        // would have done, then refuse rather than quietly claim a success that did not happen.
-        logger.LogInformation("Dry Run only: {Row} would have done: {Plan}", row.Id, Describe(row));
-        throw new InvalidOperationException($"This is the Dry Run build, so \"{row.Title}\" did nothing.");
+        // Phase 1 is safe to launch on any PC because it does nothing. Say what a real run would
+        // have done, then refuse rather than quietly claim a success that did not happen.
+        logger.LogInformation("Dry Run only: {Title} would have done: {Plan}", title, plan);
+        throw new InvalidOperationException($"This is the Dry Run build, so \"{title}\" did nothing.");
     }
 
     /// <summary>
-    /// AMD and Intel cannot be installed unattended, so their own installer or page is opened and
-    /// the row says so. AMD's installer is waited for, so its settings land after it, not under it.
+    /// Driver install (updated), as AkariOS: NVIDIA's and AMD's installer downloaded and opened for
+    /// the person to run, Intel's download page opened.
     /// </summary>
-    private async Task<DriverStepOutcome> HandOffAsync(DriverRow row, IProgress<string>? progress, CancellationToken cancellationToken)
+    private async Task<DriverStepOutcome> OpenInstallerAsync(GpuVendor vendor, IProgress<string>? progress, CancellationToken cancellationToken)
     {
-        var vendor = row.Vendor;
-
-        // AkariOS's Intel "install and settings" runs an installer the person downloaded, then
-        // configures (Graphics.ps1:423-447). Here that installer comes from the drop folder.
-        if (vendor == GpuVendor.Intel && row.Kind == DriverStepKind.InstallAndConfigure && DroppedInstaller(vendor) is { } dropped)
-        {
-            progress?.Report($"Waiting for {Path.GetFileName(dropped)} to finish…");
-            logger.LogInformation("Opening {Installer} and waiting for it", dropped);
-            using (var process = Process.Start(new ProcessStartInfo(dropped) { UseShellExecute = true }))
-            {
-                if (process is not null)
-                {
-                    await process.WaitForExitAsync(cancellationToken);
-                }
-            }
-
-            var configured = await ConfigureAsync(row, DriverStepOutcome.HandedOffToInstaller, progress, cancellationToken, usedInstaller: dropped);
-            return configured == DriverStepOutcome.InstalledWithoutSettings ? configured : DriverStepOutcome.HandedOffToInstaller;
-        }
-
-        var latest = vendor == GpuVendor.Amd ? await LatestAsync(vendor, cancellationToken) : null;
-        var staged = vendor == GpuVendor.Amd ? Staged(vendor, latest) : null;
+        var latest = await LatestAsync(vendor, cancellationToken);
+        var staged = vendor == GpuVendor.Intel ? null : Staged(vendor, latest);
         if (latest is null && staged is null)
         {
-            logger.LogInformation("Opening {Vendor}'s driver page", vendor);
-            Process.Start(new ProcessStartInfo(DriverLookup.Endpoint(vendor).AbsoluteUri) { UseShellExecute = true });
+            if (vendor != GpuVendor.Intel)
+            {
+                throw new InvalidOperationException(
+                    $"Could not find the latest {vendor.DisplayName()} driver: {vendor.DisplayName()}'s driver source did not answer with one.");
+            }
+
+            OpenTarget(DriverLookup.Endpoint(vendor).AbsoluteUri);
             return DriverStepOutcome.HandedOffToInstaller;
         }
 
-        var folder = FreshFolder(vendor);
+        // Kept after the run: the installer is still open when this returns.
+        var installer = staged ?? await DownloadAsync(latest!.DownloadUrl, FreshFolder(vendor), progress, cancellationToken);
+        logger.LogInformation("Opening {Installer}", installer);
+        Process.Start(new ProcessStartInfo(installer) { UseShellExecute = true })?.Dispose();
+        return DriverStepOutcome.HandedOffToInstaller;
+    }
+
+    /// <summary>AMD's install and settings (Graphics.ps1:355-412): its installer, waited for, then AkariOS's steps.</summary>
+    private async Task<DriverStepOutcome> RunAmdInstallerAsync(DriverRow row, IProgress<string>? progress, CancellationToken cancellationToken)
+    {
+        var latest = await LatestAsync(GpuVendor.Amd, cancellationToken);
+        var staged = Staged(GpuVendor.Amd, latest);
+        if (latest is null && staged is null)
+        {
+            throw new InvalidOperationException("Could not find the latest AMD driver: AMD's driver page did not answer with one. Nothing was changed.");
+        }
+
+        var folder = FreshFolder(GpuVendor.Amd);
         try
         {
             var installer = staged ?? await DownloadAsync(latest!.DownloadUrl, folder, progress, cancellationToken);
+            await OpenAndWaitAsync(installer, progress, cancellationToken);
+            TryDelete(StagedFolder(GpuVendor.Amd));
 
-            progress?.Report($"Waiting for {vendor.DisplayName()}'s installer to finish…");
-            logger.LogInformation("Opening {Installer} and waiting for it", installer);
-            using (var process = Process.Start(new ProcessStartInfo(installer) { UseShellExecute = true }))
-            {
-                if (process is not null)
-                {
-                    await process.WaitForExitAsync(cancellationToken);
-                }
-            }
-
-            TryDelete(StagedFolder(vendor));
-
-            if (AppliesSettings(row))
-            {
-                var outcome = await ConfigureAsync(row, DriverStepOutcome.HandedOffToInstaller, progress, cancellationToken);
-                return outcome == DriverStepOutcome.InstalledWithoutSettings ? outcome : DriverStepOutcome.HandedOffToInstaller;
-            }
-
-            return DriverStepOutcome.HandedOffToInstaller;
+            var outcome = await ConfigureAsync(row, DriverStepOutcome.HandedOffToInstaller, progress, cancellationToken);
+            return outcome == DriverStepOutcome.InstalledWithoutSettings ? outcome : DriverStepOutcome.HandedOffToInstaller;
         }
         finally
         {
@@ -574,106 +512,40 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
         }
     }
 
-    private async Task<string> DownloadAsync(Uri url, string folder, IProgress<string>? progress, CancellationToken cancellationToken)
-    {
-        var path = Path.Combine(folder, Path.GetFileName(url.LocalPath));
-        logger.LogInformation("Downloading {Url} to {Path}", url, path);
-
-        using var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        response.EnsureSuccessStatusCode();
-
-        var total = response.Content.Headers.ContentLength;
-        await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
-        await using var target = File.Create(path);
-
-        var buffer = new byte[1 << 20];
-        long received = 0;
-        var lastPercent = -1;
-        int read;
-        while ((read = await source.ReadAsync(buffer, cancellationToken)) > 0)
-        {
-            await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
-            received += read;
-
-            if (total is > 0)
-            {
-                var percent = (int)(received * 100 / total.Value);
-                if (percent != lastPercent)
-                {
-                    lastPercent = percent;
-                    progress?.Report($"Downloading {Path.GetFileName(path)} — {percent}%");
-                }
-            }
-        }
-
-        logger.LogInformation("Downloaded {Bytes} bytes", received);
-        return path;
-    }
-
     /// <summary>
-    /// Unpacks a vendor's self-extracting installer with a managed reader: no 7-Zip is shipped or
-    /// installed (design Call 4). Every entry must land inside <paramref name="destination"/>.
+    /// Intel's install and settings (Graphics.ps1:415-447): AkariOS opens Intel's page and asks for
+    /// the installer the person downloaded. Here it is the one in the drop folder; without one, the
+    /// page opens so it can be downloaded there.
     /// </summary>
-    private void Unpack(string installer, string destination)
+    private async Task<DriverStepOutcome> RunIntelInstallerAsync(DriverRow row, IProgress<string>? progress, CancellationToken cancellationToken)
     {
-        using var file = File.OpenRead(installer);
-        var start = SelfExtractingArchive.FindSevenZipStart(file)
-            ?? throw new InvalidOperationException($"{Path.GetFileName(installer)} is not an installer we can unpack.");
-
-        using var archiveStream = new OffsetStream(file, start);
-        using var archive = SevenZipArchive.Open(archiveStream);
-        using var reader = archive.ExtractAllEntries();
-
-        Directory.CreateDirectory(destination);
-        var count = 0;
-        while (reader.MoveToNextEntry())
+        if (DroppedInstaller(GpuVendor.Intel) is not { } dropped)
         {
-            if (reader.Entry.IsDirectory || reader.Entry.Key is not { } key)
-            {
-                continue;
-            }
-
-            var path = Inside(destination, key);
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            using var output = File.Create(path);
-            reader.WriteEntryTo(output);
-            count++;
+            OpenTarget(DriverLookup.Endpoint(GpuVendor.Intel).AbsoluteUri);
+            throw new InvalidOperationException(
+                $"Intel's download page is open. Save the driver (gfx_win_....exe) to {DriverInbox.Folder}, then press Install again.");
         }
 
-        logger.LogInformation("Unpacked {Count} files from {Installer}", count, installer);
+        await OpenAndWaitAsync(dropped, progress, cancellationToken);
+        var outcome = await ConfigureAsync(row, DriverStepOutcome.HandedOffToInstaller, progress, cancellationToken, usedInstaller: dropped);
+        return outcome == DriverStepOutcome.InstalledWithoutSettings ? outcome : DriverStepOutcome.HandedOffToInstaller;
     }
 
-    private async Task<DriverStepOutcome> RunSetupAsync(
-        DriverRow row,
-        string setup,
-        IReadOnlyList<string> arguments,
-        CancellationToken cancellationToken)
+    private async Task OpenAndWaitAsync(string installer, IProgress<string>? progress, CancellationToken cancellationToken)
     {
-        if (!File.Exists(setup))
+        progress?.Report($"Waiting for {Path.GetFileName(installer)} to finish…");
+        logger.LogInformation("Opening {Installer} and waiting for it", installer);
+        using var process = Process.Start(new ProcessStartInfo(installer) { UseShellExecute = true });
+        if (process is not null)
         {
-            throw new InvalidOperationException(
-                $"The {row.Vendor.DisplayName()} package has no {Path.GetFileName(setup)} where it should be, so nothing was installed.");
+            await process.WaitForExitAsync(cancellationToken);
         }
-
-        logger.LogInformation("Running {CommandLine}", DriverInstallCommand.Describe(setup, arguments));
-        var run = await ProcessRunner.RunAsync(setup, arguments, cancellationToken, Path.GetDirectoryName(setup))
-            ?? throw new InvalidOperationException($"{Path.GetFileName(setup)} could not be started.");
-
-        logger.LogInformation("{Setup} exited with {ExitCode}", setup, run.ExitCode);
-        return run.ExitCode switch
-        {
-            0 => DriverStepOutcome.Completed,
-            3010 or 1641 => DriverStepOutcome.CompletedNeedsRestart,
-            _ => throw new InvalidOperationException(
-                $"The {row.Vendor.DisplayName()} installer stopped with exit code {run.ExitCode}{(run.LastLine is { } last ? $": {last}" : ".")}"),
-        };
     }
 
     /// <summary>
-    /// Does everything AkariOS does after the driver (<see cref="DriverExtras"/>), in its order:
-    /// the tools, the shortcuts, the clean-up, the settings, the profile. A step that fails does not
-    /// undo the install that just happened, nor stop the steps after it; the row says not every step
-    /// applied instead. Clean-up of something that is not there is not a failure.
+    /// Does everything AkariOS does after the driver (<see cref="DriverExtras"/>), in its order. A
+    /// step that fails does not undo the install, nor stop the steps after it; the row says not every
+    /// step applied instead. Clean-up of something that is not there is not a failure.
     /// </summary>
     private async Task<DriverStepOutcome> ConfigureAsync(
         DriverRow row,
@@ -683,7 +555,6 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
         string? usedInstaller = null)
     {
         var allApplied = true;
-
         foreach (var extra in DriverExtras.For(row.Vendor, row.Kind))
         {
             progress?.Report(extra.Describe() + "…");
@@ -704,14 +575,14 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
         return allApplied ? installed : DriverStepOutcome.InstalledWithoutSettings;
     }
 
-    private async Task<bool> RunExtraAsync(GpuVendor vendor, DriverExtra extra, string? usedInstaller, CancellationToken cancellationToken)
+    private async Task<bool> RunExtraAsync(GpuVendor? vendor, DriverExtra extra, string? usedInstaller, CancellationToken cancellationToken)
     {
         logger.LogInformation("{Step}", extra.Describe());
         switch (extra)
         {
             case ApplyRegistrySettings:
                 var applied = true;
-                foreach (var setting in DriverSettings.For(vendor))
+                foreach (var setting in vendor is { } card ? DriverSettings.For(card) : [])
                 {
                     try
                     {
@@ -726,6 +597,31 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
                 }
 
                 return applied;
+
+            case SetRegistry set:
+                Write(set.Vendor, set.Setting);
+                return true;
+
+            case DeleteRegistry delete:
+                Delete(delete);
+                return true;
+
+            case SetMsiMode msi:
+                return SetMsi(msi.Value);
+
+            case OpenTarget open:
+                OpenTarget(Expand(open.Target));
+                return true;
+
+            case EnsureSevenZip:
+                await EnsureSevenZipAsync(null, cancellationToken);
+                return true;
+
+            case InstallRedistributable redist:
+                return await InstallRedistributableAsync(redist, cancellationToken);
+
+            case InstallDirectX directx:
+                return await InstallDirectXAsync(directx, cancellationToken);
 
             case DownloadTool tool:
             {
@@ -789,8 +685,7 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
                 var from = Expand(move.From);
                 if (File.Exists(from))
                 {
-                    var to = Expand(move.ToFolder);
-                    File.Move(from, Path.Combine(to, Path.GetFileName(from)), overwrite: true);
+                    File.Move(from, Path.Combine(Expand(move.ToFolder), Path.GetFileName(from)), overwrite: true);
                 }
 
                 return true;
@@ -881,7 +776,7 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
                 return true;
 
             case ImportNvidiaProfile import:
-                return await ImportNvidiaProfileAsync(Expand(import.Inspector), cancellationToken);
+                return await ImportNvidiaProfileAsync(Expand(import.Inspector), import.Reset, cancellationToken);
 
             case RemoveUsedInstaller:
                 if (usedInstaller is not null)
@@ -896,6 +791,404 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
                 return false;
         }
     }
+
+    /// <summary>Installs 7-Zip from the mirror when it is not already there, as AkariOS does (Graphics.ps1:8-20).</summary>
+    private async Task EnsureSevenZipAsync(IProgress<string>? progress, CancellationToken cancellationToken)
+    {
+        var program = Expand(SevenZip.Program);
+        if (File.Exists(program))
+        {
+            return;
+        }
+
+        progress?.Report("Installing 7-Zip…");
+        var folder = FreshFolder(null);
+        try
+        {
+            var setup = await DownloadAsync(SevenZip.Download, folder, null, cancellationToken);
+            var run = await ProcessRunner.RunAsync(setup, ["/S"], cancellationToken);
+            logger.LogInformation("7-Zip setup exited with {ExitCode}", run?.ExitCode);
+        }
+        finally
+        {
+            TryDelete(folder);
+        }
+
+        if (!File.Exists(program))
+        {
+            throw new InvalidOperationException($"7-Zip did not install to {program}, so nothing was unpacked.");
+        }
+
+        foreach (var step in SevenZip.AfterInstall)
+        {
+            try
+            {
+                await RunExtraAsync(null, step, null, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not {Step}", step.Describe());
+            }
+        }
+    }
+
+    /// <summary>Unpacks an archive or self-extractor with 7-Zip, as AkariOS does (<c>7z x file -ofolder -y</c>).</summary>
+    private async Task UnpackAsync(string archive, string destination, CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(destination);
+        var run = await ProcessRunner.RunAsync(Expand(SevenZip.Program), SevenZip.Extract(archive, destination), cancellationToken)
+            ?? throw new InvalidOperationException("7-Zip could not be started, so nothing was unpacked.");
+
+        // 7-Zip: 0 is done, 1 is done with warnings; 2 and up mean it did not unpack.
+        if (run.ExitCode > 1)
+        {
+            throw new InvalidOperationException(
+                $"7-Zip could not unpack {Path.GetFileName(archive)} (exit code {run.ExitCode}){(run.LastLine is { } last ? $": {last}" : ".")}");
+        }
+
+        logger.LogInformation("Unpacked {Archive} to {Folder}", archive, destination);
+    }
+
+    private async Task<bool> InstallRedistributableAsync(InstallRedistributable redist, CancellationToken cancellationToken)
+    {
+        var folder = FreshFolder(null);
+        try
+        {
+            var setup = await DownloadAsync(redist.Source, folder, null, cancellationToken);
+
+            // The 2005 runtimes take a quoted msiexec line, so the arguments go as AkariOS writes them.
+            using var process = Process.Start(new ProcessStartInfo(setup, redist.Arguments) { UseShellExecute = false, CreateNoWindow = true });
+            if (process is null)
+            {
+                return false;
+            }
+
+            await process.WaitForExitAsync(cancellationToken);
+            logger.LogInformation("{Name} exited with {ExitCode}", redist.Name, process.ExitCode);
+            return true;
+        }
+        finally
+        {
+            TryDelete(folder);
+        }
+    }
+
+    private async Task<bool> InstallDirectXAsync(InstallDirectX directx, CancellationToken cancellationToken)
+    {
+        var folder = FreshFolder(null);
+        try
+        {
+            var download = await DownloadAsync(directx.Source, folder, null, cancellationToken);
+            var unpacked = Path.Combine(folder, "directx");
+            await UnpackAsync(download, unpacked, cancellationToken);
+
+            var setup = Directory.EnumerateFiles(unpacked, "DXSETUP.exe", SearchOption.AllDirectories).FirstOrDefault();
+            if (setup is null)
+            {
+                logger.LogError("The DirectX package has no DXSETUP.exe");
+                return false;
+            }
+
+            var run = await ProcessRunner.RunAsync(setup, ["/silent"], cancellationToken, Path.GetDirectoryName(setup));
+            logger.LogInformation("DXSETUP exited with {ExitCode}", run?.ExitCode);
+            return run?.ExitCode == 0;
+        }
+        finally
+        {
+            TryDelete(folder);
+        }
+    }
+
+    /// <summary>
+    /// MSISupported on every PCI display device (Graphics.ps1:1523-1528): AkariOS asks
+    /// Get-PnpDevice -Class Display; the same devices are the ones whose Enum key carries the
+    /// Display class.
+    /// </summary>
+    private bool SetMsi(int value)
+    {
+        using var machine = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+        using var pci = machine.OpenSubKey(@"SYSTEM\CurrentControlSet\Enum\PCI");
+        var any = false;
+        foreach (var device in pci?.GetSubKeyNames() ?? [])
+        {
+            using var deviceKey = pci!.OpenSubKey(device);
+            foreach (var instance in deviceKey?.GetSubKeyNames() ?? [])
+            {
+                using var instanceKey = deviceKey!.OpenSubKey(instance);
+                if (!string.Equals(instanceKey?.GetValue("ClassGUID") as string, DisplayClassGuid, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                using var msi = instanceKey!.CreateSubKey(MsiKey, writable: true);
+                msi.SetValue("MSISupported", value, RegistryValueKind.DWord);
+                logger.LogInformation(@"PCI\{Device}\{Instance}: MSISupported = {Value}", device, instance, value);
+                any = true;
+            }
+        }
+
+        return any;
+    }
+
+    private void OpenTarget(string target)
+    {
+        logger.LogInformation("Opening {Target}", target);
+
+        // A shell: app id opens through Explorer; ms-settings: and a path through the shell itself.
+        Process.Start(target.StartsWith("shell:", StringComparison.OrdinalIgnoreCase)
+            ? new ProcessStartInfo("explorer.exe", target) { UseShellExecute = true }
+            : new ProcessStartInfo(target) { UseShellExecute = true })?.Dispose();
+    }
+
+    private async Task<bool> ImportNvidiaProfileAsync(string inspector, bool reset, CancellationToken cancellationToken)
+    {
+        if (!File.Exists(inspector))
+        {
+            logger.LogWarning("Nvidia Profile Inspector is not at {Path}, so the NVIDIA profile was not imported", inspector);
+            return false;
+        }
+
+        // The profile declares UTF-16, so it is written as UTF-16.
+        var profile = Path.Combine(WorkFolder(GpuVendor.Nvidia), "inspector.nip");
+        Directory.CreateDirectory(Path.GetDirectoryName(profile)!);
+        await File.WriteAllTextAsync(profile, reset ? DriverSettings.NvidiaEmptyProfileXml : DriverSettings.NvidiaProfileXml, Encoding.Unicode, cancellationToken);
+
+        try
+        {
+            var run = await ProcessRunner.RunAsync(inspector, ["-silentImport", "-silent", profile], cancellationToken);
+            logger.LogInformation("Nvidia Profile Inspector exited with {ExitCode}", run?.ExitCode);
+            return run is not null;
+        }
+        finally
+        {
+            TryDelete(profile);
+        }
+    }
+
+    /// <summary>The driver staged for this vendor: the one matching the latest version, or any when the source cannot be asked.</summary>
+    private static string? Staged(GpuVendor vendor, AvailableDriver? latest)
+    {
+        var folder = StagedFolder(vendor);
+        if (!Directory.Exists(folder))
+        {
+            return null;
+        }
+
+        var files = Directory.EnumerateFiles(folder, "*.exe").ToList();
+        return latest is null
+            ? files.FirstOrDefault()
+            : files.FirstOrDefault(file => Path.GetFileName(file).Contains(latest.Version, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Puts this card's latest driver on disk before a clean removes the old one.</summary>
+    private async Task StageAsync(GpuVendor vendor, IProgress<string>? progress, CancellationToken cancellationToken)
+    {
+        progress?.Report($"Finding the latest {vendor.DisplayName()} driver…");
+        var latest = await LatestAsync(vendor, cancellationToken)
+            ?? throw new InvalidOperationException(
+                $"Could not find the latest {vendor.DisplayName()} driver, so the old one was not removed. Nothing was changed.");
+
+        if (Staged(vendor, latest) is { } already)
+        {
+            logger.LogInformation("Already staged: {Installer}", already);
+            return;
+        }
+
+        TryDelete(StagedFolder(vendor));
+        Directory.CreateDirectory(StagedFolder(vendor));
+        await DownloadAsync(latest.DownloadUrl, StagedFolder(vendor), progress, cancellationToken);
+    }
+
+    private async Task<string> DownloadAsync(Uri url, string folder, IProgress<string>? progress, CancellationToken cancellationToken)
+    {
+        var path = Path.Combine(folder, Path.GetFileName(url.LocalPath));
+        logger.LogInformation("Downloading {Url} to {Path}", url, path);
+
+        using var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var total = response.Content.Headers.ContentLength;
+        await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
+        await using var target = File.Create(path);
+
+        var buffer = new byte[1 << 20];
+        long received = 0;
+        var lastPercent = -1;
+        int read;
+        while ((read = await source.ReadAsync(buffer, cancellationToken)) > 0)
+        {
+            await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+            received += read;
+
+            if (total is > 0)
+            {
+                var percent = (int)(received * 100 / total.Value);
+                if (percent != lastPercent)
+                {
+                    lastPercent = percent;
+                    progress?.Report($"Downloading {Path.GetFileName(path)} — {percent}%");
+                }
+            }
+        }
+
+        logger.LogInformation("Downloaded {Bytes} bytes", received);
+        return path;
+    }
+
+    private async Task<DriverStepOutcome> RunSetupAsync(
+        DriverRow row,
+        string setup,
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken)
+    {
+        if (!File.Exists(setup))
+        {
+            throw new InvalidOperationException(
+                $"The {row.Vendor.DisplayName()} package has no {Path.GetFileName(setup)} where it should be, so nothing was installed.");
+        }
+
+        logger.LogInformation("Running {CommandLine}", DriverInstallCommand.Describe(setup, arguments));
+        var run = await ProcessRunner.RunAsync(setup, arguments, cancellationToken, Path.GetDirectoryName(setup))
+            ?? throw new InvalidOperationException($"{Path.GetFileName(setup)} could not be started.");
+
+        logger.LogInformation("{Setup} exited with {ExitCode}", setup, run.ExitCode);
+        return run.ExitCode switch
+        {
+            0 => DriverStepOutcome.Completed,
+            3010 or 1641 => DriverStepOutcome.CompletedNeedsRestart,
+            _ => throw new InvalidOperationException(
+                $"The {row.Vendor.DisplayName()} installer stopped with exit code {run.ExitCode}{(run.LastLine is { } last ? $": {last}" : ".")}"),
+        };
+    }
+
+    private static void Write(GpuVendor? vendor, DriverSetting setting)
+    {
+        if (setting.Root == DriverSettingRoot.GraphicsClass)
+        {
+            // Only this vendor's adapters: a laptop's other card keeps its own settings.
+            using var machine = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+            var any = false;
+            foreach (var adapter in Adapters(machine, vendor, writable: true))
+            {
+                using (adapter)
+                {
+                    using var key = setting.KeyPath.Length == 0 ? null : adapter.CreateSubKey(setting.KeyPath, writable: true);
+                    SetValue(key ?? adapter, setting);
+                    any = true;
+                }
+            }
+
+            if (!any)
+            {
+                throw new InvalidOperationException($"There is no {vendor?.DisplayName() ?? "graphics"} adapter key to write {setting.Name} under.");
+            }
+
+            return;
+        }
+
+        using var root = OpenRoot(setting.Root);
+        using var target = root.CreateSubKey(RootPath(setting.Root, setting.KeyPath), writable: true);
+        SetValue(target, setting);
+    }
+
+    private static void Delete(DeleteRegistry delete)
+    {
+        if (delete.Root == DriverSettingRoot.GraphicsClass)
+        {
+            using var machine = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+            foreach (var adapter in Adapters(machine, delete.Vendor, writable: true))
+            {
+                using (adapter)
+                {
+                    DeleteBelow(adapter, delete.KeyPath, delete.Name);
+                }
+            }
+
+            return;
+        }
+
+        using var root = OpenRoot(delete.Root);
+        DeleteBelow(root, RootPath(delete.Root, delete.KeyPath), delete.Name);
+    }
+
+    private static void DeleteBelow(RegistryKey parent, string keyPath, string? name)
+    {
+        if (name is null)
+        {
+            parent.DeleteSubKeyTree(keyPath, throwOnMissingSubKey: false);
+            return;
+        }
+
+        using var key = keyPath.Length == 0 ? null : parent.OpenSubKey(keyPath, writable: true);
+        (keyPath.Length == 0 ? parent : key)?.DeleteValue(name, throwOnMissingValue: false);
+    }
+
+    private static RegistryKey OpenRoot(DriverSettingRoot root) => root == DriverSettingRoot.Hkcu
+        ? RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Registry64)
+        : RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+
+    private static string RootPath(DriverSettingRoot root, string keyPath) => root switch
+    {
+        DriverSettingRoot.HklmServices => $@"{ServicesKey}\{keyPath}",
+        DriverSettingRoot.HklmSoftware => $@"SOFTWARE\{keyPath}",
+        _ => keyPath,
+    };
+
+    private static void SetValue(RegistryKey key, DriverSetting setting)
+    {
+        switch (setting.Kind)
+        {
+            case DriverSettingKind.Dword:
+                key.SetValue(setting.Name, unchecked((int)uint.Parse(setting.Value)), RegistryValueKind.DWord);
+                break;
+            case DriverSettingKind.Binary:
+                key.SetValue(setting.Name, Convert.FromHexString(setting.Value), RegistryValueKind.Binary);
+                break;
+            default:
+                key.SetValue(setting.Name, setting.Value, RegistryValueKind.String);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// The numbered adapter keys under the Display class for <paramref name="vendor"/>, or for every
+    /// NVIDIA, AMD and Intel card when it is <see langword="null"/>. The caller disposes each.
+    /// </summary>
+    private static IEnumerable<RegistryKey> Adapters(RegistryKey machine, GpuVendor? vendor, bool writable)
+    {
+        using var displayClass = machine.OpenSubKey(DisplayClassKey, writable: false);
+        foreach (var name in displayClass?.GetSubKeyNames() ?? [])
+        {
+            if (!int.TryParse(name, out _))
+            {
+                continue;
+            }
+
+            var adapter = displayClass!.OpenSubKey(name, writable);
+            if (adapter is null)
+            {
+                continue;
+            }
+
+            var found = GpuVendorExtensions.FromMatchingDeviceId(adapter.GetValue("MatchingDeviceId") as string);
+            if (found is not null && (vendor is null || found == vendor))
+            {
+                yield return adapter;
+            }
+            else
+            {
+                adapter.Dispose();
+            }
+        }
+    }
+
+    private static string Where(DriverSetting setting) => setting.Root switch
+    {
+        DriverSettingRoot.Hkcu => $@"HKCU\{setting.KeyPath}",
+        DriverSettingRoot.HklmServices => $@"HKLM\{ServicesKey}\{setting.KeyPath}",
+        DriverSettingRoot.HklmSoftware => $@"HKLM\SOFTWARE\{setting.KeyPath}",
+        _ => $@"HKLM\{DisplayClassKey}\<adapter>{(setting.KeyPath.Length == 0 ? string.Empty : $@"\{setting.KeyPath}")}",
+    };
 
     private static string Expand(string path) => Environment.ExpandEnvironmentVariables(path);
 
@@ -959,120 +1252,18 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
         return codes;
     }
 
-    private async Task<bool> ImportNvidiaProfileAsync(string inspector, CancellationToken cancellationToken)
+    private void RemoveRunOnce()
     {
-        if (!File.Exists(inspector))
-        {
-            logger.LogWarning("Nvidia Profile Inspector is not at {Path}, so the NVIDIA profile was not imported", inspector);
-            return false;
-        }
-
-        // The profile declares UTF-16, so it is written as UTF-16.
-        var profile = Path.Combine(WorkFolder(GpuVendor.Nvidia), "akari-dash.nip");
-        Directory.CreateDirectory(Path.GetDirectoryName(profile)!);
-        await File.WriteAllTextAsync(profile, DriverSettings.NvidiaProfileXml, Encoding.Unicode, cancellationToken);
-
         try
         {
-            var run = await ProcessRunner.RunAsync(inspector, ["-silentImport", "-silent", profile], cancellationToken);
-            if (run?.ExitCode != 0)
-            {
-                logger.LogWarning("Nvidia Profile Inspector did not import the profile (exit code {ExitCode})", run?.ExitCode);
-                return false;
-            }
-
-            logger.LogInformation("Imported the NVIDIA profile");
-            return true;
+            using var runOnce = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64).OpenSubKey(RunOnceKey, writable: true);
+            runOnce?.DeleteValue(DriverClean.RunOnceValueName, throwOnMissingValue: false);
         }
-        finally
+        catch (Exception ex)
         {
-            TryDelete(profile);
+            logger.LogError(ex, "Could not remove the RunOnce value {Name}", DriverClean.RunOnceValueName);
         }
     }
-
-    private static void Write(GpuVendor vendor, DriverSetting setting)
-    {
-        if (setting.Root == DriverSettingRoot.GraphicsClass)
-        {
-            // Only this vendor's adapters: a laptop's other card keeps its own settings.
-            using var machine = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
-            var any = false;
-            foreach (var adapter in Adapters(machine, vendor, writable: true))
-            {
-                using (adapter)
-                {
-                    using var key = setting.KeyPath.Length == 0 ? null : adapter.CreateSubKey(setting.KeyPath, writable: true);
-                    SetValue(key ?? adapter, setting);
-                    any = true;
-                }
-            }
-
-            if (!any)
-            {
-                throw new InvalidOperationException($"There is no {vendor.DisplayName()} adapter key to write {setting.Name} under.");
-            }
-
-            return;
-        }
-
-        using var root = setting.Root == DriverSettingRoot.Hkcu
-            ? RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Registry64)
-            : RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
-        var path = setting.Root == DriverSettingRoot.HklmServices ? $@"{ServicesKey}\{setting.KeyPath}" : setting.KeyPath;
-        using var target = root.CreateSubKey(path, writable: true);
-        SetValue(target, setting);
-    }
-
-    private static void SetValue(RegistryKey key, DriverSetting setting)
-    {
-        switch (setting.Kind)
-        {
-            case DriverSettingKind.Dword:
-                key.SetValue(setting.Name, unchecked((int)uint.Parse(setting.Value)), RegistryValueKind.DWord);
-                break;
-            case DriverSettingKind.Binary:
-                key.SetValue(setting.Name, Convert.FromHexString(setting.Value), RegistryValueKind.Binary);
-                break;
-            default:
-                key.SetValue(setting.Name, setting.Value, RegistryValueKind.String);
-                break;
-        }
-    }
-
-    /// <summary>The vendor's numbered adapter keys under the Display class. The caller disposes each.</summary>
-    private static IEnumerable<RegistryKey> Adapters(RegistryKey machine, GpuVendor vendor, bool writable)
-    {
-        using var displayClass = machine.OpenSubKey(DisplayClassKey, writable: false);
-        foreach (var name in displayClass?.GetSubKeyNames() ?? [])
-        {
-            if (!int.TryParse(name, out _))
-            {
-                continue;
-            }
-
-            var adapter = displayClass!.OpenSubKey(name, writable);
-            if (adapter is null)
-            {
-                continue;
-            }
-
-            if (GpuVendorExtensions.FromMatchingDeviceId(adapter.GetValue("MatchingDeviceId") as string) == vendor)
-            {
-                yield return adapter;
-            }
-            else
-            {
-                adapter.Dispose();
-            }
-        }
-    }
-
-    private static string Where(DriverSetting setting) => setting.Root switch
-    {
-        DriverSettingRoot.Hkcu => $@"HKCU\{setting.KeyPath}",
-        DriverSettingRoot.HklmServices => $@"HKLM\{ServicesKey}\{setting.KeyPath}",
-        _ => $@"HKLM\{DisplayClassKey}\<adapter>{(setting.KeyPath.Length == 0 ? string.Empty : $@"\{setting.KeyPath}")}",
-    };
 
     /// <summary>A path inside <paramref name="root"/>, or an exception for one that would leave it.</summary>
     private static string Inside(string root, string relative)
@@ -1087,9 +1278,9 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
         return full;
     }
 
-    private static string FreshFolder(GpuVendor vendor)
+    private static string FreshFolder(GpuVendor? vendor)
     {
-        var folder = Path.Combine(WorkFolder(vendor), DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+        var folder = Path.Combine(WorkFolder(vendor), DateTime.Now.ToString("yyyyMMdd-HHmmss-fff"));
         Directory.CreateDirectory(folder);
         return folder;
     }
@@ -1098,14 +1289,7 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
     {
         try
         {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, recursive: true);
-            }
-            else if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
+            RemoveIfThere(path);
         }
         catch (Exception ex)
         {
@@ -1121,37 +1305,5 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
         client.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
         client.DefaultRequestHeaders.Referrer = new Uri("https://www.amd.com/");
         return client;
-    }
-
-    /// <summary>A read-only view of a stream from <paramref name="start"/> on, so the archive reader sees only the archive.</summary>
-    private sealed class OffsetStream(Stream inner, long start) : Stream
-    {
-        public override bool CanRead => true;
-        public override bool CanSeek => true;
-        public override bool CanWrite => false;
-        public override long Length => inner.Length - start;
-
-        public override long Position
-        {
-            get => inner.Position - start;
-            set => inner.Position = value + start;
-        }
-
-        public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
-
-        public override long Seek(long offset, SeekOrigin origin) => origin switch
-        {
-            SeekOrigin.Begin => inner.Seek(offset + start, SeekOrigin.Begin) - start,
-            SeekOrigin.Current => inner.Seek(offset, SeekOrigin.Current) - start,
-            _ => inner.Seek(offset, SeekOrigin.End) - start,
-        };
-
-        public override void Flush()
-        {
-        }
-
-        public override void SetLength(long value) => throw new NotSupportedException();
-
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }

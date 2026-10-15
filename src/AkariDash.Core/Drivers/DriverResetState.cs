@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using AkariDash.Core.Machine;
 
 namespace AkariDash.Core.Drivers;
 
@@ -26,7 +25,6 @@ public enum DriverResetStage
 /// companion updates it in safe mode; the app reads it back when Windows is normal again.
 /// </summary>
 public sealed record DriverResetState(
-    GpuVendor Vendor,
     bool Manual,
     string DduFolder,
     DateTimeOffset Scheduled,
@@ -58,7 +56,6 @@ public sealed record DriverResetState(
         {
             var state = JsonSerializer.Deserialize<DriverResetState>(json, Options);
             return state is not null
-                && Enum.IsDefined(state.Vendor)
                 && Enum.IsDefined(state.Stage)
                 && !string.IsNullOrWhiteSpace(state.DduFolder)
                 ? state
@@ -73,10 +70,10 @@ public sealed record DriverResetState(
     /// <summary>The line the page shows about this clean once Windows is back to normal.</summary>
     public string Summary => Stage switch
     {
-        DriverResetStage.Scheduled => $"A DDU clean of the {Vendor.DisplayName()} driver is waiting for the next restart.",
-        DriverResetStage.Cleaning => $"The DDU clean of the {Vendor.DisplayName()} driver started but did not finish. Run it again, or install the driver.",
-        DriverResetStage.Cleaned when Manual => $"DDU was opened in safe mode for the {Vendor.DisplayName()} driver. Install the driver now.",
-        DriverResetStage.Cleaned => $"DDU removed the {Vendor.DisplayName()} driver. Install the driver now.",
-        _ => $"The DDU clean of the {Vendor.DisplayName()} driver did not run: {Message ?? "no reason was recorded"}",
+        DriverResetStage.Scheduled => "A DDU clean of the graphics driver is waiting for the next restart.",
+        DriverResetStage.Cleaning => "The DDU clean of the graphics driver started but did not finish. Run it again, or install the driver.",
+        DriverResetStage.Cleaned when Manual => "DDU was opened in safe mode for the graphics driver. Install the driver now.",
+        DriverResetStage.Cleaned => "DDU removed the graphics driver. Install the driver now.",
+        _ => $"The DDU clean of the graphics driver did not run: {Message ?? "no reason was recorded"}",
     };
 }

@@ -3,7 +3,7 @@ using AkariDash.App.ViewModels;
 
 namespace AkariDash.App.Views;
 
-/// <summary>The Drivers page: install, configure and debloat the driver for each graphics card in the PC.</summary>
+/// <summary>The Drivers page: AkariOS-Ultimate's Graphics category, entry for entry.</summary>
 public sealed partial class DriversPage : Page
 {
     public DriverPipelineViewModel ViewModel { get; }

@@ -101,10 +101,57 @@ public sealed record Wait(int Seconds) : DriverExtra
     public override string Describe() => $"Wait {Seconds} seconds for the installer to finish in the background";
 }
 
-/// <summary>Imports <see cref="DriverSettings.NvidiaProfileXml"/> with the Profile Inspector at this path.</summary>
-public sealed record ImportNvidiaProfile(string Inspector) : DriverExtra
+/// <summary>
+/// Imports <see cref="DriverSettings.NvidiaProfileXml"/> with the Profile Inspector at this path,
+/// or, with <paramref name="Reset"/>, the empty Base Profile AkariOS's Default imports.
+/// </summary>
+public sealed record ImportNvidiaProfile(string Inspector, bool Reset = false) : DriverExtra
 {
-    public override string Describe() => "Import the NVIDIA profile with Nvidia Profile Inspector";
+    public override string Describe() => Reset
+        ? "Import an empty NVIDIA Base Profile with Nvidia Profile Inspector"
+        : "Import the NVIDIA profile with Nvidia Profile Inspector";
+}
+
+/// <summary>Writes one registry value; <paramref name="Vendor"/> picks the adapters for a GraphicsClass value.</summary>
+public sealed record SetRegistry(GpuVendor? Vendor, DriverSetting Setting) : DriverExtra
+{
+    public override string Describe() => $"Set {Setting.KeyPath}\\{Setting.Name} = {Setting.Value} ({Setting.Kind})";
+}
+
+/// <summary>Deletes one registry value, or the whole key when <paramref name="Name"/> is <see langword="null"/>.</summary>
+public sealed record DeleteRegistry(GpuVendor? Vendor, DriverSettingRoot Root, string KeyPath, string? Name = null) : DriverExtra
+{
+    public override string Describe() => Name is null ? $"Delete the key {KeyPath}" : $"Delete {KeyPath}\\{Name}";
+}
+
+/// <summary>MSISupported on every display device (Graphics.ps1:1523): 1 turns MSI mode on, 0 off.</summary>
+public sealed record SetMsiMode(int Value) : DriverExtra
+{
+    public override string Describe() => $"Set MSISupported = {Value} on every display device";
+}
+
+/// <summary>Opens a settings page, an app or a program, as Start-Process does.</summary>
+public sealed record OpenTarget(string Target) : DriverExtra
+{
+    public override string Describe() => $"Open {Target}";
+}
+
+/// <summary>Installs 7-Zip from the mirror when it is not there, as AkariOS does before it unpacks anything.</summary>
+public sealed record EnsureSevenZip : DriverExtra
+{
+    public override string Describe() => "Install 7-Zip from AkariOS-Files";
+}
+
+/// <summary>Downloads a runtime installer and runs it quietly with its own arguments.</summary>
+public sealed record InstallRedistributable(string Name, Uri Source, string Arguments) : DriverExtra
+{
+    public override string Describe() => $"Install {Name} ({Path.GetFileName(Source.LocalPath)} {Arguments})";
+}
+
+/// <summary>Downloads the DirectX runtime, unpacks it with 7-Zip and runs DXSETUP /silent (Graphics.ps1:1597-1607).</summary>
+public sealed record InstallDirectX(Uri Source) : DriverExtra
+{
+    public override string Describe() => $"Install DirectX from {Source}";
 }
 
 /// <summary>Deletes the installer the person put in the drop folder, once it has been used.</summary>

@@ -1,14 +1,11 @@
-using AkariDash.Core.Machine;
-
 namespace AkariDash.Core.Drivers;
 
 /// <summary>
-/// How a DDU clean is run, as data: where DDU comes from, the settings it is given, the command
-/// line it runs in safe mode, and the RunOnce line that starts the companion there. Transcribed
-/// from AkariOS's driver-clean entry (Graphics.ps1:3-186), with two deliberate differences: DDU
-/// cleans only the card the person picked, never <c>-CleanAllGpus</c> or the sound drivers, and
-/// nothing is written that outlives the run (AkariOS also sets Windows Update's driver search off
-/// for good; that is a Tweak, not part of an Action).
+/// How a DDU clean runs, as AkariOS's driver-clean entry runs it (Graphics.ps1:3-186): DDU from the
+/// AkariOS-Files mirror, unpacked with 7-Zip, given AkariOS's settings, Windows Update kept from
+/// searching for drivers, then safe mode and a restart, where DDU cleans every GPU and the
+/// SoundBlaster and Realtek drivers. The one difference: the safe-mode half is a small exe beside
+/// the app (ADR-0001), not a .ps1 run through RunOnce with the execution policy bypassed.
 /// </summary>
 public static class DriverClean
 {
@@ -30,24 +27,24 @@ public static class DriverClean
     /// </summary>
     public const string RunOnceValueName = "*AkariDashDriverReset";
 
-    /// <summary>DDU's own arguments for an unattended clean of one vendor's driver. No restart: the companion restarts once it has written down how the clean went.</summary>
-    public static IReadOnlyList<string> Arguments(GpuVendor vendor) => vendor switch
-    {
-        GpuVendor.Nvidia => ["-CleanNvidia"],
-        GpuVendor.Amd => ["-CleanAmd"],
-        GpuVendor.Intel => ["-CleanIntel"],
-        _ => throw new ArgumentOutOfRangeException(nameof(vendor), vendor, null),
-    };
+    /// <summary>
+    /// DDU's arguments for the automatic clean (Graphics.ps1:84), without <c>-Restart</c>: the
+    /// companion restarts once it has written down how the clean went.
+    /// </summary>
+    public static IReadOnlyList<string> Arguments { get; } = ["-CleanSoundBlaster", "-CleanRealtek", "-CleanAllGpus"];
+
+    /// <summary>
+    /// What AkariOS writes before the restart so Windows Update does not put a driver back
+    /// (Graphics.ps1:73 and 167): HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\DriverSearching.
+    /// </summary>
+    public static DriverSetting SearchOrderConfig { get; } = new(
+        DriverSettingRoot.HklmSoftware, @"Microsoft\Windows\CurrentVersion\DriverSearching", "SearchOrderConfig", DriverSettingKind.Dword, "0");
 
     /// <summary>The RunOnce command line that starts the companion with the run's state file.</summary>
     public static string RunOnceCommand(string companionPath, string statePath) =>
         $"\"{companionPath}\" --state \"{statePath}\"";
 
-    /// <summary>
-    /// DDU's settings (Graphics.ps1:29-66): English, no update check, no offer, no restore point,
-    /// no safe-mode dialog of its own (we handle safe mode), and Windows Update kept from putting a
-    /// driver back while DDU works.
-    /// </summary>
+    /// <summary>DDU's settings (Graphics.ps1:29-66), verbatim.</summary>
     public const string DduSettingsXml = """
         <?xml version="1.0" encoding="utf-8"?>
         <DisplayDriverUninstaller Version="18.1.4.2">
@@ -86,4 +83,24 @@ public static class DriverClean
         	</Settings>
         </DisplayDriverUninstaller>
         """;
+}
+
+/// <summary>7-Zip, which AkariOS installs from its mirror to unpack DDU, DirectX and the drivers.</summary>
+public static class SevenZip
+{
+    public static Uri Download { get; } = new("https://github.com/isleap9/AkariOS-Files/releases/download/Files/7zip.exe");
+
+    public const string Program = @"%ProgramFiles%\7-Zip\7z.exe";
+
+    /// <summary>The arguments that unpack <paramref name="archive"/> into <paramref name="folder"/> (AkariOS's <c>7z x ... -o... -y</c>).</summary>
+    public static IReadOnlyList<string> Extract(string archive, string folder) => ["x", archive, $"-o{folder}", "-y"];
+
+    /// <summary>What AkariOS does around the install (Graphics.ps1:8-20): two menu settings, and its Start menu folder tidied away.</summary>
+    public static IReadOnlyList<DriverExtra> AfterInstall { get; } =
+    [
+        new SetRegistry(null, new DriverSetting(DriverSettingRoot.Hkcu, @"Software\7-Zip\Options", "ContextMenu", DriverSettingKind.Dword, "259")),
+        new SetRegistry(null, new DriverSetting(DriverSettingRoot.Hkcu, @"Software\7-Zip\Options", "CascadedMenu", DriverSettingKind.Dword, "0")),
+        new MoveFile(@"%ProgramData%\Microsoft\Windows\Start Menu\Programs\7-Zip\7-Zip File Manager.lnk", @"%ProgramData%\Microsoft\Windows\Start Menu\Programs"),
+        new RemovePath(@"%ProgramData%\Microsoft\Windows\Start Menu\Programs\7-Zip"),
+    ];
 }

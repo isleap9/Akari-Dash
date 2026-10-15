@@ -16,14 +16,6 @@ MIT License
 
 Copyright (c) 2025 Marco du Plessis
 
-## SharpCompress
-
-Used as a library, unmodified, to unpack the graphics vendors' self-extracting driver installers on the Drivers page.
-
-MIT License
-
-Copyright (c) 2014 Adam Hathcock
-
 ## License text (applies to each project above)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy

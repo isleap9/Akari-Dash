@@ -17,6 +17,9 @@ public enum DriverSettingRoot
     /// An empty key path is the adapter key itself.
     /// </summary>
     GraphicsClass,
+
+    /// <summary>Below <c>HKEY_LOCAL_MACHINE\SOFTWARE</c>.</summary>
+    HklmSoftware,
 }
 
 public enum DriverSettingKind
@@ -87,6 +90,18 @@ public static class DriverSettings
         new(DriverSettingRoot.GraphicsClass, "3DKeys", "Global_LowLatency", DriverSettingKind.Dword, "1"),
         new(DriverSettingRoot.Hkcu, @"Software\Microsoft\DirectX\UserGpuPreferences", "DirectXUserGlobalSettings", DriverSettingKind.String, "SwapEffectUpgradeEnable=1;VRROptimizeEnable=0;"),
     ];
+
+    /// <summary>The empty Base Profile NVIDIA settings' Default imports (Graphics.ps1:1103-1111), verbatim.</summary>
+    public const string NvidiaEmptyProfileXml = """
+        <?xml version="1.0" encoding="utf-16"?>
+        <ArrayOfProfile>
+          <Profile>
+            <ProfileName>Base Profile</ProfileName>
+            <Executeables/>
+            <Settings/>
+          </Profile>
+        </ArrayOfProfile>
+        """;
 
     public static IReadOnlyList<DriverSetting> For(GpuVendor vendor) => vendor switch
     {

@@ -54,7 +54,6 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools.MSIX" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" />
-    <PackageReference Include="SharpCompress" />
   </ItemGroup>
 
 </Project>

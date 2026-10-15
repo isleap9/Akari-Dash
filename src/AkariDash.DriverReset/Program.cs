@@ -1,11 +1,10 @@
 using System.Diagnostics;
 using AkariDash.Core.Drivers;
-using AkariDash.Core.Machine;
 
 // The safe-mode half of a DDU clean. Windows starts this once, from RunOnce, in safe mode. It takes
 // the PC out of safe mode before anything else, so whatever happens next the following restart is a
-// normal one; then it runs DDU on the one card the person picked, writes down how that went for
-// the app to read, and restarts.
+// normal one; then it runs DDU as AkariOS does (every GPU, SoundBlaster, Realtek), writes down how
+// that went for the app to read, and restarts.
 
 var log = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Akari-Dash", "logs", "driver-reset.log");
@@ -87,13 +86,13 @@ else
         int exitCode;
         if (state.Manual)
         {
-            Say($"Opening DDU. Clean the {state.Vendor.DisplayName()} driver, then close DDU: the PC restarts after it closes.");
+            Say("Opening DDU. Clean the driver, then close DDU: the PC restarts after it closes.");
             exitCode = Run(dduPath);
         }
         else
         {
-            Say($"DDU is removing the {state.Vendor.DisplayName()} driver. This takes a minute or two; the screen may flicker.");
-            exitCode = Run(dduPath, [.. DriverClean.Arguments(state.Vendor)]);
+            Say("DDU is removing the graphics driver. This takes a minute or two; the screen may flicker.");
+            exitCode = Run(dduPath, [.. DriverClean.Arguments]);
         }
 
         Say($"DDU finished (exit code {exitCode}).");

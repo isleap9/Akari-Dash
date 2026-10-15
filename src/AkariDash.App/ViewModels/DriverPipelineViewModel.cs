@@ -1,7 +1,6 @@
 using System.Diagnostics;
-using System.Text;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using AkariDash.Core.Drivers;
 using AkariDash.Core.Machine;
@@ -11,42 +10,23 @@ using AkariDash.Framework.ViewModels;
 
 namespace AkariDash.App.ViewModels;
 
-/// <summary>One graphics card on the Drivers page: what is installed, what is available, and its rows.</summary>
-public sealed partial class DriverSectionViewModel(GpuVendor vendor, IReadOnlyList<DriverRowViewModel> rows) : ObservableObject
-{
-    public GpuVendor Vendor { get; } = vendor;
-
-    public IReadOnlyList<DriverRowViewModel> Rows { get; } = rows;
-
-    /// <summary>The card's name as Windows has it, once read; the vendor's name until then.</summary>
-    [ObservableProperty]
-    public partial string Heading { get; set; } = vendor.DisplayName();
-
-    /// <summary>The installed and the available version, in a line.</summary>
-    [ObservableProperty]
-    public partial string VersionLine { get; set; } = "Checking the driver…";
-
-    [ObservableProperty]
-    public partial DriverVersionState DriverState { get; set; }
-}
-
 /// <summary>
-/// The Drivers page: one section per graphics card in the PC, each with its install, configure and
-/// debloat rows. An Action surface (ADR-0004): every row asks first, names the card, says it cannot
-/// be undone, runs through one queue - two driver installers at once is never right - and the page
-/// reads the installed version back afterwards.
+/// The Drivers page: AkariOS-Ultimate's Graphics category, entry for entry. Each row does what its
+/// AkariOS entry does; one runs at a time, as in AkariOS. A choice for a card that is not in this PC
+/// is greyed out rather than run.
 /// </summary>
 public sealed partial class DriverPipelineViewModel : ViewModelBase, INavigationAware
 {
+    private static readonly string StatePath = Path.Combine(App.SettingsFolder, "graphics-state.json");
+
     private readonly IDriverService _drivers;
     private readonly IMachine _machine;
     private readonly IDialogService _dialogs;
     private readonly IInfoBarService _infoBar;
     private readonly IStatusService _status;
     private readonly ILogger<DriverPipelineViewModel> _logger;
-    private readonly Queue<(DriverRowViewModel Row, string? Installer)> _queue = [];
-    private bool _loading;
-    private bool _pumping;
+    private readonly SemaphoreSlim _oneAtATime = new(1, 1);
+    private IReadOnlySet<GpuVendor> _cards = new HashSet<GpuVendor>();
 
     public DriverPipelineViewModel(
         IDriverService drivers,
@@ -65,14 +45,7 @@ public sealed partial class DriverPipelineViewModel : ViewModelBase, INavigation
         Title = "Drivers";
     }
 
-    public IReadOnlyList<DriverSectionViewModel> Sections { get; private set; } = [];
-
-    /// <summary>False on a PC with no PCI graphics card; the page then says so instead of showing rows.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasNoGraphicsCard))]
-    public partial bool HasGraphicsCard { get; set; } = true;
-
-    public bool HasNoGraphicsCard => !HasGraphicsCard;
+    public IReadOnlyList<GraphicsEntryViewModel> Entries { get; private set; } = [];
 
     [ObservableProperty]
     public partial string StatusText { get; set; } = string.Empty;
@@ -80,405 +53,238 @@ public sealed partial class DriverPipelineViewModel : ViewModelBase, INavigation
     [ObservableProperty]
     public partial bool IsBusy { get; set; }
 
-    /// <summary>Where a person puts a driver they downloaded, for the Debloat rows.</summary>
-    public string InboxFolder => DriverInbox.Folder;
-
-    /// <summary>The DDU clean waiting for a restart, or the one that just ran, in a line; empty when there is none.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasReset))]
-    public partial string ResetText { get; set; } = string.Empty;
-
-    public bool HasReset => ResetText.Length > 0;
-
-    /// <summary>A clean is set up and has not run: it can still be taken back, or started with a restart.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasResetResult))]
-    public partial bool IsResetPending { get; set; }
-
-    /// <summary>A clean has run (or tried to); the banner only needs dismissing.</summary>
-    public bool HasResetResult => HasReset && !IsResetPending;
-
-    partial void OnResetTextChanged(string value) => OnPropertyChanged(nameof(HasResetResult));
-
-    private void ReadReset()
-    {
-        var reset = _drivers.ReadReset();
-        IsResetPending = reset?.Stage == DriverResetStage.Scheduled;
-        ResetText = reset is null
-            ? string.Empty
-            : IsResetPending
-                ? $"{reset.Summary} Restarting now goes to safe mode, runs DDU, and restarts again by itself."
-                : reset.Summary;
-    }
-
-    [RelayCommand]
-    private async Task RestartNowAsync()
-    {
-        var confirmed = await _dialogs.ConfirmAsync(
-            "Restart now?",
-            "The PC restarts into safe mode, where DDU removes the driver, then restarts into Windows again. Save your work in other apps first.",
-            "Restart",
-            "Cancel");
-        if (confirmed)
-        {
-            _drivers.RestartNow();
-        }
-    }
-
-    [RelayCommand]
-    private async Task CancelResetAsync()
+    public void OnNavigatedTo(object? parameter)
     {
         try
         {
-            await _drivers.CancelResetAsync();
-            _infoBar.ShowSuccess("Drivers", "The DDU clean was cancelled. The next restart is a normal one, and the driver stays.");
+            _cards = _machine.GpuVendors();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Could not cancel the DDU clean");
-            _infoBar.ShowError("Drivers", $"Could not cancel the DDU clean: {ex.Message}");
+            _logger.LogError(ex, "Could not read the graphics cards");
         }
 
-        ReadReset();
-        foreach (var row in Sections.SelectMany(section => section.Rows).Where(row => row.State == DriverRowState.RestartPending))
-        {
-            row.State = DriverRowState.Ready;
-        }
-    }
+        var state = ReadState();
+        Entries = GraphicsEntries.All
+            .Select(entry => new GraphicsEntryViewModel(
+                entry,
+                state.TryGetValue(entry.Id, out var applied) ? applied : null,
+                Unavailable(entry.Vendor),
+                ToggleAsync,
+                RunAsync,
+                (_, option) => Unavailable(option.Vendor),
+                RunOptionAsync))
+            .ToList();
+        OnPropertyChanged(nameof(Entries));
 
-    [RelayCommand]
-    private void DismissReset()
-    {
-        _drivers.ForgetReset();
-        ReadReset();
+        ReportReset();
     }
-
-    public void OnNavigatedTo(object? parameter) => _ = LoadAsync();
 
     public void OnNavigatedFrom()
     {
     }
 
-    /// <summary>
-    /// Builds a section per card actually in the PC, in a fixed order, then asks each vendor and the
-    /// machine for the versions. Review Focus 3: no card means no sections, never every vendor's rows.
-    /// </summary>
-    private async Task LoadAsync()
+    private string? Unavailable(GpuVendor? vendor) =>
+        vendor is { } card && !_cards.Contains(card) ? $"There is no {card.DisplayName()} graphics card in this PC." : null;
+
+    /// <summary>After the restarts, says once how the DDU clean went, then tidies it away.</summary>
+    private void ReportReset()
     {
-        if (_loading)
+        if (_drivers.ReadReset() is not { } reset)
         {
             return;
         }
 
-        _loading = true;
-        try
+        if (reset.Stage == DriverResetStage.Scheduled)
         {
-            ReadReset();
+            _infoBar.ShowInfo("Driver clean (DDU)", reset.Summary);
+            return;
+        }
 
-            if (Sections.Count == 0)
+        if (reset.Stage == DriverResetStage.Cleaned)
+        {
+            _infoBar.ShowSuccess("Driver clean (DDU)", reset.Summary);
+        }
+        else
+        {
+            _infoBar.ShowWarning("Driver clean (DDU)", reset.Summary);
+        }
+
+        _drivers.ForgetReset();
+    }
+
+    /// <summary>Optimize or Default on a Toggle row.</summary>
+    private Task ToggleAsync(GraphicsEntryViewModel entry, bool optimize) =>
+        RunOneAsync(entry, $"{entry.Name}: {(optimize ? "optimize" : "default")}", async progress =>
+        {
+            var steps = optimize ? GraphicsEntries.Apply(entry.Model.Id) : GraphicsEntries.Revert(entry.Model.Id);
+            if (_drivers.IsDryRun)
             {
-                // Right after a clean, Windows runs the card on its basic display driver, which names
-                // no vendor; the card the clean was for still gets its section, so it can be installed.
-                var vendors = new HashSet<GpuVendor>(_machine.GpuVendors());
-                if (_drivers.ReadReset() is { } reset)
-                {
-                    vendors.Add(reset.Vendor);
-                }
-
-                Sections = Enum.GetValues<GpuVendor>()
-                    .Where(vendors.Contains)
-                    .Select(vendor => new DriverSectionViewModel(
-                        vendor,
-                        DriverRows.For(vendor).Select(row => new DriverRowViewModel(row, RunRowAsync)).ToList()))
-                    .ToList();
-                OnPropertyChanged(nameof(Sections));
-                HasGraphicsCard = Sections.Count > 0;
-                _logger.LogInformation("Drivers: found {Vendors}", string.Join(", ", Sections.Select(section => section.Vendor)));
+                return DryRun(entry.Name, _drivers.Describe(steps));
             }
 
-            RefreshInbox();
-            await Task.WhenAll(Sections.Select(ReadVersionsAsync));
+            var allApplied = await _drivers.RunStepsAsync(steps, progress);
+            entry.Applied = optimize;
+            SaveState();
+            return allApplied ? null : "Not every step applied — the log says which.";
+        });
+
+    /// <summary>The one button on an Action row.</summary>
+    private Task RunAsync(GraphicsEntryViewModel entry) =>
+        RunOneAsync(entry, $"{entry.Name}: {entry.Button.ToLowerInvariant()}", async progress =>
+        {
+            var steps = GraphicsEntries.Apply(entry.Model.Id);
+            if (_drivers.IsDryRun)
+            {
+                return DryRun(entry.Name, _drivers.Describe(steps));
+            }
+
+            return await _drivers.RunStepsAsync(steps, progress) ? null : "Not every step applied — the log says which.";
+        });
+
+    /// <summary>A choice inside a Group row: DDU, or a driver install for one vendor.</summary>
+    private async Task RunOptionAsync(GraphicsEntryViewModel entry, GraphicsOptionViewModel option)
+    {
+        var choice = option.Model;
+        var vendor = choice.Vendor ?? GpuVendor.Nvidia;
+        var row = new DriverRow($"{entry.Model.Id}.{vendor}".ToLowerInvariant(), vendor, choice.Kind, $"{entry.Name}: {choice.Name}", choice.Description, entry.Model.Risk);
+        string? installer = null;
+
+        // AkariOS asks for the downloaded file with a picker; an elevated app cannot open one, so the
+        // file comes from the drop folder, and an empty folder is opened for it instead.
+        if (choice.Kind == DriverStepKind.Debloat)
+        {
+            installer = _drivers.DroppedInstaller(vendor);
+            if (installer is null)
+            {
+                _infoBar.ShowInfo(row.Title,
+                    $"Put the {vendor.DisplayName()} driver you downloaded in {DriverInbox.Folder}, then press Install again. The folder is opening now.");
+                OpenInbox();
+                return;
+            }
+        }
+
+        var confirm = choice.Confirm
+            ?? (choice.Kind == DriverStepKind.Debloat ? $"Debloat and install {Path.GetFileName(installer)}?" : null);
+        if (confirm is not null && !await _dialogs.ConfirmAsync(row.Title, confirm, choice.Button, "Cancel"))
+        {
+            return;
+        }
+
+        await RunOneAsync(entry, row.Title, async progress =>
+        {
+            if (_drivers.IsDryRun)
+            {
+                return DryRun(row.Title, _drivers.Describe(row, installer));
+            }
+
+            var outcome = choice.Kind switch
+            {
+                DriverStepKind.Clean or DriverStepKind.CleanManual => await _drivers.CleanAsync(choice.Kind == DriverStepKind.CleanManual, _cards, progress),
+                DriverStepKind.Debloat => await _drivers.DebloatAsync(row, installer!, progress),
+                _ => await _drivers.InstallAsync(row, progress),
+            };
+
+            return outcome switch
+            {
+                DriverStepOutcome.CompletedNeedsRestart => "Installed. Restart the PC to finish.",
+                DriverStepOutcome.InstalledWithoutSettings => "Installed, but not every step after it applied — the log says which.",
+                DriverStepOutcome.HandedOffToInstaller => "The installer was opened for you to finish.",
+                DriverStepOutcome.CleanScheduled => "Restarting into safe mode for DDU.",
+                _ => null,
+            };
+        });
+    }
+
+    /// <summary>
+    /// Runs one row's work, one row at a time as AkariOS does, with the status line and the row's
+    /// spinner; the work returns a note for the info bar, or null for a plain "done".
+    /// </summary>
+    private async Task RunOneAsync(GraphicsEntryViewModel entry, string title, Func<IProgress<string>, Task<string?>> work)
+    {
+        await _oneAtATime.WaitAsync();
+        entry.IsWorking = true;
+        IsBusy = true;
+        StatusText = $"{title}…";
+        try
+        {
+            _logger.LogInformation("Running {Title}", title);
+            string? note;
+            using (_status.Begin(title))
+            {
+                note = await work(new Progress<string>(text => StatusText = text));
+            }
+
+            if (note is null)
+            {
+                _infoBar.ShowSuccess("Drivers", $"{title}: done.");
+            }
+            else if (note.StartsWith("Not every", StringComparison.Ordinal) || note.StartsWith("Installed, but", StringComparison.Ordinal))
+            {
+                _infoBar.ShowWarning("Drivers", $"{title}: {note}");
+            }
+            else
+            {
+                _infoBar.ShowInfo("Drivers", $"{title}: {note}");
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Could not read the graphics cards");
-            _infoBar.ShowError("Drivers", $"Could not read the graphics cards: {ex.Message}");
+            _logger.LogError(ex, "{Title} failed", title);
+            _infoBar.ShowError("Drivers", $"{title}: {ex.Message}");
         }
         finally
         {
-            _loading = false;
+            entry.IsWorking = false;
+            IsBusy = false;
+            StatusText = string.Empty;
+            _oneAtATime.Release();
         }
     }
 
-    private async Task ReadVersionsAsync(DriverSectionViewModel section)
-    {
-        section.VersionLine = "Checking the driver…";
-        var vendor = section.Vendor;
-        var installedTask = _drivers.InstalledAsync(vendor);
-        var latestTask = _drivers.LatestAsync(vendor);
-        var installed = await installedTask;
-        var latest = await latestTask;
+    private static string DryRun(string title, string plan) =>
+        $"This is the Dry Run build, so nothing was done. A real run would:{Environment.NewLine}{Environment.NewLine}{plan}";
 
-        if (installed is not null)
-        {
-            section.Heading = installed.CardName;
-        }
-
-        section.DriverState = DriverVersion.State(installed?.Version, latest);
-
-        var have = installed?.Version is { } version ? $"{version} installed" : "could not read the installed version";
-        var offered = latest is not null
-            ? $"{latest.Version} available"
-            : vendor == GpuVendor.Intel
-                ? "Intel publishes no feed to check — see its download page"
-                : "could not check the latest driver";
-
-        section.VersionLine = section.DriverState switch
-        {
-            DriverVersionState.UpToDate => $"{have} — up to date",
-            _ => $"{have}, {offered}",
-        };
-    }
-
-    /// <summary>Lists the drop folder again, giving each Debloat row the files that are its vendor's own.</summary>
-    [RelayCommand]
-    private void RefreshInbox()
-    {
-        IReadOnlyList<string> files = [];
-        try
-        {
-            if (Directory.Exists(DriverInbox.Folder))
-            {
-                files = DriverInbox.Installers(Directory.EnumerateFiles(DriverInbox.Folder));
-            }
-        }
-        catch (Exception ex)
-        {
-            // A folder we cannot read is an empty one to the rows; the log says why.
-            _logger.LogWarning(ex, "Could not list {Folder}", DriverInbox.Folder);
-        }
-
-        foreach (var row in Sections.SelectMany(section => section.Rows).Where(row => row.IsDebloat))
-        {
-            row.SetInstallers(files
-                .Where(file => DriverDebloat.Plan(row.Model.Vendor, Path.GetFileName(file)) is not null)
-                .Select(file => new DroppedInstaller(file)));
-        }
-    }
-
-    /// <summary>Opens the drop folder in Explorer, making it first: file pickers do not open in an elevated app.</summary>
-    [RelayCommand]
     private void OpenInbox()
     {
         try
         {
             Directory.CreateDirectory(DriverInbox.Folder);
-            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{DriverInbox.Folder}\"") { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{DriverInbox.Folder}\"") { UseShellExecute = true })?.Dispose();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Could not open {Folder}", DriverInbox.Folder);
-            _infoBar.ShowError("Drivers", $"Could not open {DriverInbox.Folder}: {ex.Message}");
         }
     }
 
-    private async Task RunRowAsync(DriverRowViewModel row)
+    /// <summary>What each Toggle row last did, kept as AkariOS keeps its state.json, for the dot.</summary>
+    private Dictionary<string, bool> ReadState()
     {
-        if (!row.IsRunnable)
-        {
-            return;
-        }
-
-        var section = Sections.First(section => section.Rows.Contains(row));
-        var vendor = row.Model.Vendor.DisplayName();
-        string? installer = null;
-
-        if (row.IsDebloat)
-        {
-            RefreshInbox();
-            if (row.SelectedInstaller is not { } picked)
-            {
-                _infoBar.ShowInfo(
-                    row.Title,
-                    $"Put the {vendor} driver you downloaded in {DriverInbox.Folder}, then press Refresh. The folder is opening now.");
-                OpenInbox();
-                return;
-            }
-
-            installer = picked.Path;
-        }
-
-        var (title, what) = row.Model.Kind switch
-        {
-            DriverStepKind.Install => ($"{row.Title}?", $"The newest {vendor} driver will be downloaded and installed"),
-            DriverStepKind.InstallAndConfigure => (
-                $"Install and configure the {vendor} driver?",
-                $"The newest {vendor} driver will be downloaded and installed, and the {vendor} settings put on with it"),
-            DriverStepKind.Clean or DriverStepKind.CleanManual => (
-                row.Model.Kind == DriverStepKind.Clean ? $"Clean the {vendor} driver with DDU?" : $"Open DDU in safe mode for the {vendor} driver?",
-                (row.Model.Vendor == GpuVendor.Intel
-                    ? $"Akari Dash first checks that an Intel installer is waiting in {DriverInbox.Folder}, and downloads DDU. "
-                    : $"Akari Dash first downloads DDU and the newest {vendor} driver, so a way back is on disk before anything is removed. ")
-                + "Then the next restart goes to safe mode, where "
-                + (row.Model.Kind == DriverStepKind.Clean
-                    ? $"DDU removes the {vendor} driver completely and the PC restarts again by itself"
-                    : $"DDU opens for you to clean the {vendor} driver yourself; the PC restarts again when you close it")
-                + $". Other cards are not touched. Until a driver is installed again the screen runs on Windows' basic display driver, so press Install afterwards"),
-            _ => (
-                $"Debloat and install {Path.GetFileName(installer)}?",
-                $"{Path.GetFileName(installer)} will be unpacked, its extras removed, and what is left installed and configured"),
-        };
-
-        var handOff = row.Model.Kind is DriverStepKind.Install or DriverStepKind.InstallAndConfigure && !DriverInstallCommand.IsUnattended(row.Model.Vendor)
-            ? $"{Environment.NewLine}{Environment.NewLine}{vendor} cannot be installed unattended, so {vendor}'s own installer or download page opens for you to finish."
-            : string.Empty;
-
-        // Intel's "Install and configure" runs the installer from the drop folder when one is there, as AkariOS runs the one it is given.
-        if (row.Model is { Vendor: GpuVendor.Intel, Kind: DriverStepKind.InstallAndConfigure })
-        {
-            handOff = $"{Environment.NewLine}{Environment.NewLine}Intel cannot be installed unattended. With an Intel installer in {DriverInbox.Folder}, it opens for you to finish and the settings go on after it; without one, Intel's download page opens instead.";
-        }
-
-        var downloads = DriverExtras.Downloads(row.Model.Vendor, row.Model.Kind);
-        var extras = DriverExtras.For(row.Model.Vendor, row.Model.Kind).Count == 0
-            ? string.Empty
-            : $"{Environment.NewLine}{Environment.NewLine}Afterwards it does what AkariOS does: "
-                + (downloads.Length > 0 ? $"installs {downloads} from AkariOS-Files, " : string.Empty)
-                + (row.Model.Kind == DriverStepKind.Debloat && row.Model.Vendor != GpuVendor.Nvidia ? $"removes {vendor}'s background services and extras, " : string.Empty)
-                + "adds the shortcuts and applies the settings.";
-
-        var confirmed = await _dialogs.ConfirmAsync(
-            title,
-            row.IsClean
-                ? $"{what}. This is for {section.Heading}.{Environment.NewLine}{Environment.NewLine}Nothing is removed until you restart, and until then the clean can be cancelled. Once it runs, it cannot be undone."
-                : $"{what} on {section.Heading}.{handOff}{extras}{Environment.NewLine}{Environment.NewLine}The screen may go dark for a moment while the driver changes. This cannot be undone.",
-            row.ActionLabel,
-            "Cancel");
-
-        // The dialog is modal, but the click that opened it is not: a second click queues its own
-        // confirm behind this one, and both would otherwise run the row twice.
-        if (!confirmed || !row.IsRunnable)
-        {
-            return;
-        }
-
-        if (_drivers.IsDryRun)
-        {
-            // Phase 1 runs nothing: say what a real run would have done, and leave the row alone.
-            _infoBar.ShowInfo(
-                row.Title,
-                $"This is the Dry Run build, so nothing was done. A real run would:{Environment.NewLine}{Environment.NewLine}{_drivers.Describe(row.Model, installer)}");
-            return;
-        }
-
-        _queue.Enqueue((row, installer));
-        row.State = DriverRowState.Queued;
-
-        if (!_pumping)
-        {
-            _ = RunQueueAsync();
-        }
-    }
-
-    private async Task RunQueueAsync()
-    {
-        _pumping = true;
-        IsBusy = true;
-        var finished = new List<(string Title, DriverRowState State)>();
-        var failed = new List<(string Title, string Error)>();
-
         try
         {
-            while (_queue.Count > 0)
-            {
-                var (row, installer) = _queue.Dequeue();
-                row.State = DriverRowState.Working;
-                StatusText = $"{row.Title}…";
-                var progress = new Progress<string>(text => StatusText = text);
-
-                try
-                {
-                    _logger.LogInformation("Running {Row}", row.Model.Id);
-
-                    DriverStepOutcome outcome;
-                    using (_status.Begin(row.Title))
-                    {
-                        outcome = row.IsDebloat
-                            ? await _drivers.DebloatAsync(row.Model, installer!, progress)
-                            : row.IsClean
-                                ? await _drivers.CleanAsync(row.Model, progress)
-                                : await _drivers.InstallAsync(row.Model, progress);
-                    }
-
-                    row.State = outcome switch
-                    {
-                        DriverStepOutcome.CleanScheduled => DriverRowState.RestartPending,
-                        DriverStepOutcome.CompletedNeedsRestart => DriverRowState.NeedsRestart,
-                        DriverStepOutcome.InstalledWithoutSettings => DriverRowState.DoneWithoutSettings,
-                        DriverStepOutcome.HandedOffToInstaller => DriverRowState.HandedOff,
-                        _ => DriverRowState.Done,
-                    };
-                    finished.Add((row.Title, row.State));
-                    _logger.LogInformation("{Row} ended as {Outcome}", row.Model.Id, outcome);
-                }
-                catch (Exception ex)
-                {
-                    // One row that fails must not cancel the ones queued behind it.
-                    _logger.LogError(ex, "{Row} failed", row.Model.Id);
-                    row.State = DriverRowState.Failed;
-                    failed.Add((row.Title, ex.Message));
-                }
-            }
+            return File.Exists(StatePath)
+                ? JsonSerializer.Deserialize<Dictionary<string, bool>>(File.ReadAllText(StatePath)) ?? []
+                : [];
         }
-        finally
+        catch (Exception ex) when (ex is IOException or JsonException)
         {
-            _pumping = false;
-            IsBusy = false;
-            StatusText = string.Empty;
-        }
-
-        Report(finished, failed);
-
-        // Read the machine back: the heading says what is installed now, not what we hoped.
-        RefreshInbox();
-        ReadReset();
-        await Task.WhenAll(Sections.Select(ReadVersionsAsync));
-
-        // A clean only happens at a restart, so offer it now; "Cancel" leaves it for the next one.
-        if (finished.Any(item => item.State == DriverRowState.RestartPending) && IsResetPending)
-        {
-            await RestartNowAsync();
+            _logger.LogWarning(ex, "Could not read {Path}", StatePath);
+            return [];
         }
     }
 
-    private void Report(List<(string Title, DriverRowState State)> finished, List<(string Title, string Error)> failed)
+    private void SaveState()
     {
-        var report = new StringBuilder();
-        foreach (var (title, state) in finished)
+        try
         {
-            report.AppendLine(state switch
-            {
-                DriverRowState.NeedsRestart => $"{title}: installed. Restart the PC to finish.",
-                DriverRowState.DoneWithoutSettings => $"{title}: installed, but not every step after it applied (a tool, a shortcut or a setting) — the log says which.",
-                DriverRowState.HandedOff => $"{title}: the vendor's installer or page was opened for you to finish.",
-                DriverRowState.RestartPending => $"{title}: DDU and the new driver are ready; the clean runs at the next restart.",
-                _ => $"{title}: done.",
-            });
+            var state = Entries.Where(entry => entry.Applied is not null).ToDictionary(entry => entry.Model.Id, entry => entry.Applied!.Value);
+            Directory.CreateDirectory(Path.GetDirectoryName(StatePath)!);
+            File.WriteAllText(StatePath, JsonSerializer.Serialize(state));
         }
-
-        foreach (var (title, error) in failed)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            report.AppendLine($"{title}: {error}");
-        }
-
-        var text = report.ToString().TrimEnd();
-        if (failed.Count > 0 || finished.Any(item => item.State == DriverRowState.DoneWithoutSettings))
-        {
-            _infoBar.ShowWarning("Drivers", text);
-        }
-        else
-        {
-            _infoBar.ShowSuccess("Drivers", text);
+            _logger.LogWarning(ex, "Could not write {Path}", StatePath);
         }
     }
 }

@@ -8,9 +8,10 @@ namespace AkariDash.Core.Drivers;
 public sealed record InstalledDriver(string CardName, string? Version);
 
 /// <summary>
-/// Finds, installs and configures a graphics card's driver. An Action backend (ADR-0004): every
-/// write here runs once and cannot be undone, and in the Phase 1 build nothing is written,
-/// downloaded or run at all - see <see cref="IsDryRun"/>. Reads are always live.
+/// Does what AkariOS-Ultimate's Graphics entries do: finds, installs and configures a graphics
+/// driver, cleans it with DDU, applies and reverts the settings entries, installs DirectX and the
+/// C++ runtimes. In the Phase 1 build nothing is written, downloaded or run - see <see cref="IsDryRun"/>.
+/// Reads are always live.
 /// </summary>
 public interface IDriverService
 {
@@ -25,30 +26,34 @@ public interface IDriverService
     /// </summary>
     Task<InstalledDriver?> InstalledAsync(GpuVendor vendor, CancellationToken cancellationToken = default);
 
-    /// <summary>What a real run of this row would do, in the words the Phase 1 build reports.</summary>
+    /// <summary>What a real run of this driver choice would do, in the words the Phase 1 build reports.</summary>
     string Describe(DriverRow row, string? installerPath = null);
 
-    /// <summary>Installs the latest driver for the row's card, configuring it when the row says so.</summary>
+    /// <summary>What a real run of these steps would do, one per line.</summary>
+    string Describe(IReadOnlyList<DriverExtra> steps);
+
+    /// <summary>The newest installer in the drop folder that is this vendor's own, or <see langword="null"/>.</summary>
+    string? DroppedInstaller(GpuVendor vendor);
+
+    /// <summary>Driver install (updated), or Driver install and settings (updated), for the row's card.</summary>
     Task<DriverStepOutcome> InstallAsync(DriverRow row, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
 
-    /// <summary>Strips a downloaded vendor installer of its extras, installs what is left and configures it.</summary>
+    /// <summary>Driver debloat install and settings: strips a downloaded vendor installer, installs what is left and configures it.</summary>
     Task<DriverStepOutcome> DebloatAsync(DriverRow row, string installerPath, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Stages DDU and the replacement driver, then sets the next restart to safe mode, where the
-    /// companion runs DDU on the row's card only. Nothing is removed until that restart.
+    /// Driver clean (DDU): puts DDU (and, for the cards in <paramref name="cards"/>, the replacement
+    /// driver) on disk, sets the next start to safe mode with the companion in RunOnce, and restarts,
+    /// as AkariOS does.
     /// </summary>
-    Task<DriverStepOutcome> CleanAsync(DriverRow row, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
+    Task<DriverStepOutcome> CleanAsync(bool manual, IReadOnlySet<GpuVendor> cards, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
 
-    /// <summary>The clean waiting for a restart, or the one that just ran; <see langword="null"/> when there is none.</summary>
+    /// <summary>Runs one entry's steps (Optimize, Default, or an Action); <see langword="false"/> when any did not apply.</summary>
+    Task<bool> RunStepsAsync(IReadOnlyList<DriverExtra> steps, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
+
+    /// <summary>The clean that just ran, or is waiting; <see langword="null"/> when there is none.</summary>
     DriverResetState? ReadReset();
-
-    /// <summary>Takes back a clean that has not run yet: no safe mode, no RunOnce, no note.</summary>
-    Task CancelResetAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Forgets a clean that has run, and tidies DDU away.</summary>
     void ForgetReset();
-
-    /// <summary>Restarts the PC, into the clean that is waiting.</summary>
-    void RestartNow();
 }
