@@ -26,7 +26,7 @@ public static class ShellPages
 
         NavigationItem.Header("Apps"),
         new("UWP Apps", "\uE74D", typeof(UwpAppsPage), Subtitle: "Remove Windows apps for good, and bring them back"),
-        new("Downloads", "\uE896", typeof(DownloadsPage), Subtitle: "Work in progress"),
+        new("Downloads", "\uE896", typeof(DownloadsPage), Subtitle: "Install the apps a gaming PC needs — launchers, runtimes and tools"),
 
         NavigationItem.Header("Advanced"),
         new("GPUs", "\uE950", typeof(GpusPage), Subtitle: "Work in progress"),

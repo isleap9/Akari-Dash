@@ -1,9 +1,17 @@
 using Microsoft.UI.Xaml.Controls;
+using AkariDash.App.ViewModels;
 
 namespace AkariDash.App.Views;
 
-/// <summary>The Downloads page: a work-in-progress placeholder for now.</summary>
+/// <summary>The Downloads page: the curated catalogue of apps, each installed through winget.</summary>
 public sealed partial class DownloadsPage : Page
 {
-    public DownloadsPage() => InitializeComponent();
+    public DownloadsViewModel ViewModel { get; }
+
+    public DownloadsPage(DownloadsViewModel viewModel)
+    {
+        ViewModel = viewModel;
+        InitializeComponent();
+        DataContext = viewModel;
+    }
 }
