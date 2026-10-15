@@ -187,6 +187,9 @@ public partial class App : Application
         builder.Services.AddSingleton<IWindowsFeatureService, WindowsFeatureService>();
         builder.Services.AddSingleton<ISystemCleanupService, WindowsSystemCleanupService>();
 
+        // Downloads (an Action backend, ADR-0004): installs apps from the curated catalogue through winget.
+        builder.Services.AddSingleton<IAppInstallService, WindowsWingetAppService>();
+
         // Navigation: pages are created through the DI container.
         builder.Services.AddSingleton<INavigationService>(sp =>
             new FrameNavigationService(pageType => (Page)ActivatorUtilities.CreateInstance(sp, pageType)));
