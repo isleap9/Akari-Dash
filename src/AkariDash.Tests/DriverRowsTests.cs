@@ -29,15 +29,15 @@ public class DriverRowsTests
     }
 
     [Fact]
-    public void Every_vendor_has_the_three_rows()
+    public void Every_vendor_has_the_five_rows()
     {
         Assert.All(Enum.GetValues<GpuVendor>(), vendor =>
         {
             var rows = DriverRows.For(vendor);
-            Assert.Equal(3, rows.Count);
+            Assert.Equal(5, rows.Count);
             Assert.All(rows, row => Assert.Equal(vendor, row.Vendor));
             Assert.Equal(
-                [DriverStepKind.Install, DriverStepKind.InstallAndConfigure, DriverStepKind.Debloat],
+                [DriverStepKind.Clean, DriverStepKind.CleanManual, DriverStepKind.Install, DriverStepKind.InstallAndConfigure, DriverStepKind.Debloat],
                 rows.Select(row => row.Kind));
         });
     }

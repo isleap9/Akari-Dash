@@ -5,6 +5,12 @@ namespace AkariDash.Core.Drivers;
 /// <summary>What kind of work a driver row does.</summary>
 public enum DriverStepKind
 {
+    /// <summary>DDU removes the driver in safe mode, unattended.</summary>
+    Clean,
+
+    /// <summary>DDU opens in safe mode for the person to drive.</summary>
+    CleanManual,
+
     Install,
     InstallAndConfigure,
     Debloat,
