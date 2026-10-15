@@ -19,11 +19,6 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
     private const string DisplayClassKey = @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
     private const string ServicesKey = @"SYSTEM\CurrentControlSet\Services";
 
-    // AkariOS installs Nvidia Profile Inspector here; the profile is imported only when it is present.
-    private static readonly string ProfileInspector = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-        "Nvidia Profile Inspector", "Nvidia Profile Inspector.exe");
-
     // AMD answers the default .NET client with a refusal, so this looks like a browser (Graphics.ps1:228-232).
     private static readonly HttpClient Http = CreateClient();
 
@@ -137,16 +132,17 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
             text.AppendLine($"Open {DriverLookup.Endpoint(row.Vendor)}");
         }
 
-        if (AppliesSettings(row))
+        foreach (var extra in DriverExtras.For(row.Vendor, row.Kind))
         {
+            if (extra is not ApplyRegistrySettings)
+            {
+                text.AppendLine(extra.Describe());
+                continue;
+            }
+
             foreach (var setting in DriverSettings.For(row.Vendor))
             {
                 text.AppendLine($"Set {Where(setting)}\\{setting.Name} = {setting.Value} ({setting.Kind})");
-            }
-
-            if (row.Vendor == GpuVendor.Nvidia)
-            {
-                text.AppendLine("Import the NVIDIA profile with Nvidia Profile Inspector, if it is installed");
             }
         }
 
@@ -247,7 +243,27 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
 
             progress?.Report($"Installing the {row.Vendor.DisplayName()} driver…");
             var outcome = await RunSetupAsync(row, Inside(unpacked, plan.Setup), plan.SetupArguments, cancellationToken);
-            return await ConfigureAsync(row, outcome, progress, cancellationToken);
+
+            // Intel's control app ships beside the driver and installs on its own (Graphics.ps1:720-721).
+            if (plan.AfterSetup is { } afterSetup)
+            {
+                var extras = Inside(unpacked, Path.GetDirectoryName(afterSetup)!);
+                var program = Directory.Exists(extras)
+                    ? Directory.EnumerateFiles(extras, Path.GetFileName(afterSetup)).FirstOrDefault()
+                    : null;
+                if (program is not null)
+                {
+                    progress?.Report($"Installing {Path.GetFileName(program)}…");
+                    var run = await ProcessRunner.RunAsync(program, plan.AfterSetupArguments ?? [], cancellationToken);
+                    logger.LogInformation("{Program} exited with {ExitCode}", program, run?.ExitCode);
+                }
+                else
+                {
+                    logger.LogWarning("The package has no {Pattern}", afterSetup);
+                }
+            }
+
+            return await ConfigureAsync(row, outcome, progress, cancellationToken, usedInstaller: installerPath);
         }
         finally
         {
@@ -410,14 +426,18 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
     /// Puts the replacement driver on disk before anything is removed. NVIDIA's and AMD's come from
     /// their sources; Intel publishes none, so its installer must already be in the drop folder.
     /// </summary>
+    /// <summary>The newest installer in the drop folder that is this vendor's own, or <see langword="null"/>.</summary>
+    private static string? DroppedInstaller(GpuVendor vendor) =>
+        Directory.Exists(DriverInbox.Folder)
+            ? DriverInbox.Installers(Directory.EnumerateFiles(DriverInbox.Folder))
+                .FirstOrDefault(file => DriverDebloat.Plan(vendor, Path.GetFileName(file)) is not null)
+            : null;
+
     private async Task StageReplacementAsync(GpuVendor vendor, IProgress<string>? progress, CancellationToken cancellationToken)
     {
         if (vendor == GpuVendor.Intel)
         {
-            var dropped = Directory.Exists(DriverInbox.Folder)
-                ? DriverInbox.Installers(Directory.EnumerateFiles(DriverInbox.Folder))
-                    .FirstOrDefault(file => DriverDebloat.Plan(vendor, Path.GetFileName(file)) is not null)
-                : null;
+            var dropped = DroppedInstaller(vendor);
             if (dropped is null)
             {
                 throw new InvalidOperationException(
@@ -495,6 +515,25 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
     private async Task<DriverStepOutcome> HandOffAsync(DriverRow row, IProgress<string>? progress, CancellationToken cancellationToken)
     {
         var vendor = row.Vendor;
+
+        // AkariOS's Intel "install and settings" runs an installer the person downloaded, then
+        // configures (Graphics.ps1:423-447). Here that installer comes from the drop folder.
+        if (vendor == GpuVendor.Intel && row.Kind == DriverStepKind.InstallAndConfigure && DroppedInstaller(vendor) is { } dropped)
+        {
+            progress?.Report($"Waiting for {Path.GetFileName(dropped)} to finish…");
+            logger.LogInformation("Opening {Installer} and waiting for it", dropped);
+            using (var process = Process.Start(new ProcessStartInfo(dropped) { UseShellExecute = true }))
+            {
+                if (process is not null)
+                {
+                    await process.WaitForExitAsync(cancellationToken);
+                }
+            }
+
+            var configured = await ConfigureAsync(row, DriverStepOutcome.HandedOffToInstaller, progress, cancellationToken, usedInstaller: dropped);
+            return configured == DriverStepOutcome.InstalledWithoutSettings ? configured : DriverStepOutcome.HandedOffToInstaller;
+        }
+
         var latest = vendor == GpuVendor.Amd ? await LatestAsync(vendor, cancellationToken) : null;
         var staged = vendor == GpuVendor.Amd ? Staged(vendor, latest) : null;
         if (latest is null && staged is null)
@@ -631,45 +670,300 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
     }
 
     /// <summary>
-    /// Applies the vendor's settings bundle after an install. A setting that will not write does not
-    /// undo the install that just happened; the row says the settings were not applied instead.
+    /// Does everything AkariOS does after the driver (<see cref="DriverExtras"/>), in its order:
+    /// the tools, the shortcuts, the clean-up, the settings, the profile. A step that fails does not
+    /// undo the install that just happened, nor stop the steps after it; the row says not every step
+    /// applied instead. Clean-up of something that is not there is not a failure.
     /// </summary>
     private async Task<DriverStepOutcome> ConfigureAsync(
         DriverRow row,
         DriverStepOutcome installed,
         IProgress<string>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? usedInstaller = null)
     {
-        progress?.Report($"Applying the {row.Vendor.DisplayName()} settings…");
         var allApplied = true;
 
-        foreach (var setting in DriverSettings.For(row.Vendor))
+        foreach (var extra in DriverExtras.For(row.Vendor, row.Kind))
         {
+            progress?.Report(extra.Describe() + "…");
             try
             {
-                Write(row.Vendor, setting);
-                logger.LogInformation("Set {Key}\\{Name} = {Value}", Where(setting), setting.Name, setting.Value);
+                if (!await RunExtraAsync(row.Vendor, extra, usedInstaller, cancellationToken))
+                {
+                    allApplied = false;
+                }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 allApplied = false;
-                logger.LogError(ex, "Could not set {Key}\\{Name}", Where(setting), setting.Name);
+                logger.LogError(ex, "Could not {Step}", extra.Describe());
             }
-        }
-
-        if (row.Vendor == GpuVendor.Nvidia && !await ImportNvidiaProfileAsync(cancellationToken))
-        {
-            allApplied = false;
         }
 
         return allApplied ? installed : DriverStepOutcome.InstalledWithoutSettings;
     }
 
-    private async Task<bool> ImportNvidiaProfileAsync(CancellationToken cancellationToken)
+    private async Task<bool> RunExtraAsync(GpuVendor vendor, DriverExtra extra, string? usedInstaller, CancellationToken cancellationToken)
     {
-        if (!File.Exists(ProfileInspector))
+        logger.LogInformation("{Step}", extra.Describe());
+        switch (extra)
         {
-            logger.LogWarning("Nvidia Profile Inspector is not installed at {Path}, so the NVIDIA profile was not imported", ProfileInspector);
+            case ApplyRegistrySettings:
+                var applied = true;
+                foreach (var setting in DriverSettings.For(vendor))
+                {
+                    try
+                    {
+                        Write(vendor, setting);
+                        logger.LogInformation("Set {Key}\\{Name} = {Value}", Where(setting), setting.Name, setting.Value);
+                    }
+                    catch (Exception ex)
+                    {
+                        applied = false;
+                        logger.LogError(ex, "Could not set {Key}\\{Name}", Where(setting), setting.Name);
+                    }
+                }
+
+                return applied;
+
+            case DownloadTool tool:
+            {
+                var folder = FreshFolder(vendor);
+                try
+                {
+                    var downloaded = await DownloadAsync(tool.Source, folder, null, cancellationToken);
+                    var destination = Expand(tool.Destination);
+                    Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                    File.Move(downloaded, destination, overwrite: true);
+                    return true;
+                }
+                finally
+                {
+                    TryDelete(folder);
+                }
+            }
+
+            case InstallAppx appx:
+            {
+                var folder = FreshFolder(vendor);
+                try
+                {
+                    var package = await DownloadAsync(appx.Source, folder, null, cancellationToken);
+                    var result = await new Windows.Management.Deployment.PackageManager().AddPackageAsync(
+                        new Uri(package), null, Windows.Management.Deployment.DeploymentOptions.ForceApplicationShutdown);
+                    if (result.ExtendedErrorCode is { } error)
+                    {
+                        logger.LogError(error, "{Name} did not install: {Text}", appx.Name, result.ErrorText);
+                        return false;
+                    }
+
+                    return true;
+                }
+                finally
+                {
+                    TryDelete(folder);
+                }
+            }
+
+            case CreateShortcut shortcut:
+            {
+                var folder = shortcut.StartMenu
+                    ? Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms)
+                    : Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+                var target = shortcut.Target.StartsWith("shell:", StringComparison.OrdinalIgnoreCase)
+                    ? shortcut.Target
+                    : Expand(shortcut.Target);
+                if (!target.StartsWith("shell:", StringComparison.OrdinalIgnoreCase) && !File.Exists(target))
+                {
+                    logger.LogWarning("{Target} is not there, so its shortcut was not made", target);
+                    return false;
+                }
+
+                ShellShortcut.Create(Path.Combine(folder, shortcut.Name + ".lnk"), target, Expand(shortcut.WorkingDirectory));
+                return true;
+            }
+
+            case MoveFile move:
+            {
+                var from = Expand(move.From);
+                if (File.Exists(from))
+                {
+                    var to = Expand(move.ToFolder);
+                    File.Move(from, Path.Combine(to, Path.GetFileName(from)), overwrite: true);
+                }
+
+                return true;
+            }
+
+            case RemovePath remove:
+                RemoveIfThere(Expand(remove.Path));
+                return true;
+
+            case RemoveService service:
+                await ProcessRunner.RunAsync("sc.exe", ["stop", service.Name], cancellationToken);
+                var deleted = await ProcessRunner.RunAsync("sc.exe", ["delete", service.Name], cancellationToken);
+                logger.LogInformation("sc delete {Service}: exit code {ExitCode}", service.Name, deleted?.ExitCode);
+                return true;
+
+            case RemoveRegistryValue value:
+            {
+                using var root = RegistryKey.OpenBaseKey(value.LocalMachine ? RegistryHive.LocalMachine : RegistryHive.CurrentUser, RegistryView.Registry64);
+                using var key = root.OpenSubKey(value.KeyPath, writable: true);
+                key?.DeleteValue(value.Name, throwOnMissingValue: false);
+                return true;
+            }
+
+            case ClearUserKey clear:
+            {
+                using var root = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Registry64);
+                root.DeleteSubKeyTree(clear.KeyPath, throwOnMissingSubKey: false);
+                root.CreateSubKey(clear.KeyPath)?.Dispose();
+                return true;
+            }
+
+            case RemoveScheduledTask task:
+                await ProcessRunner.RunAsync("schtasks.exe", ["/Delete", "/TN", task.Name, "/F"], cancellationToken);
+                return true;
+
+            case UninstallProduct product:
+                foreach (var code in ProductCodes(product.DisplayNameContains))
+                {
+                    var run = await ProcessRunner.RunAsync("msiexec.exe", ["/x", code, "/qn", "/norestart"], cancellationToken);
+                    logger.LogInformation("msiexec /x {Code}: exit code {ExitCode}", code, run?.ExitCode);
+                }
+
+                return true;
+
+            case StopProcess stop:
+                await StopAsync(stop.Name);
+                return true;
+
+            case OpenThenClose open:
+            {
+                var program = Expand(open.Program);
+                if (!File.Exists(program))
+                {
+                    logger.LogWarning("{Program} is not there to open", program);
+                    return true;
+                }
+
+                Process.Start(new ProcessStartInfo(program) { UseShellExecute = true })?.Dispose();
+                await Task.Delay(TimeSpan.FromSeconds(open.Seconds), cancellationToken);
+                await StopAsync(open.ProcessName);
+                return true;
+            }
+
+            case UnblockFiles unblock:
+            {
+                var folder = Expand(unblock.Folder);
+                if (Directory.Exists(folder))
+                {
+                    foreach (var file in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories))
+                    {
+                        // The mark is an alternate data stream on the file; deleting it unblocks the file.
+                        try
+                        {
+                            File.Delete(file + ":Zone.Identifier");
+                        }
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                        {
+                            logger.LogWarning(ex, "Could not unblock {File}", file);
+                        }
+                    }
+                }
+
+                return true;
+            }
+
+            case Wait wait:
+                await Task.Delay(TimeSpan.FromSeconds(wait.Seconds), cancellationToken);
+                return true;
+
+            case ImportNvidiaProfile import:
+                return await ImportNvidiaProfileAsync(Expand(import.Inspector), cancellationToken);
+
+            case RemoveUsedInstaller:
+                if (usedInstaller is not null)
+                {
+                    RemoveIfThere(usedInstaller);
+                }
+
+                return true;
+
+            default:
+                logger.LogError("No way to run {Step}", extra.GetType().Name);
+                return false;
+        }
+    }
+
+    private static string Expand(string path) => Environment.ExpandEnvironmentVariables(path);
+
+    private static void RemoveIfThere(string path)
+    {
+        if (Directory.Exists(path))
+        {
+            foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+            {
+                File.SetAttributes(file, FileAttributes.Normal);
+            }
+
+            Directory.Delete(path, recursive: true);
+        }
+        else if (File.Exists(path))
+        {
+            File.SetAttributes(path, FileAttributes.Normal);
+            File.Delete(path);
+        }
+    }
+
+    private static async Task StopAsync(string processName)
+    {
+        foreach (var process in Process.GetProcessesByName(processName))
+        {
+            using (process)
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    // Already gone.
+                }
+            }
+        }
+
+        await Task.Delay(TimeSpan.FromSeconds(2));
+    }
+
+    /// <summary>The Windows Installer product codes whose name contains <paramref name="name"/>, in both registry views.</summary>
+    private static IEnumerable<string> ProductCodes(string name)
+    {
+        var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+        {
+            using var root = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, view);
+            using var uninstall = root.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall");
+            foreach (var code in uninstall?.GetSubKeyNames() ?? [])
+            {
+                using var product = uninstall!.OpenSubKey(code);
+                if (code.StartsWith('{')
+                    && (product?.GetValue("DisplayName") as string)?.Contains(name, StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    codes.Add(code);
+                }
+            }
+        }
+
+        return codes;
+    }
+
+    private async Task<bool> ImportNvidiaProfileAsync(string inspector, CancellationToken cancellationToken)
+    {
+        if (!File.Exists(inspector))
+        {
+            logger.LogWarning("Nvidia Profile Inspector is not at {Path}, so the NVIDIA profile was not imported", inspector);
             return false;
         }
 
@@ -680,7 +974,7 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
 
         try
         {
-            var run = await ProcessRunner.RunAsync(ProfileInspector, ["-silentImport", "-silent", profile], cancellationToken);
+            var run = await ProcessRunner.RunAsync(inspector, ["-silentImport", "-silent", profile], cancellationToken);
             if (run?.ExitCode != 0)
             {
                 logger.LogWarning("Nvidia Profile Inspector did not import the profile (exit code {ExitCode})", run?.ExitCode);

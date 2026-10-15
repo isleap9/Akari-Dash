@@ -333,11 +333,25 @@ public sealed partial class DriverPipelineViewModel : ViewModelBase, INavigation
             ? $"{Environment.NewLine}{Environment.NewLine}{vendor} cannot be installed unattended, so {vendor}'s own installer or download page opens for you to finish."
             : string.Empty;
 
+        // Intel's "Install and configure" runs the installer from the drop folder when one is there, as AkariOS runs the one it is given.
+        if (row.Model is { Vendor: GpuVendor.Intel, Kind: DriverStepKind.InstallAndConfigure })
+        {
+            handOff = $"{Environment.NewLine}{Environment.NewLine}Intel cannot be installed unattended. With an Intel installer in {DriverInbox.Folder}, it opens for you to finish and the settings go on after it; without one, Intel's download page opens instead.";
+        }
+
+        var downloads = DriverExtras.Downloads(row.Model.Vendor, row.Model.Kind);
+        var extras = DriverExtras.For(row.Model.Vendor, row.Model.Kind).Count == 0
+            ? string.Empty
+            : $"{Environment.NewLine}{Environment.NewLine}Afterwards it does what AkariOS does: "
+                + (downloads.Length > 0 ? $"installs {downloads} from AkariOS-Files, " : string.Empty)
+                + (row.Model.Kind == DriverStepKind.Debloat && row.Model.Vendor != GpuVendor.Nvidia ? $"removes {vendor}'s background services and extras, " : string.Empty)
+                + "adds the shortcuts and applies the settings.";
+
         var confirmed = await _dialogs.ConfirmAsync(
             title,
             row.IsClean
                 ? $"{what}. This is for {section.Heading}.{Environment.NewLine}{Environment.NewLine}Nothing is removed until you restart, and until then the clean can be cancelled. Once it runs, it cannot be undone."
-                : $"{what} on {section.Heading}.{handOff}{Environment.NewLine}{Environment.NewLine}The screen may go dark for a moment while the driver changes. This cannot be undone.",
+                : $"{what} on {section.Heading}.{handOff}{extras}{Environment.NewLine}{Environment.NewLine}The screen may go dark for a moment while the driver changes. This cannot be undone.",
             row.ActionLabel,
             "Cancel");
 
@@ -445,7 +459,7 @@ public sealed partial class DriverPipelineViewModel : ViewModelBase, INavigation
             report.AppendLine(state switch
             {
                 DriverRowState.NeedsRestart => $"{title}: installed. Restart the PC to finish.",
-                DriverRowState.DoneWithoutSettings => $"{title}: installed, but not every setting was applied — the log says which.",
+                DriverRowState.DoneWithoutSettings => $"{title}: installed, but not every step after it applied (a tool, a shortcut or a setting) — the log says which.",
                 DriverRowState.HandedOff => $"{title}: the vendor's installer or page was opened for you to finish.",
                 DriverRowState.RestartPending => $"{title}: DDU and the new driver are ready; the clean runs at the next restart.",
                 _ => $"{title}: done.",

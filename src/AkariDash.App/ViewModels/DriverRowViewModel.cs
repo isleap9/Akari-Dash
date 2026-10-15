@@ -23,7 +23,7 @@ public enum DriverRowState
     /// <summary>Installed, but Windows wants a restart before it is usable.</summary>
     NeedsRestart,
 
-    /// <summary>Installed, but the settings the row promised were not all applied.</summary>
+    /// <summary>Installed, but not every step after it (tools, shortcuts, settings) applied.</summary>
     DoneWithoutSettings,
 
     /// <summary>The vendor's own installer or page was opened instead.</summary>
@@ -102,7 +102,7 @@ public sealed partial class DriverRowViewModel : ObservableObject
         DriverRowState.Working => "Working…",
         DriverRowState.Done => "Done",
         DriverRowState.NeedsRestart => "Installed — restart to finish",
-        DriverRowState.DoneWithoutSettings => "Installed — settings not applied",
+        DriverRowState.DoneWithoutSettings => "Installed — not every step applied",
         DriverRowState.HandedOff => "Opened the installer",
         DriverRowState.RestartPending => "Runs at the next restart",
         DriverRowState.Failed => "Could not install",
