@@ -10,8 +10,8 @@ subtitle already states the intent: *"Install the apps a gaming PC needs, launch
 and tools, in one place."*
 
 Today it renders `WorkInProgressView` and nothing else. This design turns it into a curated
-catalogue of installable apps: a grid of tiles you tick, and one button that installs everything
-you ticked, backed by `winget`.
+catalogue of installable apps: a grid of tiles you click to pick, and one button that installs
+everything you picked, backed by `winget`.
 
 ## Why now
 
@@ -26,8 +26,8 @@ an Action, and it is the only one still showing a placeholder.
 1. **A shipped, curated catalogue** — not a live `winget search`. Akari Dash ships a hand-picked
    list, the same way it ships its Tweak catalogue: curated, not copied. The list works without
    a network round-trip, and nothing on the page is a package we have not chosen.
-2. **Tiles** (mockup option A): a grid of app cards, three across, each with a tick box. Not the
-   one-row-per-app list.
+2. **Tiles** (mockup option A): a grid of app cards, three across, picked by clicking the card. Not
+   the one-row-per-app list.
 3. **Confirm before installing.** Clicking the one Install button opens a short dialog naming what
    is going in, and the fact that it cannot be undone, with Install / Cancel.
 4. **The app list as proposed** is good for now (~20 entries, listed below).
@@ -39,12 +39,12 @@ an Action, and it is the only one still showing a placeholder.
 ## Goals
 
 - A grid of tiles for the curated catalogue, each showing name, publisher and a one-line
-  description, and a tick box to pick it.
+  description, and picked by clicking the card.
 - A category filter and a search box to narrow the grid.
 - Each tile says whether the app is **already installed** on this machine.
-- Ticking apps and clicking Install warns first (naming them), then installs them via `winget`,
+- Picking apps and clicking Install warns first (naming them), then installs them via `winget`,
   with progress on each tile and a log of what happened; then the tiles read as installed.
-- Several tiles may be ticked at once and go in with one click; the page installs them one after
+- Several tiles may be picked at once and go in with one click; the page installs them one after
   another, and each tile shows where it is: waiting, installing, done, or failed.
 
 ## Non-goals
@@ -190,29 +190,46 @@ The first build had an **Install** button on every tile: one click, one app, the
 tile. That is a lot of clicking to set a machine up, so the interaction changed — the user picked
 mockup option A on screen:
 
-- **A tick box on each tile, one button for the lot.** The bar above the grid holds
-  `Install selected (3)`, `Select all` and `Clear`. The button's caption carries the count, so the
-  bar needs no label of its own, and it is disabled while nothing is ticked.
-- **The per-tile Install button is gone.** A tile has one control: its tick box.
+- **Pick cards, one button for the lot.** The bar above the grid holds `Install selected (3)`,
+  `Select all` and `Clear`. The button's caption carries the count, so the bar needs no label of its
+  own, and it is disabled while nothing is picked.
+- **The per-tile Install button is gone.** A tile's only control is the card itself.
 - **The confirm names what is going in**, one app per line, plus the cannot-be-undone line. A
   single app says `Install 7-Zip?`; several say `Install 3 apps?`.
 - **Select all takes what the filter and search are showing**, not the whole catalogue, so a chip
-  or a search narrows what it takes. `Clear` empties every tick.
+  or a search narrows what it takes. `Clear` empties every pick.
 
 Rules the builder settled, for review:
 
-1. **A tile that cannot be installed keeps its tick box, greyed** (already here, checking, queued,
-   installing). It is disabled rather than hidden, so the grid stays even and a tile does not
-   change shape as its state changes.
-2. **A tick is dropped when the machine says the app is installed**, and when the queue takes the
-   tile for an install. A tick means "picked and waiting"; once either is true it is not pending
+1. **A tile that cannot be installed cannot be picked** (already here, checking, queued,
+   installing): clicking it does nothing, and the card does not light up under the pointer, so it
+   never looks like it would do something. The card keeps its full-strength text — nothing about it
+   is greyed out.
+2. **A pick is dropped when the machine says the app is installed**, and when the queue takes the
+   tile for an install. A pick means "picked and waiting"; once either is true it is not pending
    anything.
-3. **A failed install leaves its tile unticked**, with "Could not install" and winget's reason in
-   the info bar. Re-ticking it is the retry.
-4. **Ticks survive a filter or search change** — the count is over the whole catalogue, so ticking
-   three apps, searching for a fourth, ticking it, and clearing the search leaves four ticked.
-5. **Ticking still works while a run is going**, and adds to the same queue rather than starting a
+3. **A failed install leaves its tile unpicked**, with "Could not install" and winget's reason in
+   the info bar. Clicking it again is the retry.
+4. **Picks survive a filter or search change** — the count is over the whole catalogue, so picking
+   three apps, searching for a fourth, picking it, and clearing the search leaves four picked.
+5. **Picking still works while a run is going**, and adds to the same queue rather than starting a
    second one: that is what the queue is for.
 
 The catalogue, the service, the read-back, the queue and the reporting are unchanged by this
 revision — only how a tile is picked, and how a run is started.
+
+### And then the tick box went too
+
+The user's follow-up, minutes later: *"instead to click the checkbox let makes it just by clicking
+the card will select the app"*. So:
+
+- **The whole card is the control.** One transparent `Button` fills the tile, over the card's own
+  drawing, so a click anywhere on it picks or unpicks the app. The button gives the hover tint, the
+  focus ring and the keyboard (Tab to a card, Space or Enter to pick) that a bare tick box would
+  have to be taught; the card keeps its own background, border and text untouched underneath.
+- **The pick shows as an accent outline**, the same 2px accent ring a tweak row wears for a search
+  hit (`HighlightThickness`, the pattern already in `TweakViewModel`), plus a small accent tick badge
+  in the corner the box used to sit in. The badge is the only tick left, and it is not a control.
+- **Greyed-out boxes are gone with the boxes.** A tile that cannot be installed is a disabled
+  button: nothing to fill in, nothing greyed beside it, and its text stays readable.
+

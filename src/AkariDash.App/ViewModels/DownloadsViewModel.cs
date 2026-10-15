@@ -58,8 +58,8 @@ public sealed class CategoryChipViewModel(
 /// <summary>
 /// The Downloads page: a curated grid of apps, installed with winget. An Action surface
 /// (ADR-0004): an install asks first, runs once, cannot be undone, and is read back from the
-/// machine afterwards. Tiles are ticked and one button installs the lot, through a queue, because
-/// winget itself runs one at a time.
+/// machine afterwards. Cards are clicked to pick them and one button installs the lot, through a
+/// queue, because winget itself runs one at a time.
 /// </summary>
 public sealed partial class DownloadsViewModel : ViewModelBase, INavigationAware
 {
@@ -120,8 +120,8 @@ public sealed partial class DownloadsViewModel : ViewModelBase, INavigationAware
     public partial bool IsBusy { get; set; }
 
     /// <summary>
-    /// How many tiles are ticked. Only tiles that are waiting for an install can be ticked: a tile
-    /// that turns out to be installed, or that the queue has taken, loses its tick.
+    /// How many cards are picked. Only tiles that are waiting for an install can be picked: a tile
+    /// that turns out to be installed, or that the queue has taken, loses its pick.
     /// </summary>
     [ObservableProperty]
     public partial int SelectedCount { get; set; }
@@ -149,14 +149,14 @@ public sealed partial class DownloadsViewModel : ViewModelBase, INavigationAware
     private void OnSelectionChanged() => RefreshSelection();
 
     /// <summary>
-    /// The tick box is the only control on a tile, so the count is asked of the tiles themselves
+    /// Clicking a card is the only way to pick one, so the count is asked of the tiles themselves
     /// rather than kept alongside them - there is no second copy to drift.
     /// </summary>
     private void RefreshSelection() => SelectedCount = Tiles.Count(tile => tile.IsSelected);
 
     private bool CanInstallSelected() => SelectedCount > 0;
 
-    // Deliberately not gated on IsBusy: ticking more while a run is going adds to the same queue,
+    // Deliberately not gated on IsBusy: picking more while a run is going adds to the same queue,
     // which is what the queue is for.
     [RelayCommand(CanExecute = nameof(CanInstallSelected))]
     private async Task InstallSelectedAsync()
@@ -181,7 +181,7 @@ public sealed partial class DownloadsViewModel : ViewModelBase, INavigationAware
 
         // The dialog is modal, but the click that opened it is not: a second click queues its own
         // confirm behind this one, and both would otherwise install the same apps twice. Take the
-        // ticks again, now that the answer can have changed.
+        // picked tiles again, now that the answer can have changed.
         var queue = Tiles.Where(tile => tile.IsSelected && tile.IsInstallable).ToList();
         if (queue.Count == 0)
         {
@@ -202,7 +202,7 @@ public sealed partial class DownloadsViewModel : ViewModelBase, INavigationAware
 
         foreach (var tile in queue)
         {
-            // The tick has done its job: it means "waiting to be installed", and it is now waiting.
+            // The pick has done its job: it means "waiting to be installed", and it is now waiting.
             tile.IsSelected = false;
             _queue.Enqueue(tile);
             tile.State = AppTileState.Queued;
@@ -217,7 +217,7 @@ public sealed partial class DownloadsViewModel : ViewModelBase, INavigationAware
         _ = RunQueueAsync();
     }
 
-    /// <summary>Ticks everything the filter and search are showing, so the button can take the lot.</summary>
+    /// <summary>Picks everything the filter and search are showing, so the button can take the lot.</summary>
     [RelayCommand]
     private void SelectAll()
     {
@@ -314,8 +314,8 @@ public sealed partial class DownloadsViewModel : ViewModelBase, INavigationAware
                     ? AppTileState.Unknown
                     : installed.Contains(tile.Model.WingetId) ? AppTileState.Installed : AppTileState.NotInstalled;
 
-                // A tick on a tile that cannot be installed would leave the button counting an app it
-                // cannot install, so the machine's answer takes the tick away.
+                // A pick on a tile that cannot be installed would leave the button counting an app it
+                // cannot install, so the machine's answer takes the pick away.
                 if (!tile.IsInstallable)
                 {
                     tile.IsSelected = false;
