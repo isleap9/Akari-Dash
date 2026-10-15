@@ -56,9 +56,10 @@ public sealed class CategoryChipViewModel(
 }
 
 /// <summary>
-/// The Downloads page: a curated grid of apps, each installed with winget. An Action surface
+/// The Downloads page: a curated grid of apps, installed with winget. An Action surface
 /// (ADR-0004): an install asks first, runs once, cannot be undone, and is read back from the
-/// machine afterwards. Installs go through a queue, because winget itself runs one at a time.
+/// machine afterwards. Tiles are ticked and one button installs the lot, through a queue, because
+/// winget itself runs one at a time.
 /// </summary>
 public sealed partial class DownloadsViewModel : ViewModelBase, INavigationAware
 {
@@ -85,7 +86,7 @@ public sealed partial class DownloadsViewModel : ViewModelBase, INavigationAware
         _logger = logger;
         Title = "Downloads";
 
-        Tiles = InstallableApps.All.Select(app => new AppTileViewModel(app, OnInstallRequested)).ToList();
+        Tiles = InstallableApps.All.Select(app => new AppTileViewModel(app, OnSelectionChanged)).ToList();
 
         // "All" first, then the categories in the order the enum declares them.
         Categories = new[] { new CategoryChipViewModel("All", null, true, Pick) }
@@ -118,6 +119,23 @@ public sealed partial class DownloadsViewModel : ViewModelBase, INavigationAware
     [ObservableProperty]
     public partial bool IsBusy { get; set; }
 
+    /// <summary>
+    /// How many tiles are ticked. Only tiles that are waiting for an install can be ticked: a tile
+    /// that turns out to be installed, or that the queue has taken, loses its tick.
+    /// </summary>
+    [ObservableProperty]
+    public partial int SelectedCount { get; set; }
+
+    /// <summary>The caption on the one Install button. It carries the count, so the bar needs no label.</summary>
+    public string InstallSelectedLabel =>
+        SelectedCount == 0 ? "Install selected" : $"Install selected ({SelectedCount})";
+
+    partial void OnSelectedCountChanged(int value)
+    {
+        OnPropertyChanged(nameof(InstallSelectedLabel));
+        InstallSelectedCommand.NotifyCanExecuteChanged();
+    }
+
     partial void OnSearchTextChanged(string value) => ApplyFilter();
 
     partial void OnSelectedCategoryChanged(InstallableAppCategory? value) => ApplyFilter();
@@ -128,11 +146,99 @@ public sealed partial class DownloadsViewModel : ViewModelBase, INavigationAware
     {
     }
 
-    private void OnInstallRequested(AppTileViewModel tile) => InstallCommand.Execute(tile);
+    private void OnSelectionChanged() => RefreshSelection();
 
-    /// <summary>True once the tile is waiting for the queue, or in it.</summary>
-    private static bool IsQueuedOrInstalling(AppTileViewModel tile) =>
-        tile.State is AppTileState.Queued or AppTileState.Installing;
+    /// <summary>
+    /// The tick box is the only control on a tile, so the count is asked of the tiles themselves
+    /// rather than kept alongside them - there is no second copy to drift.
+    /// </summary>
+    private void RefreshSelection() => SelectedCount = Tiles.Count(tile => tile.IsSelected);
+
+    private bool CanInstallSelected() => SelectedCount > 0;
+
+    // Deliberately not gated on IsBusy: ticking more while a run is going adds to the same queue,
+    // which is what the queue is for.
+    [RelayCommand(CanExecute = nameof(CanInstallSelected))]
+    private async Task InstallSelectedAsync()
+    {
+        var picked = Tiles.Where(tile => tile.IsSelected).ToList();
+        if (picked.Count == 0)
+        {
+            return;
+        }
+
+        var names = string.Join(Environment.NewLine, picked.Select(tile => $"    {tile.Name}"));
+        var confirmed = await _dialogs.ConfirmAsync(
+            picked.Count == 1 ? $"Install {picked[0].Name}?" : $"Install {picked.Count} apps?",
+            $"The following will be installed with winget:{Environment.NewLine}{Environment.NewLine}{names}{Environment.NewLine}{Environment.NewLine}This cannot be undone.",
+            "Install",
+            "Cancel");
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        // The dialog is modal, but the click that opened it is not: a second click queues its own
+        // confirm behind this one, and both would otherwise install the same apps twice. Take the
+        // ticks again, now that the answer can have changed.
+        var queue = Tiles.Where(tile => tile.IsSelected && tile.IsInstallable).ToList();
+        if (queue.Count == 0)
+        {
+            return;
+        }
+
+        if (_apps.IsDryRun)
+        {
+            // Phase 1 installs nothing: say what a real run would have done, and change no tile.
+            var commands = string.Join(
+                Environment.NewLine,
+                queue.Select(tile => "    " + WingetCommand.DescribeInstall(tile.Model)));
+            _infoBar.ShowInfo(
+                queue.Count == 1 ? $"Install {queue[0].Name}" : $"Install {queue.Count} apps",
+                $"This is the Dry Run build, so nothing was installed. A real run would have run:{Environment.NewLine}{Environment.NewLine}{commands}");
+            return;
+        }
+
+        foreach (var tile in queue)
+        {
+            // The tick has done its job: it means "waiting to be installed", and it is now waiting.
+            tile.IsSelected = false;
+            _queue.Enqueue(tile);
+            tile.State = AppTileState.Queued;
+        }
+
+        if (_pumping)
+        {
+            // The pump already running will reach them; one winget at a time is the point of the queue.
+            return;
+        }
+
+        _ = RunQueueAsync();
+    }
+
+    /// <summary>Ticks everything the filter and search are showing, so the button can take the lot.</summary>
+    [RelayCommand]
+    private void SelectAll()
+    {
+        foreach (var tile in Filtered.Where(tile => tile.IsInstallable))
+        {
+            tile.IsSelected = true;
+        }
+
+        RefreshSelection();
+    }
+
+    [RelayCommand]
+    private void ClearSelection()
+    {
+        foreach (var tile in Tiles.Where(tile => tile.IsSelected))
+        {
+            tile.IsSelected = false;
+        }
+
+        RefreshSelection();
+    }
 
     private void Pick(CategoryChipViewModel picked)
     {
@@ -207,6 +313,13 @@ public sealed partial class DownloadsViewModel : ViewModelBase, INavigationAware
                 tile.State = installed is null
                     ? AppTileState.Unknown
                     : installed.Contains(tile.Model.WingetId) ? AppTileState.Installed : AppTileState.NotInstalled;
+
+                // A tick on a tile that cannot be installed would leave the button counting an app it
+                // cannot install, so the machine's answer takes the tick away.
+                if (!tile.IsInstallable)
+                {
+                    tile.IsSelected = false;
+                }
             }
         }
         catch (Exception ex)
@@ -219,54 +332,6 @@ public sealed partial class DownloadsViewModel : ViewModelBase, INavigationAware
         {
             _loading = false;
         }
-    }
-
-    [RelayCommand]
-    private async Task InstallAsync(AppTileViewModel tile)
-    {
-        if (IsQueuedOrInstalling(tile))
-        {
-            return;
-        }
-
-        var confirmed = await _dialogs.ConfirmAsync(
-            $"Install {tile.Name}?",
-            $"Install {tile.Name} by {tile.Publisher} from winget?{Environment.NewLine}{Environment.NewLine}This cannot be undone.",
-            "Install",
-            "Cancel");
-
-        if (!confirmed)
-        {
-            return;
-        }
-
-        // The dialog is modal, but the click that opened it is not: a second click queues its own
-        // confirm behind this one, and both would otherwise reach this same tile. Ask again, now
-        // that the answer can have changed.
-        if (IsQueuedOrInstalling(tile))
-        {
-            return;
-        }
-
-        if (_apps.IsDryRun)
-        {
-            // Phase 1 installs nothing: say what a real run would have done, and change no tile.
-            _infoBar.ShowInfo(
-                $"Install {tile.Name}",
-                $"This is the Dry Run build, so nothing was installed. A real install would run:{Environment.NewLine}{Environment.NewLine}    {WingetCommand.DescribeInstall(tile.Model)}");
-            return;
-        }
-
-        _queue.Enqueue(tile);
-        tile.State = AppTileState.Queued;
-
-        if (_pumping)
-        {
-            // The pump already running will reach it; one winget at a time is the point of the queue.
-            return;
-        }
-
-        _ = RunQueueAsync();
     }
 
     private async Task RunQueueAsync()

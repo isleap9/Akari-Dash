@@ -1,7 +1,7 @@
 # Downloads page
 
 **Date:** 2026-10-15
-**Status:** design, awaiting review
+**Status:** design; built, reviewed, then revised the same day — see **Revision** at the end
 
 ## What this is
 
@@ -10,8 +10,8 @@ subtitle already states the intent: *"Install the apps a gaming PC needs, launch
 and tools, in one place."*
 
 Today it renders `WorkInProgressView` and nothing else. This design turns it into a curated
-catalogue of installable apps: a grid of tiles, each with an **Install** button, backed by
-`winget`.
+catalogue of installable apps: a grid of tiles you tick, and one button that installs everything
+you ticked, backed by `winget`.
 
 ## Why now
 
@@ -26,26 +26,26 @@ an Action, and it is the only one still showing a placeholder.
 1. **A shipped, curated catalogue** — not a live `winget search`. Akari Dash ships a hand-picked
    list, the same way it ships its Tweak catalogue: curated, not copied. The list works without
    a network round-trip, and nothing on the page is a package we have not chosen.
-2. **Tiles** (mockup option A): a grid of app cards, three across, each with an Install button.
-   Not the one-row-per-app list.
-3. **Confirm before installing.** Clicking Install opens a short dialog naming the app, its
-   publisher, and the fact that it cannot be undone, with Install / Cancel.
+2. **Tiles** (mockup option A): a grid of app cards, three across, each with a tick box. Not the
+   one-row-per-app list.
+3. **Confirm before installing.** Clicking the one Install button opens a short dialog naming what
+   is going in, and the fact that it cannot be undone, with Install / Cancel.
 4. **The app list as proposed** is good for now (~20 entries, listed below).
-5. **Installs queue.** The user may click Install on several tiles; each click joins a queue, the
-   page works through it in order, and each tile shows its own progress. `winget` takes a
-   process-wide lock and cannot run two installs at once, so the queue makes that visible rather
+5. **Installs queue.** The user ticks the apps they want and clicks Install once; those apps join a
+   queue, the page works through it in order, and each tile shows its own progress. `winget` takes
+   a process-wide lock and cannot run two installs at once, so the queue makes that visible rather
    than hiding it.
 
 ## Goals
 
 - A grid of tiles for the curated catalogue, each showing name, publisher and a one-line
-  description.
+  description, and a tick box to pick it.
 - A category filter and a search box to narrow the grid.
 - Each tile says whether the app is **already installed** on this machine.
-- Clicking Install warns first, then installs via `winget`, with progress on that tile and a
-  log of what happened; then the tile reads as installed.
-- Several tiles may be queued at once; the page installs them one after another in the order
-  they were clicked, and each tile shows where it is: waiting, installing, done, or failed.
+- Ticking apps and clicking Install warns first (naming them), then installs them via `winget`,
+  with progress on each tile and a log of what happened; then the tiles read as installed.
+- Several tiles may be ticked at once and go in with one click; the page installs them one after
+  another, and each tile shows where it is: waiting, installing, done, or failed.
 
 ## Non-goals
 
@@ -133,10 +133,11 @@ Following `IInstalledAppService` / `WindowsStoreAppService`: an interface in
 ### Page and view model
 
 `DownloadsPage.xaml` replaces the `WorkInProgressView` placeholder with the tile grid, the
-filter chips, the search box, and the status line — modelled on `UwpAppsPage.xaml`. A new view
-model supplies the tiles, the installed state, the filter/search, the confirm dialog, the
-queue, the per-tile progress, and the log. Register it in `App.xaml.cs` alongside the other page
-view models (`AddTransient`), and the service as `AddSingleton`.
+filter chips, the search box, the action bar, and the status line — modelled on `UwpAppsPage.xaml`.
+A new view model supplies the tiles, the installed state, the filter/search, the ticks and their
+count, the confirm dialog, the queue, the per-tile progress, and the log. Register it in
+`App.xaml.cs` alongside the other page view models (`AddTransient`), and the service as
+`AddSingleton`.
 
 **The log** follows the neighbours rather than adding a surface: a status line while a job runs
 (`IStatusService`), a per-tile spinner, and on failure the readable reason in the info bar
@@ -162,8 +163,8 @@ inside the VM, including an independent way to confirm each install actually hap
 3. **Read-back is "is it installed?", not "is our record happy?"** — the tile reflects the
    machine, not a note we wrote, and it is asked of `winget list --id`, not of a name match.
 4. **No uninstall button on this page.**
-5. **In the Phase1 build the Install button is inert** (it reports the command it would have
-   run). Phase1's promise is that it is safe to launch anywhere, and a real `winget install`
+5. **In the Phase1 build the Install selected button is inert** (it reports the commands it would
+   have run). Phase1's promise is that it is safe to launch anywhere, and a real `winget install`
    would break that promise. No existing Action is gated this way, so this would be new.
 6. **Chips are the category list, plus a search box** over name and publisher.
 7. **Success includes the "restart to finish" codes.** 3010 / 1641, and "already installed", end
@@ -182,3 +183,36 @@ inside the VM, including an independent way to confirm each install actually hap
 - Exact wording of the confirm dialog and the per-tile progress text.
 - Whether `winget` missing (no App Installer) is surfaced once at the top of the page or per
   tile. The existing Store path phrases it as an install-app-installer instruction.
+
+## Revision (2026-10-15, after the first VM build)
+
+The first build had an **Install** button on every tile: one click, one app, then move to the next
+tile. That is a lot of clicking to set a machine up, so the interaction changed — the user picked
+mockup option A on screen:
+
+- **A tick box on each tile, one button for the lot.** The bar above the grid holds
+  `Install selected (3)`, `Select all` and `Clear`. The button's caption carries the count, so the
+  bar needs no label of its own, and it is disabled while nothing is ticked.
+- **The per-tile Install button is gone.** A tile has one control: its tick box.
+- **The confirm names what is going in**, one app per line, plus the cannot-be-undone line. A
+  single app says `Install 7-Zip?`; several say `Install 3 apps?`.
+- **Select all takes what the filter and search are showing**, not the whole catalogue, so a chip
+  or a search narrows what it takes. `Clear` empties every tick.
+
+Rules the builder settled, for review:
+
+1. **A tile that cannot be installed keeps its tick box, greyed** (already here, checking, queued,
+   installing). It is disabled rather than hidden, so the grid stays even and a tile does not
+   change shape as its state changes.
+2. **A tick is dropped when the machine says the app is installed**, and when the queue takes the
+   tile for an install. A tick means "picked and waiting"; once either is true it is not pending
+   anything.
+3. **A failed install leaves its tile unticked**, with "Could not install" and winget's reason in
+   the info bar. Re-ticking it is the retry.
+4. **Ticks survive a filter or search change** — the count is over the whole catalogue, so ticking
+   three apps, searching for a fourth, ticking it, and clearing the search leaves four ticked.
+5. **Ticking still works while a run is going**, and adds to the same queue rather than starting a
+   second one: that is what the queue is for.
+
+The catalogue, the service, the read-back, the queue and the reporting are unchanged by this
+revision — only how a tile is picked, and how a run is started.

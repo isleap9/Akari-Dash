@@ -1,5 +1,4 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using AkariDash.Core.Apps;
 
 namespace AkariDash.App.ViewModels;
@@ -13,7 +12,7 @@ public enum AppTileState
     /// <summary>winget could not be asked, so this tile does not know - and will not guess.</summary>
     Unknown,
 
-    /// <summary>Not on this machine, and the Install button is live.</summary>
+    /// <summary>Not on this machine, so the tile can be picked.</summary>
     NotInstalled,
 
     /// <summary>Waiting for the queue to reach it.</summary>
@@ -33,17 +32,18 @@ public enum AppTileState
 }
 
 /// <summary>
-/// One app on the Downloads page: the app, its avatar square, and whether it is already installed.
-/// The tile installs nothing itself - it hands itself to the page's queue.
+/// One app on the Downloads page: the app, its avatar square, whether it is already installed, and
+/// whether the user has ticked it. The tile installs nothing itself - a tick says "this one", and
+/// the page's one Install button takes the ticks away.
 /// </summary>
 public sealed partial class AppTileViewModel : ObservableObject
 {
-    private readonly Action<AppTileViewModel> _installRequested;
+    private readonly Action _selectionChanged;
 
-    public AppTileViewModel(InstallableApp app, Action<AppTileViewModel> installRequested)
+    public AppTileViewModel(InstallableApp app, Action selectionChanged)
     {
         Model = app;
-        _installRequested = installRequested;
+        _selectionChanged = selectionChanged;
     }
 
     public InstallableApp Model { get; }
@@ -64,8 +64,13 @@ public sealed partial class AppTileViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(StateText))]
     [NotifyPropertyChangedFor(nameof(IsInstallable))]
     [NotifyPropertyChangedFor(nameof(IsInstalling))]
-    [NotifyCanExecuteChangedFor(nameof(InstallCommand))]
     public partial AppTileState State { get; set; } = AppTileState.Checking;
+
+    /// <summary>Ticked in the grid, waiting for the page's one Install button.</summary>
+    [ObservableProperty]
+    public partial bool IsSelected { get; set; }
+
+    partial void OnIsSelectedChanged(bool value) => _selectionChanged();
 
     /// <summary>What the caption beside the button says.</summary>
     public string StateText => State switch
@@ -80,14 +85,9 @@ public sealed partial class AppTileViewModel : ObservableObject
         _ => string.Empty,
     };
 
-    /// <summary>Live only where installing is the next thing to do.</summary>
+    /// <summary>Live only where installing is the next thing to do - and so, only where ticking means something.</summary>
     public bool IsInstallable => State is AppTileState.NotInstalled or AppTileState.Failed;
 
     /// <summary>This tile's own spinner, on while winget is working on it.</summary>
     public bool IsInstalling => State is AppTileState.Installing;
-
-    // The same rule as IsInstallable, so the button's enabled state cannot drift from the tile's:
-    // the page binds IsEnabled to the property and the command reports it through CanExecute.
-    [RelayCommand(CanExecute = nameof(IsInstallable))]
-    private void Install() => _installRequested(this);
 }
