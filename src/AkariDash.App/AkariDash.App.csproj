@@ -44,6 +44,8 @@
   <ItemGroup>
     <ProjectReference Include="..\AkariDash.Core\AkariDash.Core.csproj" />
     <ProjectReference Include="..\AkariDash.Framework\AkariDash.Framework.csproj" />
+    <!-- The safe-mode companion of the DDU clean; referencing it puts its exe beside the app. -->
+    <ProjectReference Include="..\AkariDash.DriverReset\AkariDash.DriverReset.csproj" />
   </ItemGroup>
 
   <ItemGroup>
