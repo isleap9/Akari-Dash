@@ -72,4 +72,34 @@ public class WingetListOutputTests
             Microsoft Visual C++ 2015-2022 Redistributable (x64)  Microsoft.VCRedist.2015+.x…   14.40.0
             """,
             [App("Microsoft.VCRedist.2015+.x64")]));
+
+    // ...but winget truncates every column, not just the Id, and a truncated name (or the id of
+    // some package we do not offer) cannot change the answer about ours.
+    [Fact]
+    public void A_truncated_token_that_is_not_one_of_ours_does_not_stop_the_answer()
+    {
+        const string output = """
+            Name                                                  Id                    Version
+            -----------------------------------------------------------------------------------------
+            Steam                                                 Valve.Steam           1.0.0
+            Some Very Long Unrelated Application Name That Runs O…
+            AnotherUnrelated.Package.Name.Goes.On.For.Ever…
+            """;
+
+        var installed = WingetListOutput.InstalledIds(output, Catalogue);
+
+        Assert.NotNull(installed);
+        Assert.Equal(["Valve.Steam"], installed);
+    }
+
+    // A truncated id that could be one of ours is the one that must never be guessed at.
+    [Fact]
+    public void A_truncated_id_that_could_be_ours_still_says_we_do_not_know() =>
+        Assert.Null(WingetListOutput.InstalledIds(
+            """
+            Name                                                  Id                    Version
+            -----------------------------------------------------------------------------------------
+            Steam                                                 Valve.Stea…           1.0.0
+            """,
+            Catalogue));
 }

@@ -130,6 +130,10 @@ public sealed partial class DownloadsViewModel : ViewModelBase, INavigationAware
 
     private void OnInstallRequested(AppTileViewModel tile) => InstallCommand.Execute(tile);
 
+    /// <summary>True once the tile is waiting for the queue, or in it.</summary>
+    private static bool IsQueuedOrInstalling(AppTileViewModel tile) =>
+        tile.State is AppTileState.Queued or AppTileState.Installing;
+
     private void Pick(CategoryChipViewModel picked)
     {
         foreach (var chip in Categories.Where(chip => chip != picked))
@@ -220,7 +224,7 @@ public sealed partial class DownloadsViewModel : ViewModelBase, INavigationAware
     [RelayCommand]
     private async Task InstallAsync(AppTileViewModel tile)
     {
-        if (tile.State is AppTileState.Queued or AppTileState.Installing)
+        if (IsQueuedOrInstalling(tile))
         {
             return;
         }
@@ -232,6 +236,14 @@ public sealed partial class DownloadsViewModel : ViewModelBase, INavigationAware
             "Cancel");
 
         if (!confirmed)
+        {
+            return;
+        }
+
+        // The dialog is modal, but the click that opened it is not: a second click queues its own
+        // confirm behind this one, and both would otherwise reach this same tile. Ask again, now
+        // that the answer can have changed.
+        if (IsQueuedOrInstalling(tile))
         {
             return;
         }

@@ -64,6 +64,7 @@ public sealed partial class AppTileViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(StateText))]
     [NotifyPropertyChangedFor(nameof(IsInstallable))]
     [NotifyPropertyChangedFor(nameof(IsInstalling))]
+    [NotifyCanExecuteChangedFor(nameof(InstallCommand))]
     public partial AppTileState State { get; set; } = AppTileState.Checking;
 
     /// <summary>What the caption beside the button says.</summary>
@@ -85,6 +86,8 @@ public sealed partial class AppTileViewModel : ObservableObject
     /// <summary>This tile's own spinner, on while winget is working on it.</summary>
     public bool IsInstalling => State is AppTileState.Installing;
 
-    [RelayCommand]
+    // The same rule as IsInstallable, so the button's enabled state cannot drift from the tile's:
+    // the page binds IsEnabled to the property and the command reports it through CanExecute.
+    [RelayCommand(CanExecute = nameof(IsInstallable))]
     private void Install() => _installRequested(this);
 }

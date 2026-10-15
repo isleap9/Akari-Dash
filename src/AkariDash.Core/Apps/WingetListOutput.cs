@@ -17,8 +17,10 @@ public static class WingetListOutput
         var tokens = wingetListOutput
             .Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
 
-        // A truncated id shares its prefix with another package, so a missing one proves nothing.
-        if (tokens.Any(token => token.EndsWith('…')))
+        // winget truncates every column of a narrow table. A cut-off name, or the id of a package
+        // we do not offer, cannot change our answer; a cut-off id of one of ours can, and that one
+        // still means "we do not know".
+        if (tokens.Any(token => token.EndsWith('…') && CouldBeOneOfOurs(token, apps)))
         {
             return null;
         }
@@ -27,5 +29,12 @@ public static class WingetListOutput
         return apps.Where(app => listed.Contains(app.WingetId))
             .Select(app => app.WingetId)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Could this truncated token be the start of an id we offer?</summary>
+    private static bool CouldBeOneOfOurs(string token, IReadOnlyList<InstallableApp> apps)
+    {
+        var prefix = token[..^1];
+        return apps.Any(app => app.WingetId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
     }
 }
