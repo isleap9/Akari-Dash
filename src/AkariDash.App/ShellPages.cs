@@ -12,7 +12,7 @@ public static class ShellPages
 
         NavigationItem.Header("Performance"),
         new("Gaming", "\uE7FC", typeof(GamingPage), Subtitle: "Latency, GPU scheduling and the visual effects games pay for"),
-        new("Drivers", "\uE7F8", typeof(DriversPage), Subtitle: "Install and configure the graphics driver"),
+        new("Drivers", "\uE7F8", typeof(DriversPage), Subtitle: "Clean the old graphics driver with DDU, then install and configure the new one"),
         new("Network", "\uE968", typeof(NetworkPage), Subtitle: "Work in progress"),
         new("Services", "\uE9F5", typeof(ServicesPage), Subtitle: "Background services and scheduled tasks"),
 

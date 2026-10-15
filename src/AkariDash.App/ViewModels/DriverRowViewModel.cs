@@ -29,6 +29,9 @@ public enum DriverRowState
     /// <summary>The vendor's own installer or page was opened instead.</summary>
     HandedOff,
 
+    /// <summary>A clean is set up and runs at the next restart.</summary>
+    RestartPending,
+
     /// <summary>It did not work. The reason is in the info bar.</summary>
     Failed,
 }
@@ -68,6 +71,16 @@ public sealed partial class DriverRowViewModel : ObservableObject
         _ => "Safe",
     };
 
+    /// <summary>The button's word: a clean is not an install.</summary>
+    public string ActionLabel => Model.Kind switch
+    {
+        DriverStepKind.Clean => "Clean",
+        DriverStepKind.CleanManual => "Open DDU",
+        _ => "Install",
+    };
+
+    public bool IsClean => Model.Kind is DriverStepKind.Clean or DriverStepKind.CleanManual;
+
     /// <summary>Only a Debloat row takes a file, from the drop folder.</summary>
     public bool IsDebloat => Model.Kind == DriverStepKind.Debloat;
 
@@ -91,6 +104,7 @@ public sealed partial class DriverRowViewModel : ObservableObject
         DriverRowState.NeedsRestart => "Installed — restart to finish",
         DriverRowState.DoneWithoutSettings => "Installed — settings not applied",
         DriverRowState.HandedOff => "Opened the installer",
+        DriverRowState.RestartPending => "Runs at the next restart",
         DriverRowState.Failed => "Could not install",
         _ => string.Empty,
     };

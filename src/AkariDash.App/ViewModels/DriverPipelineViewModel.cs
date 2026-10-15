@@ -83,6 +83,76 @@ public sealed partial class DriverPipelineViewModel : ViewModelBase, INavigation
     /// <summary>Where a person puts a driver they downloaded, for the Debloat rows.</summary>
     public string InboxFolder => DriverInbox.Folder;
 
+    /// <summary>The DDU clean waiting for a restart, or the one that just ran, in a line; empty when there is none.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasReset))]
+    public partial string ResetText { get; set; } = string.Empty;
+
+    public bool HasReset => ResetText.Length > 0;
+
+    /// <summary>A clean is set up and has not run: it can still be taken back, or started with a restart.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasResetResult))]
+    public partial bool IsResetPending { get; set; }
+
+    /// <summary>A clean has run (or tried to); the banner only needs dismissing.</summary>
+    public bool HasResetResult => HasReset && !IsResetPending;
+
+    partial void OnResetTextChanged(string value) => OnPropertyChanged(nameof(HasResetResult));
+
+    private void ReadReset()
+    {
+        var reset = _drivers.ReadReset();
+        IsResetPending = reset?.Stage == DriverResetStage.Scheduled;
+        ResetText = reset is null
+            ? string.Empty
+            : IsResetPending
+                ? $"{reset.Summary} Restarting now goes to safe mode, runs DDU, and restarts again by itself."
+                : reset.Summary;
+    }
+
+    [RelayCommand]
+    private async Task RestartNowAsync()
+    {
+        var confirmed = await _dialogs.ConfirmAsync(
+            "Restart now?",
+            "The PC restarts into safe mode, where DDU removes the driver, then restarts into Windows again. Save your work in other apps first.",
+            "Restart",
+            "Cancel");
+        if (confirmed)
+        {
+            _drivers.RestartNow();
+        }
+    }
+
+    [RelayCommand]
+    private async Task CancelResetAsync()
+    {
+        try
+        {
+            await _drivers.CancelResetAsync();
+            _infoBar.ShowSuccess("Drivers", "The DDU clean was cancelled. The next restart is a normal one, and the driver stays.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Could not cancel the DDU clean");
+            _infoBar.ShowError("Drivers", $"Could not cancel the DDU clean: {ex.Message}");
+        }
+
+        ReadReset();
+        foreach (var row in Sections.SelectMany(section => section.Rows).Where(row => row.State == DriverRowState.RestartPending))
+        {
+            row.State = DriverRowState.Ready;
+        }
+    }
+
+    [RelayCommand]
+    private void DismissReset()
+    {
+        _drivers.ForgetReset();
+        ReadReset();
+    }
+
     public void OnNavigatedTo(object? parameter) => _ = LoadAsync();
 
     public void OnNavigatedFrom()
@@ -103,9 +173,18 @@ public sealed partial class DriverPipelineViewModel : ViewModelBase, INavigation
         _loading = true;
         try
         {
+            ReadReset();
+
             if (Sections.Count == 0)
             {
-                var vendors = _machine.GpuVendors();
+                // Right after a clean, Windows runs the card on its basic display driver, which names
+                // no vendor; the card the clean was for still gets its section, so it can be installed.
+                var vendors = new HashSet<GpuVendor>(_machine.GpuVendors());
+                if (_drivers.ReadReset() is { } reset)
+                {
+                    vendors.Add(reset.Vendor);
+                }
+
                 Sections = Enum.GetValues<GpuVendor>()
                     .Where(vendors.Contains)
                     .Select(vendor => new DriverSectionViewModel(
@@ -235,19 +314,31 @@ public sealed partial class DriverPipelineViewModel : ViewModelBase, INavigation
             DriverStepKind.InstallAndConfigure => (
                 $"Install and configure the {vendor} driver?",
                 $"The newest {vendor} driver will be downloaded and installed, and the {vendor} settings put on with it"),
+            DriverStepKind.Clean or DriverStepKind.CleanManual => (
+                row.Model.Kind == DriverStepKind.Clean ? $"Clean the {vendor} driver with DDU?" : $"Open DDU in safe mode for the {vendor} driver?",
+                (row.Model.Vendor == GpuVendor.Intel
+                    ? $"Akari Dash first checks that an Intel installer is waiting in {DriverInbox.Folder}, and downloads DDU. "
+                    : $"Akari Dash first downloads DDU and the newest {vendor} driver, so a way back is on disk before anything is removed. ")
+                + "Then the next restart goes to safe mode, where "
+                + (row.Model.Kind == DriverStepKind.Clean
+                    ? $"DDU removes the {vendor} driver completely and the PC restarts again by itself"
+                    : $"DDU opens for you to clean the {vendor} driver yourself; the PC restarts again when you close it")
+                + $". Other cards are not touched. Until a driver is installed again the screen runs on Windows' basic display driver, so press Install afterwards"),
             _ => (
                 $"Debloat and install {Path.GetFileName(installer)}?",
                 $"{Path.GetFileName(installer)} will be unpacked, its extras removed, and what is left installed and configured"),
         };
 
-        var handOff = row.Model.Kind != DriverStepKind.Debloat && !DriverInstallCommand.IsUnattended(row.Model.Vendor)
+        var handOff = row.Model.Kind is DriverStepKind.Install or DriverStepKind.InstallAndConfigure && !DriverInstallCommand.IsUnattended(row.Model.Vendor)
             ? $"{Environment.NewLine}{Environment.NewLine}{vendor} cannot be installed unattended, so {vendor}'s own installer or download page opens for you to finish."
             : string.Empty;
 
         var confirmed = await _dialogs.ConfirmAsync(
             title,
-            $"{what} on {section.Heading}.{handOff}{Environment.NewLine}{Environment.NewLine}The screen may go dark for a moment while the driver changes. This cannot be undone.",
-            "Install",
+            row.IsClean
+                ? $"{what}. This is for {section.Heading}.{Environment.NewLine}{Environment.NewLine}Nothing is removed until you restart, and until then the clean can be cancelled. Once it runs, it cannot be undone."
+                : $"{what} on {section.Heading}.{handOff}{Environment.NewLine}{Environment.NewLine}The screen may go dark for a moment while the driver changes. This cannot be undone.",
+            row.ActionLabel,
             "Cancel");
 
         // The dialog is modal, but the click that opened it is not: a second click queues its own
@@ -300,11 +391,14 @@ public sealed partial class DriverPipelineViewModel : ViewModelBase, INavigation
                     {
                         outcome = row.IsDebloat
                             ? await _drivers.DebloatAsync(row.Model, installer!, progress)
-                            : await _drivers.InstallAsync(row.Model, progress);
+                            : row.IsClean
+                                ? await _drivers.CleanAsync(row.Model, progress)
+                                : await _drivers.InstallAsync(row.Model, progress);
                     }
 
                     row.State = outcome switch
                     {
+                        DriverStepOutcome.CleanScheduled => DriverRowState.RestartPending,
                         DriverStepOutcome.CompletedNeedsRestart => DriverRowState.NeedsRestart,
                         DriverStepOutcome.InstalledWithoutSettings => DriverRowState.DoneWithoutSettings,
                         DriverStepOutcome.HandedOffToInstaller => DriverRowState.HandedOff,
@@ -333,7 +427,14 @@ public sealed partial class DriverPipelineViewModel : ViewModelBase, INavigation
 
         // Read the machine back: the heading says what is installed now, not what we hoped.
         RefreshInbox();
+        ReadReset();
         await Task.WhenAll(Sections.Select(ReadVersionsAsync));
+
+        // A clean only happens at a restart, so offer it now; "Cancel" leaves it for the next one.
+        if (finished.Any(item => item.State == DriverRowState.RestartPending) && IsResetPending)
+        {
+            await RestartNowAsync();
+        }
     }
 
     private void Report(List<(string Title, DriverRowState State)> finished, List<(string Title, string Error)> failed)
@@ -346,6 +447,7 @@ public sealed partial class DriverPipelineViewModel : ViewModelBase, INavigation
                 DriverRowState.NeedsRestart => $"{title}: installed. Restart the PC to finish.",
                 DriverRowState.DoneWithoutSettings => $"{title}: installed, but not every setting was applied — the log says which.",
                 DriverRowState.HandedOff => $"{title}: the vendor's installer or page was opened for you to finish.",
+                DriverRowState.RestartPending => $"{title}: DDU and the new driver are ready; the clean runs at the next restart.",
                 _ => $"{title}: done.",
             });
         }

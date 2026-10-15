@@ -14,9 +14,43 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <StackPanel Orientation="Horizontal" Spacing="12">
-            <TextBlock Opacity="0.8" Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
-            <ProgressRing Width="16" Height="16" IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+        <StackPanel Spacing="12">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <TextBlock Opacity="0.8" Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
+                <ProgressRing Width="16" Height="16" IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+            </StackPanel>
+
+            <!-- A DDU clean spans restarts, so the page says where it is: waiting (restart or take it
+                 back), or done (install the driver now). -->
+            <Grid
+                Padding="16,12"
+                ColumnSpacing="16"
+                CornerRadius="8"
+                BorderThickness="1"
+                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                Visibility="{x:Bind ViewModel.HasReset, Mode=OneWay}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="{x:Bind ViewModel.ResetText, Mode=OneWay}" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <Button
+                        Style="{StaticResource AccentButtonStyle}"
+                        Content="Restart now"
+                        Command="{x:Bind ViewModel.RestartNowCommand}"
+                        Visibility="{x:Bind ViewModel.IsResetPending, Mode=OneWay}" />
+                    <Button
+                        Content="Cancel the clean"
+                        Command="{x:Bind ViewModel.CancelResetCommand}"
+                        Visibility="{x:Bind ViewModel.IsResetPending, Mode=OneWay}" />
+                    <Button
+                        Content="Dismiss"
+                        Command="{x:Bind ViewModel.DismissResetCommand}"
+                        Visibility="{x:Bind ViewModel.HasResetResult, Mode=OneWay}" />
+                </StackPanel>
+            </Grid>
         </StackPanel>
 
         <!-- Review Focus 3: with no PCI graphics card there is nothing to install for, and no rows. -->
@@ -109,7 +143,7 @@
                                                         Style="{StaticResource CaptionTextBlockStyle}"
                                                         Text="{x:Bind StateText, Mode=OneWay}" />
                                                     <Button
-                                                        Content="Install"
+                                                        Content="{x:Bind ActionLabel}"
                                                         IsEnabled="{x:Bind IsRunnable, Mode=OneWay}"
                                                         Command="{x:Bind RunCommand}" />
                                                 </StackPanel>
