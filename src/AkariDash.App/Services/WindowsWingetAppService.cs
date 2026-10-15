@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using AkariDash.Core.Apps;
 using Microsoft.Extensions.Logging;
 
@@ -49,7 +48,7 @@ public sealed class WindowsWingetAppService(ILogger<WindowsWingetAppService> log
         var outcome = WingetInstallResult.Interpret(run.ExitCode);
         if (outcome is null)
         {
-            var last = LastLine(run.Output) ?? LastLine(run.Error);
+            var last = run.LastLine;
             throw new InvalidOperationException(
                 $"Could not install \"{app.Name}\" (winget exit code 0x{run.ExitCode:X8}){(last is null ? "." : $": {last}")}");
         }
@@ -60,54 +59,16 @@ public sealed class WindowsWingetAppService(ILogger<WindowsWingetAppService> log
     /// <summary>
     /// Runs one winget command, or <see langword="null"/> when winget is not on this PC at all.
     /// </summary>
-    private async Task<WingetRun?> TryRunAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
+    private async Task<ProcessRun?> TryRunAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
     {
         logger.LogInformation("Running {CommandLine}", WingetCommand.Describe(arguments));
 
-        var start = new ProcessStartInfo("winget")
+        var run = await ProcessRunner.RunAsync("winget", arguments, cancellationToken);
+        if (run is null)
         {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-
-        foreach (var argument in arguments)
-        {
-            start.ArgumentList.Add(argument);
+            logger.LogWarning("winget could not be started");
         }
 
-        Process? process;
-        try
-        {
-            process = Process.Start(start);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "winget could not be started");
-            return null;
-        }
-
-        if (process is null)
-        {
-            return null;
-        }
-
-        using (process)
-        {
-            // Both pipes are drained at once: an installer that fills stderr while we are still
-            // waiting on stdout would otherwise deadlock the two of us against each other.
-            var stdout = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var stderr = process.StandardError.ReadToEndAsync(cancellationToken);
-            await Task.WhenAll(stdout, stderr);
-            await process.WaitForExitAsync(cancellationToken);
-
-            return new WingetRun(process.ExitCode, await stdout, await stderr);
-        }
+        return run;
     }
-
-    private static string? LastLine(string? text) =>
-        text?.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).LastOrDefault();
-
-    private sealed record WingetRun(int ExitCode, string Output, string Error);
 }

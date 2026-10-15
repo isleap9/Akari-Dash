@@ -10,6 +10,7 @@ using AkariDash.Framework.Logging;
 using AkariDash.App.ViewModels;
 using AkariDash.Core.Machine;
 using AkariDash.Core.Apps;
+using AkariDash.Core.Drivers;
 using AkariDash.Core.Tweaks;
 using AkariDash.Framework;
 using AkariDash.Framework.Navigation;
@@ -190,6 +191,9 @@ public partial class App : Application
 
         // Downloads (an Action backend, ADR-0004): installs apps from the curated catalogue through winget.
         builder.Services.AddSingleton<IAppInstallService, WindowsWingetAppService>();
+
+        // Drivers (an Action backend, ADR-0004): finds, installs and configures the card's driver.
+        builder.Services.AddSingleton<IDriverService, WindowsDriverService>();
 
         // Navigation: pages are created through the DI container.
         builder.Services.AddSingleton<INavigationService>(sp =>

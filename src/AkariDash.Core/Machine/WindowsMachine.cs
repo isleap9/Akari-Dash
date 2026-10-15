@@ -122,16 +122,7 @@ public sealed class WindowsMachine : IMachine
             }
 
             using var adapter = displayClass!.OpenSubKey(name, writable: false);
-            var deviceId = (adapter?.GetValue("MatchingDeviceId") as string)?.ToUpperInvariant() ?? string.Empty;
-            GpuVendor? vendor = deviceId switch
-            {
-                _ when deviceId.Contains("VEN_10DE") => GpuVendor.Nvidia,
-                _ when deviceId.Contains("VEN_1002") => GpuVendor.Amd,
-                _ when deviceId.Contains("VEN_8086") => GpuVendor.Intel,
-                _ => null,
-            };
-
-            if (vendor is { } found)
+            if (GpuVendorExtensions.FromMatchingDeviceId(adapter?.GetValue("MatchingDeviceId") as string) is { } found)
             {
                 vendors.Add(found);
             }
