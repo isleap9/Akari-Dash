@@ -14,4 +14,7 @@ public enum DriverStepOutcome
 
     /// <summary>The vendor's own installer or page was opened because it cannot be run unattended.</summary>
     HandedOffToInstaller,
+
+    /// <summary>DDU and the replacement driver are on disk, and the next restart goes to safe mode to clean.</summary>
+    CleanScheduled,
 }

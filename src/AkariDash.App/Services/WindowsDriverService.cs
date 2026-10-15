@@ -86,6 +86,22 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
     public string Describe(DriverRow row, string? installerPath = null)
     {
         var text = new StringBuilder();
+        if (row.Kind is DriverStepKind.Clean or DriverStepKind.CleanManual)
+        {
+            text.AppendLine(row.Vendor == GpuVendor.Intel
+                ? $"Check that an Intel installer is waiting in {DriverInbox.Folder}"
+                : $"Download the latest {row.Vendor.DisplayName()} driver to {StagedFolder(row.Vendor)}, so it is there after the clean");
+            text.AppendLine($"Download DDU from {DriverClean.DduDownload} and unpack it to {DduFolder}");
+            text.AppendLine($"Write DDU's settings to {DriverClean.DduSettingsFile}, read-only");
+            text.AppendLine($"Write {DriverResetState.DefaultPath}");
+            text.AppendLine($@"Set HKLM\{RunOnceKey}\{DriverClean.RunOnceValueName} = {DriverClean.RunOnceCommand(Path.Combine(AppContext.BaseDirectory, DriverClean.CompanionExecutable), DriverResetState.DefaultPath)}");
+            text.AppendLine("Run bcdedit /set {current} safeboot minimal, then offer to restart");
+            text.AppendLine(row.Kind == DriverStepKind.Clean
+                ? "In safe mode: bcdedit /deletevalue {current} safeboot, then " + DriverInstallCommand.Describe(DriverClean.DduExecutable, DriverClean.Arguments(row.Vendor)) + ", then restart"
+                : "In safe mode: bcdedit /deletevalue {current} safeboot, then open DDU for you, then restart once it closes");
+            return text.ToString().TrimEnd();
+        }
+
         if (row.Kind == DriverStepKind.Debloat)
         {
             var plan = installerPath is null ? null : DriverDebloat.Plan(row.Vendor, Path.GetFileName(installerPath));
@@ -151,21 +167,28 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
         }
 
         progress?.Report($"Finding the latest {vendor.DisplayName()} driver…");
-        var latest = await LatestAsync(vendor, cancellationToken)
-            ?? throw new InvalidOperationException(
+        var latest = await LatestAsync(vendor, cancellationToken);
+        var staged = Staged(vendor, latest);
+        if (latest is null && staged is null)
+        {
+            throw new InvalidOperationException(
                 $"Could not find the latest {vendor.DisplayName()} driver: {vendor.DisplayName()}'s driver source did not answer with one. Nothing was changed.");
+        }
 
         var folder = FreshFolder(vendor);
         try
         {
-            var installer = await DownloadAsync(latest.DownloadUrl, folder, progress, cancellationToken);
+            // A clean staged the driver before it removed the old one; that copy is used first.
+            var installer = staged ?? await DownloadAsync(latest!.DownloadUrl, folder, progress, cancellationToken);
+            var name = Path.GetFileName(installer);
             var unpacked = Path.Combine(folder, "unpacked");
-            progress?.Report($"Unpacking {vendor.DisplayName()} {latest.Version}…");
+            progress?.Report($"Unpacking {name}…");
             await Task.Run(() => Unpack(installer, unpacked), cancellationToken);
 
-            progress?.Report($"Installing {vendor.DisplayName()} {latest.Version}…");
+            progress?.Report($"Installing {name}…");
             var outcome = await RunSetupAsync(
                 row, Path.Combine(unpacked, "setup.exe"), DriverInstallCommand.Install(row, "setup.exe"), cancellationToken);
+            TryDelete(StagedFolder(vendor));
 
             return AppliesSettings(row) ? await ConfigureAsync(row, outcome, progress, cancellationToken) : outcome;
         }
@@ -232,6 +255,224 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
         }
     }
 
+    /// <summary>
+    /// Sets up a DDU clean and leaves the PC to restart into it. Everything a way back needs is put
+    /// on disk first - DDU, and the replacement driver - so if any of it cannot be fetched the run
+    /// stops here, with the old driver still in place. Only then are RunOnce and safe mode set.
+    /// </summary>
+    public async Task<DriverStepOutcome> CleanAsync(
+        DriverRow row,
+        IProgress<string>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        RefuseDryRun(row);
+        var vendor = row.Vendor;
+
+        var companion = Path.Combine(AppContext.BaseDirectory, DriverClean.CompanionExecutable);
+        if (!File.Exists(companion))
+        {
+            throw new InvalidOperationException($"{DriverClean.CompanionExecutable} is missing from the app's folder, so nothing was changed. Reinstall Akari Dash.");
+        }
+
+        if (ReadReset() is { Stage: DriverResetStage.Scheduled })
+        {
+            throw new InvalidOperationException("A DDU clean is already waiting for the next restart. Restart, or cancel it first.");
+        }
+
+        // The way back, first.
+        await StageReplacementAsync(vendor, progress, cancellationToken);
+
+        progress?.Report("Downloading DDU…");
+        TryDelete(DduFolder);
+        Directory.CreateDirectory(ResetFolder);
+        var download = await DownloadAsync(DriverClean.DduDownload, ResetFolder, progress, cancellationToken);
+        var ddu = await UnpackDduAsync(download, cancellationToken);
+        TryDelete(download);
+
+        var settings = Path.Combine(ddu, DriverClean.DduSettingsFile);
+        Directory.CreateDirectory(Path.GetDirectoryName(settings)!);
+        if (File.Exists(settings))
+        {
+            File.SetAttributes(settings, FileAttributes.Normal);
+        }
+
+        // Read-only, as AkariOS leaves it, so DDU cannot write its own choices back over ours.
+        await File.WriteAllTextAsync(settings, DriverClean.DduSettingsXml, cancellationToken);
+        File.SetAttributes(settings, FileAttributes.ReadOnly);
+
+        var state = new DriverResetState(vendor, row.Kind == DriverStepKind.CleanManual, ddu, DateTimeOffset.Now, DriverResetStage.Scheduled);
+        await File.WriteAllTextAsync(DriverResetState.DefaultPath, state.ToJson(), cancellationToken);
+
+        progress?.Report("Setting the next restart to safe mode…");
+        using (var runOnce = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64).CreateSubKey(RunOnceKey, writable: true))
+        {
+            runOnce.SetValue(DriverClean.RunOnceValueName, DriverClean.RunOnceCommand(companion, DriverResetState.DefaultPath), RegistryValueKind.String);
+        }
+
+        var bcd = await ProcessRunner.RunAsync("bcdedit.exe", ["/set", "{current}", "safeboot", "minimal"], cancellationToken);
+        if (bcd?.ExitCode != 0)
+        {
+            // Without safe mode the companion would run DDU in normal Windows; take it all back.
+            RemoveRunOnce();
+            TryDelete(DriverResetState.DefaultPath);
+            throw new InvalidOperationException(
+                $"Could not set the next restart to safe mode (bcdedit {(bcd is null ? "did not start" : $"exit code {bcd.ExitCode}")}), so nothing was changed.");
+        }
+
+        logger.LogInformation("DDU clean of {Vendor} scheduled ({Mode}); DDU in {Folder}", vendor, state.Manual ? "manual" : "auto", ddu);
+        return DriverStepOutcome.CleanScheduled;
+    }
+
+    public DriverResetState? ReadReset()
+    {
+        try
+        {
+            return File.Exists(DriverResetState.DefaultPath)
+                ? DriverResetState.FromJson(File.ReadAllText(DriverResetState.DefaultPath))
+                : null;
+        }
+        catch (IOException ex)
+        {
+            logger.LogWarning(ex, "Could not read {Path}", DriverResetState.DefaultPath);
+            return null;
+        }
+    }
+
+    public async Task CancelResetAsync(CancellationToken cancellationToken = default)
+    {
+        if (IsDryRun)
+        {
+            return;
+        }
+
+        RemoveRunOnce();
+        var bcd = await ProcessRunner.RunAsync("bcdedit.exe", ["/deletevalue", "{current}", "safeboot"], cancellationToken);
+        logger.LogInformation("Cancelled the DDU clean (bcdedit exit code {ExitCode})", bcd?.ExitCode);
+        ForgetReset();
+    }
+
+    public void ForgetReset()
+    {
+        if (IsDryRun)
+        {
+            return;
+        }
+
+        TryDelete(DriverResetState.DefaultPath);
+        if (Directory.Exists(DduFolder))
+        {
+            foreach (var file in Directory.EnumerateFiles(DduFolder, "*", SearchOption.AllDirectories))
+            {
+                File.SetAttributes(file, FileAttributes.Normal);
+            }
+        }
+
+        TryDelete(DduFolder);
+    }
+
+    public void RestartNow()
+    {
+        if (IsDryRun)
+        {
+            return;
+        }
+
+        logger.LogInformation("Restarting for the DDU clean");
+        Process.Start(new ProcessStartInfo("shutdown.exe", "/r /t 5") { UseShellExecute = false, CreateNoWindow = true });
+    }
+
+    private const string RunOnceKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce";
+
+    private static string ResetFolder => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Akari-Dash", "driver-reset");
+
+    private static string DduFolder => Path.Combine(ResetFolder, "ddu");
+
+    private static string StagedFolder(GpuVendor vendor) =>
+        Path.Combine(ResetFolder, "staged", vendor.ToString().ToLowerInvariant());
+
+    /// <summary>The driver a clean staged for this vendor: the one matching the latest version, or any when the source cannot be asked.</summary>
+    private static string? Staged(GpuVendor vendor, AvailableDriver? latest)
+    {
+        var folder = StagedFolder(vendor);
+        if (!Directory.Exists(folder))
+        {
+            return null;
+        }
+
+        var files = Directory.EnumerateFiles(folder, "*.exe").ToList();
+        return latest is null
+            ? files.FirstOrDefault()
+            : files.FirstOrDefault(file => Path.GetFileName(file).Contains(latest.Version, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Puts the replacement driver on disk before anything is removed. NVIDIA's and AMD's come from
+    /// their sources; Intel publishes none, so its installer must already be in the drop folder.
+    /// </summary>
+    private async Task StageReplacementAsync(GpuVendor vendor, IProgress<string>? progress, CancellationToken cancellationToken)
+    {
+        if (vendor == GpuVendor.Intel)
+        {
+            var dropped = Directory.Exists(DriverInbox.Folder)
+                ? DriverInbox.Installers(Directory.EnumerateFiles(DriverInbox.Folder))
+                    .FirstOrDefault(file => DriverDebloat.Plan(vendor, Path.GetFileName(file)) is not null)
+                : null;
+            if (dropped is null)
+            {
+                throw new InvalidOperationException(
+                    $"Intel publishes no driver we can fetch, so put the Intel installer (gfx_win_....exe) in {DriverInbox.Folder} first. Nothing was changed.");
+            }
+
+            logger.LogInformation("The Intel driver waiting after the clean is {Installer}", dropped);
+            return;
+        }
+
+        progress?.Report($"Finding the latest {vendor.DisplayName()} driver…");
+        var latest = await LatestAsync(vendor, cancellationToken)
+            ?? throw new InvalidOperationException(
+                $"Could not find the latest {vendor.DisplayName()} driver, so the old one was not removed. Nothing was changed.");
+
+        if (Staged(vendor, latest) is { } already)
+        {
+            logger.LogInformation("Already staged: {Installer}", already);
+            return;
+        }
+
+        TryDelete(StagedFolder(vendor));
+        Directory.CreateDirectory(StagedFolder(vendor));
+        await DownloadAsync(latest.DownloadUrl, StagedFolder(vendor), progress, cancellationToken);
+    }
+
+    /// <summary>
+    /// DDU ships as a Nullsoft self-extractor, which unpacks itself silently with its own /S and /D
+    /// switches (/D must come last and unquoted). Returns the folder DDU's program landed in.
+    /// </summary>
+    private async Task<string> UnpackDduAsync(string download, CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(DduFolder);
+        var run = await ProcessRunner.RunAsync(download, ["/S", $"/D={DduFolder}"], cancellationToken)
+            ?? throw new InvalidOperationException("DDU's download could not be started to unpack it, so nothing was changed.");
+        logger.LogInformation("DDU unpacked with exit code {ExitCode}", run.ExitCode);
+
+        var program = Directory.EnumerateFiles(DduFolder, DriverClean.DduExecutable, SearchOption.AllDirectories).FirstOrDefault()
+            ?? throw new InvalidOperationException($"DDU did not unpack to {DduFolder} (no {DriverClean.DduExecutable}), so nothing was changed.");
+        return Path.GetDirectoryName(program)!;
+    }
+
+    private void RemoveRunOnce()
+    {
+        try
+        {
+            using var runOnce = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64).OpenSubKey(RunOnceKey, writable: true);
+            runOnce?.DeleteValue(DriverClean.RunOnceValueName, throwOnMissingValue: false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Could not remove the RunOnce value {Name}", DriverClean.RunOnceValueName);
+        }
+    }
+
     private static bool AppliesSettings(DriverRow row) => row.Kind is DriverStepKind.InstallAndConfigure or DriverStepKind.Debloat;
 
     private void RefuseDryRun(DriverRow row)
@@ -255,7 +496,8 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
     {
         var vendor = row.Vendor;
         var latest = vendor == GpuVendor.Amd ? await LatestAsync(vendor, cancellationToken) : null;
-        if (latest is null)
+        var staged = vendor == GpuVendor.Amd ? Staged(vendor, latest) : null;
+        if (latest is null && staged is null)
         {
             logger.LogInformation("Opening {Vendor}'s driver page", vendor);
             Process.Start(new ProcessStartInfo(DriverLookup.Endpoint(vendor).AbsoluteUri) { UseShellExecute = true });
@@ -265,7 +507,7 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
         var folder = FreshFolder(vendor);
         try
         {
-            var installer = await DownloadAsync(latest.DownloadUrl, folder, progress, cancellationToken);
+            var installer = staged ?? await DownloadAsync(latest!.DownloadUrl, folder, progress, cancellationToken);
 
             progress?.Report($"Waiting for {vendor.DisplayName()}'s installer to finish…");
             logger.LogInformation("Opening {Installer} and waiting for it", installer);
@@ -276,6 +518,8 @@ public sealed class WindowsDriverService(ILogger<WindowsDriverService> logger) :
                     await process.WaitForExitAsync(cancellationToken);
                 }
             }
+
+            TryDelete(StagedFolder(vendor));
 
             if (AppliesSettings(row))
             {

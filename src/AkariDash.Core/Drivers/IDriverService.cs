@@ -33,4 +33,22 @@ public interface IDriverService
 
     /// <summary>Strips a downloaded vendor installer of its extras, installs what is left and configures it.</summary>
     Task<DriverStepOutcome> DebloatAsync(DriverRow row, string installerPath, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Stages DDU and the replacement driver, then sets the next restart to safe mode, where the
+    /// companion runs DDU on the row's card only. Nothing is removed until that restart.
+    /// </summary>
+    Task<DriverStepOutcome> CleanAsync(DriverRow row, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
+
+    /// <summary>The clean waiting for a restart, or the one that just ran; <see langword="null"/> when there is none.</summary>
+    DriverResetState? ReadReset();
+
+    /// <summary>Takes back a clean that has not run yet: no safe mode, no RunOnce, no note.</summary>
+    Task CancelResetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Forgets a clean that has run, and tidies DDU away.</summary>
+    void ForgetReset();
+
+    /// <summary>Restarts the PC, into the clean that is waiting.</summary>
+    void RestartNow();
 }
