@@ -30,7 +30,7 @@ Carried forward from the spec; each line is pinned in the task that owns the cod
 2. **A version that cannot be compared** — `566.36` against AMD's `25.3.1`, or a `null` from a failed read. The comparison must say `Unknown`, never "up to date". (Task 5)
 3. **A machine with no PCI graphics card** (a fresh VM, or Basic Display Adapter only), so `GpuVendors()` is empty. The page must say there is no card, not show every vendor's rows. (Tasks 1, 8, 10)
 4. **A file in the drop folder that is not a recognised vendor installer.** The debloat must refuse it and delete nothing, rather than applying one vendor's strip list to another's file. (Task 4)
-5. **A configure bundle whose XML is malformed or whose registry path escapes the graphics class key.** The bundle must not be applied. (Task 6)
+5. **A configure bundle whose XML is malformed, or whose registry path is rooted or contains `..`.** The bundle must not be applied. (Task 6)
 
 ---
 
@@ -578,9 +578,9 @@ public class DriverVersionTests
     public void A_newer_installed_driver_is_not_an_update() =>
         Assert.Equal(DriverVersionState.UpToDate, DriverVersion.State("572.16", Driver("566.36")));
 
-    // AMD's numbering has different-length parts; 25.3 is not newer than 25.3.1.
+    // AMD's numbering has different-length parts; 25.3 is older than 25.3.1.
     [Fact]
-    public void A_shorter_version_is_not_newer() =>
+    public void A_shorter_installed_version_is_older() =>
         Assert.Equal(DriverVersionState.UpdateAvailable, DriverVersion.State("25.3", Driver("25.3.1")));
 
     // Review Focus 2: what we cannot compare we must not call either way.
@@ -635,7 +635,7 @@ git commit -m "Drivers: is the driver on this card out of date, and saying so on
 
 **Interfaces:**
 - Consumes: `GpuVendor`.
-- Produces: `DriverSetting(string KeyPath, string Name, DriverSettingKind Kind, string Value)`; `DriverSettingKind` (enum: `Dword`, `String`, `Binary`); `DriverSettings.For(GpuVendor vendor)` → `IReadOnlyList<DriverSetting>`; `DriverSettings.NvidiaProfileXml` → `string`.
+- Produces: `DriverSettingRoot` (enum: `Hkcu`, `HklmServices`, `GraphicsClass`); `DriverSettingKind` (enum: `Dword`, `String`, `Binary`); `DriverSetting(DriverSettingRoot Root, string KeyPath, string Name, DriverSettingKind Kind, string Value)`; `DriverSettings.For(GpuVendor vendor)` → `IReadOnlyList<DriverSetting>`; `DriverSettings.NvidiaProfileXml` → `string`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -660,21 +660,44 @@ public class DriverSettingsTests
     {
         Assert.All(Enum.GetValues<GpuVendor>().SelectMany(DriverSettings.For), setting =>
         {
+            Assert.True(Enum.IsDefined(setting.Root));
+            Assert.True(Enum.IsDefined(setting.Kind));
             Assert.False(string.IsNullOrWhiteSpace(setting.KeyPath));
             Assert.False(string.IsNullOrWhiteSpace(setting.Name));
             Assert.False(string.IsNullOrWhiteSpace(setting.Value));
-            Assert.Matches(@"^[A-Fa-f0-9]{1,16}$", setting.Value);   // a registry value, as hex
         });
     }
 
-    // Review Focus 5: a key path that escaped the graphics class key would write somewhere else.
+    // Each value is written with the type it declares, so the service never has to guess one.
     [Fact]
-    public void Every_key_path_stays_inside_the_graphics_class_key()
+    public void Every_value_matches_the_type_it_declares()
+    {
+        Assert.All(Enum.GetValues<GpuVendor>().SelectMany(DriverSettings.For), setting =>
+        {
+            switch (setting.Kind)
+            {
+                case DriverSettingKind.Dword:
+                    Assert.Matches(@"^[0-9]+$", setting.Value);
+                    break;
+                case DriverSettingKind.Binary:
+                    Assert.Matches(@"^([0-9A-Fa-f]{2})+$", setting.Value);   // whole bytes, never a half
+                    break;
+                case DriverSettingKind.String:
+                    Assert.DoesNotContain('\0', setting.Value);
+                    break;
+            }
+        });
+    }
+
+    // Review Focus 5: a path that escaped its root would write somewhere else entirely.
+    [Fact]
+    public void Every_key_path_is_relative_and_stays_inside_its_root()
     {
         Assert.All(Enum.GetValues<GpuVendor>().SelectMany(DriverSettings.For), setting =>
         {
             Assert.DoesNotContain("..", setting.KeyPath);
-            Assert.DoesNotContain("{4d36e968-e325-11ce-bfc1-08002be10318}", setting.KeyPath);  // never the base key itself
+            Assert.DoesNotMatch(@"^[A-Za-z]:", setting.KeyPath);
+            Assert.DoesNotContain("ControlSet", setting.KeyPath);   // choosing the control set is the service's job
         });
     }
 
@@ -697,28 +720,39 @@ Expected: FAIL to compile — `DriverSettings` does not exist.
 
 - [ ] **Step 3: Write `DriverSettings.cs`**
 
-A static class holding the values, transcribed from AkariOS:
+A static class holding the values, transcribed from AkariOS. `Root` says which of the three places a
+value goes, and `KeyPath` is always **relative to that root**:
 
-- **AMD** (`Graphics.ps1:382-412` and `:1252`): the `HKCU\Software\AMD\CN` values, the
-  `KMD_DeLagEnabled` per-adapter value, and the `UMD` / `power_v1` binary values. `KeyPath` for the
-  per-adapter ones is the part **below**
-  `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}`
-  (e.g. `UMD`), never the base key — the service walks the adapter subkeys and applies each setting
-  to each, which is what AkariOS's `foreach` does. **Note** `ControlSet001` in AkariOS; use
-  `CurrentControlSet`, which is the stable spelling.
-- **Intel** (`Graphics.ps1`'s Intel block, the `3DKeys` writes): the same shape.
-- **NVIDIA**: `NvidiaProfileXml` is the `.nip` profile from `Graphics.ps1:300-352`, verbatim, applied
-  by Nvidia Profile Inspector rather than by registry. Keep it here beside the other vendors'
-  settings so there is one place that says what "configure" means (design Call 11); the GPUs page
-  (#33) will read the same values when it becomes toggles.
+- **`Hkcu`** — below `HKEY_CURRENT_USER`.
+- **`HklmServices`** — below `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services`.
+- **`GraphicsClass`** — below each adapter subkey of
+  `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}`.
+  `KeyPath` names the part under each adapter (e.g. `UMD`); the service walks the adapter subkeys and
+  applies the setting to each, which is what AkariOS's `foreach` does. There is no adapter number in
+  the data, which is the point of this root.
 
-`Value` is the registry data **in hex**, the way AkariOS writes it, so the service does not have to
-guess a type at the point of writing.
+The values:
+
+- **NVIDIA**: `HklmServices` / `nvlddmkm\Parameters\Global\NVTweak` — `NvCplPhysxAuto` (Dword `0`),
+  `NvDevToolsVisible` (Dword `1`), `RmProfilingAdminOnly` (Dword `0`), from `Graphics.ps1:286-290`.
+  `NvidiaProfileXml` is **also** NVIDIA's: the `.nip` profile from `Graphics.ps1:300-352`, verbatim,
+  applied by Nvidia Profile Inspector (a driver install writes `-clean`; the profile is separate).
+- **AMD**: the `GraphicsClass` / `KMD_DeLagEnabled` and `UMD` values, and `power_v1`'s `abmlevel`
+  (`Graphics.ps1:386-404`); the `Hkcu` / `Software\AMD\CN` values and its subkeys
+  (`Graphics.ps1:382-412`).
+- **Intel**: `GraphicsClass` / `3DKeys` (`Graphics.ps1:1383-1400`).
+
+**Write `CurrentControlSet`, never `ControlSet001`** — AkariOS's `ControlSet001` is the control set
+that happens to be current on the machine it was written on.
+
+`Value` is the data as the type declares it: a Dword is plain decimal digits (AkariOS writes `/d 0`), a
+String is the literal text, and a Binary is the hex bytes AkariOS passes (`/d "3000"` is two bytes, so
+`"3000"`). Keeping the type on the setting is what stops the service guessing at the point of writing.
 
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `dotnet test src/AkariDash.Tests/AkariDash.Tests.csproj --filter "FullyQualifiedName~DriverSettingsTests"`
-Expected: PASS, 4 tests.
+Expected: PASS, 5 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -790,8 +824,11 @@ In `src/AkariDash.App/Services/`, in the style of `WindowsWingetAppService`: pri
   through the shared concurrent-stdout/stderr `ProcessStartInfo` helper (the one Task 4 of the
   Downloads plan built into `WindowsWingetAppService` — **extract it to a shared internal helper
   rather than copying it**); map exit codes the way `WingetInstallResult` does (0 → `Completed`,
-  3010/1641 → `CompletedNeedsRestart`), then apply `DriverSettings` for the vendor and return
-  `InstalledWithoutSettings` if that part fails. For NVIDIA's `NvidiaProfileXml`, write it to the temp
+  3010/1641 → `CompletedNeedsRestart`), then apply `DriverSettings.For(vendor)` — `Hkcu` and
+  `HklmServices` resolve straight to their hive, and `GraphicsClass` walks the adapter subkeys under
+  `...\Control\Class\{4d36e968-…}` and applies the value to each with that `KeyPath` — and return
+  `InstalledWithoutSettings` if any of that fails. Write with `CurrentControlSet` in the path, never a
+  hardcoded `ControlSet001`. For NVIDIA's `NvidiaProfileXml`, write it to the temp
   folder and run Nvidia Profile Inspector's `-silentImport -silent <file>` (`Graphics.ps1:351`) only if
   it is installed; when it is not, return `InstalledWithoutSettings` and say so.
 - **`DebloatAsync(row, installerPath)`**: `DriverDebloat.Plan(row.Vendor, Path.GetFileName(installerPath))`;
