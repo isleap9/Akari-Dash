@@ -2,10 +2,145 @@
     x:Class="AkariDash.App.Views.DriversPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:views="using:AkariDash.App.Views">
+    xmlns:vm="using:AkariDash.App.ViewModels">
 
-    <!-- A placeholder: nothing behind it yet. -->
-    <views:WorkInProgressView
-        Glyph="&#xE7F8;"
-        Description="AkariOS-Ultimate's graphics setup in one place: a clean driver reset with DDU, a debloated driver install, and the NVIDIA, AMD and Intel settings, P0 state and MSI mode that get a card ready to play." />
+    <!-- The Drivers page: a section per graphics card in the PC, each naming the card and its driver
+         versions, with the rows that install, configure and debloat its driver. Every row is an
+         Action: it asks first, runs through one queue, and the heading reads the machine back after.
+         The page title and subtitle come from the shell, as they do for every other page. -->
+    <Grid Padding="24" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal" Spacing="12">
+            <TextBlock Opacity="0.8" Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
+            <ProgressRing Width="16" Height="16" IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+        </StackPanel>
+
+        <!-- Review Focus 3: with no PCI graphics card there is nothing to install for, and no rows. -->
+        <StackPanel
+            Grid.Row="1"
+            Spacing="8"
+            Visibility="{x:Bind ViewModel.HasNoGraphicsCard, Mode=OneWay}">
+            <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="No graphics card found" />
+            <TextBlock
+                Opacity="0.8"
+                TextWrapping="Wrap"
+                Text="Windows has no NVIDIA, AMD or Intel graphics card with a driver in this PC — only a basic display adapter, or none. There is no driver here for this page to install." />
+        </StackPanel>
+
+        <ScrollViewer
+            Grid.Row="1"
+            Padding="0,0,16,0"
+            Visibility="{x:Bind ViewModel.HasGraphicsCard, Mode=OneWay}">
+            <StackPanel Spacing="24">
+                <ItemsRepeater ItemsSource="{x:Bind ViewModel.Sections, Mode=OneWay}">
+                    <ItemsRepeater.Layout>
+                        <StackLayout Spacing="24" />
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="vm:DriverSectionViewModel">
+                            <StackPanel Spacing="8">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="{x:Bind Heading, Mode=OneWay}" />
+                                    <TextBlock Opacity="0.7" Text="{x:Bind VersionLine, Mode=OneWay}" />
+                                </StackPanel>
+
+                                <ItemsRepeater ItemsSource="{x:Bind Rows}">
+                                    <ItemsRepeater.Layout>
+                                        <StackLayout Spacing="4" />
+                                    </ItemsRepeater.Layout>
+                                    <ItemsRepeater.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:DriverRowViewModel">
+                                            <Grid
+                                                Padding="16,12"
+                                                ColumnSpacing="16"
+                                                CornerRadius="8"
+                                                BorderThickness="1"
+                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel Spacing="4">
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <TextBlock FontWeight="SemiBold" Text="{x:Bind Title}" />
+                                                        <TextBlock
+                                                            VerticalAlignment="Center"
+                                                            Opacity="0.6"
+                                                            Style="{StaticResource CaptionTextBlockStyle}"
+                                                            Text="{x:Bind RiskLabel}" />
+                                                    </StackPanel>
+                                                    <TextBlock
+                                                        Opacity="0.8"
+                                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                                        TextWrapping="Wrap"
+                                                        Text="{x:Bind Description}" />
+
+                                                    <!-- A Debloat row takes its file from the drop folder: no picker
+                                                         opens in an elevated app. -->
+                                                    <StackPanel
+                                                        Margin="0,6,0,0"
+                                                        Orientation="Horizontal"
+                                                        Spacing="8"
+                                                        Visibility="{x:Bind IsDebloat}">
+                                                        <ComboBox
+                                                            MinWidth="320"
+                                                            PlaceholderText="No installer in the folder yet"
+                                                            DisplayMemberPath="Name"
+                                                            ItemsSource="{x:Bind Installers}"
+                                                            SelectedItem="{Binding SelectedInstaller, Mode=TwoWay}" />
+                                                    </StackPanel>
+                                                </StackPanel>
+
+                                                <StackPanel
+                                                    Grid.Column="1"
+                                                    VerticalAlignment="Center"
+                                                    Orientation="Horizontal"
+                                                    Spacing="8">
+                                                    <ProgressRing Width="16" Height="16" IsActive="{x:Bind IsWorking, Mode=OneWay}" />
+                                                    <TextBlock
+                                                        VerticalAlignment="Center"
+                                                        Opacity="0.6"
+                                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                                        Text="{x:Bind StateText, Mode=OneWay}" />
+                                                    <Button
+                                                        Content="Install"
+                                                        IsEnabled="{x:Bind IsRunnable, Mode=OneWay}"
+                                                        Command="{x:Bind RunCommand}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsRepeater.ItemTemplate>
+                                </ItemsRepeater>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+
+                <!-- Where a downloaded driver goes, for the Debloat rows. -->
+                <StackPanel Spacing="6">
+                    <TextBlock FontWeight="SemiBold" Text="Drivers you downloaded" />
+                    <TextBlock
+                        Opacity="0.8"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        TextWrapping="Wrap"
+                        Text="Put a driver installer from NVIDIA, AMD or Intel in this folder, then press Refresh. Each card's last row lists the installers that are its own vendor's." />
+                    <TextBlock
+                        Opacity="0.6"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        IsTextSelectionEnabled="True"
+                        Text="{x:Bind ViewModel.InboxFolder}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="Open folder" Command="{x:Bind ViewModel.OpenInboxCommand}" />
+                        <Button Content="Refresh" Command="{x:Bind ViewModel.RefreshInboxCommand}" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
 </Page>
