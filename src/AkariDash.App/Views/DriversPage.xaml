@@ -14,9 +14,19 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <StackPanel Orientation="Horizontal" Spacing="12">
-            <TextBlock Opacity="0.8" Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
-            <ProgressRing Width="16" Height="16" IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+        <StackPanel Spacing="12">
+            <!-- The page as it stands is a placeholder: it works, but it is not the page it will be. -->
+            <InfoBar
+                IsOpen="True"
+                IsClosable="False"
+                Severity="Warning"
+                Title="Placeholder"
+                Message="This page is a placeholder. It will be redone." />
+
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <TextBlock Opacity="0.8" Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
+                <ProgressRing Width="16" Height="16" IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+            </StackPanel>
         </StackPanel>
 
         <ScrollViewer Grid.Row="1" Padding="0,0,16,0">
