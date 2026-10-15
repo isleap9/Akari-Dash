@@ -47,11 +47,16 @@ public static class DriverSettings
 {
     private static readonly IReadOnlyList<DriverSetting> Nvidia =
     [
-        // Graphics.ps1:286-291
+        // Graphics.ps1:280-294, in AkariOS's order: P0 state and HDCP off on the adapter, then the rest.
+        new(DriverSettingRoot.GraphicsClass, "", "DisableDynamicPstate", DriverSettingKind.Dword, "1"),
+        new(DriverSettingRoot.GraphicsClass, "", "RMHdcpKeyglobZero", DriverSettingKind.Dword, "1"),
         new(DriverSettingRoot.HklmServices, @"nvlddmkm\Parameters\Global\NVTweak", "NvCplPhysxAuto", DriverSettingKind.Dword, "0"),
         new(DriverSettingRoot.HklmServices, @"nvlddmkm\Parameters\Global\NVTweak", "NvDevToolsVisible", DriverSettingKind.Dword, "1"),
+        new(DriverSettingRoot.GraphicsClass, "", "RmProfilingAdminOnly", DriverSettingKind.Dword, "0"),
         new(DriverSettingRoot.HklmServices, @"nvlddmkm\Parameters\Global\NVTweak", "RmProfilingAdminOnly", DriverSettingKind.Dword, "0"),
         new(DriverSettingRoot.Hkcu, @"Software\NVIDIA Corporation\NvTray", "StartOnLogin", DriverSettingKind.Dword, "0"),
+        new(DriverSettingRoot.HklmServices, @"nvlddmkm\FTS", "EnableGR535", DriverSettingKind.Dword, "0"),
+        new(DriverSettingRoot.HklmServices, @"nvlddmkm\Parameters\FTS", "EnableGR535", DriverSettingKind.Dword, "0"),
     ];
 
     private static readonly IReadOnlyList<DriverSetting> Amd =
@@ -92,8 +97,8 @@ public static class DriverSettings
     };
 
     /// <summary>
-    /// NVIDIA's Base Profile (Graphics.ps1:308-347), imported with Nvidia Profile Inspector.
-    /// The "Preferred OpenGL GPU" line is left out: it names one particular card's PCI id.
+    /// NVIDIA's Base Profile (Graphics.ps1:308-347), imported with Nvidia Profile Inspector,
+    /// verbatim - the "Preferred OpenGL GPU" line included, as AkariOS imports it.
     /// </summary>
     public const string NvidiaProfileXml = """
         <?xml version="1.0" encoding="utf-16"?>
@@ -132,6 +137,7 @@ public static class DriverSettings
               <ProfileSetting><SettingNameInfo>Shader Cache - Cache Size</SettingNameInfo><SettingID>11306135</SettingID><SettingValue>4294967295</SettingValue><ValueType>Dword</ValueType></ProfileSetting>
               <ProfileSetting><SettingNameInfo>Threaded Optimization</SettingNameInfo><SettingID>549528094</SettingID><SettingValue>1</SettingValue><ValueType>Dword</ValueType></ProfileSetting>
               <ProfileSetting><SettingNameInfo>OpenGL GDI Compatibility</SettingNameInfo><SettingID>544392611</SettingID><SettingValue>0</SettingValue><ValueType>Dword</ValueType></ProfileSetting>
+              <ProfileSetting><SettingNameInfo>Preferred OpenGL GPU</SettingNameInfo><SettingID>550564838</SettingID><SettingValue>id,2.0:268410DE,00000100,GF - (400,2,161,24564) @ (0)</SettingValue><ValueType>String</ValueType></ProfileSetting>
             </Settings>
           </Profile>
         </ArrayOfProfile>

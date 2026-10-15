@@ -6,13 +6,16 @@ namespace AkariDash.Core.Drivers;
 /// <summary>
 /// What a debloat does to a vendor installer once it is extracted: the folders and files it
 /// removes, the components it switches off in the installer's own config, and the setup it then
-/// runs. Every path is relative to the extraction folder; the service decides where that is.
+/// runs, then (Intel only) the control app shipped beside it. Every path is relative to the
+/// extraction folder; the service decides where that is.
 /// </summary>
 public sealed record DebloatPlan(
     IReadOnlyList<string> RemoveAfterExtracting,
     IReadOnlyList<string> TurnOffInConfig,
     string Setup,
-    IReadOnlyList<string> SetupArguments);
+    IReadOnlyList<string> SetupArguments,
+    string? AfterSetup = null,
+    IReadOnlyList<string>? AfterSetupArguments = null);
 
 /// <summary>
 /// The debloat strip lists, transcribed from AkariOS's driver-debloat entry (Graphics.ps1:483-640).
@@ -21,9 +24,8 @@ public sealed record DebloatPlan(
 /// </summary>
 public static partial class DriverDebloat
 {
-    // NVIDIA's extracted package (Graphics.ps1:508-536). NvCpl is kept although AkariOS removes it:
-    // AkariOS then installs the Control Panel from its own appx, which this app does not, and a
-    // driver with no control panel is not what anyone asked for.
+    // NVIDIA's extracted package (Graphics.ps1:508-536), all of it: NvCpl goes too, because the
+    // NVIDIA Control Panel is installed afterwards from its own package (DriverExtras).
     private static readonly DebloatPlan Nvidia = new(
         RemoveAfterExtracting:
         [
@@ -34,6 +36,7 @@ public static partial class DriverDebloat
             "NvApp.MessageBus",
             "NvBackend",
             "NvContainer",
+            "NvCpl",
             "NvDLISR",
             "NVPCF",
             "NvTelemetry",
@@ -86,7 +89,9 @@ public static partial class DriverDebloat
         RemoveAfterExtracting: [],
         TurnOffInConfig: [],
         Setup: "Installer.exe",
-        SetupArguments: ["-f", "--noExtras", "--terminateProcesses", "-s"]);
+        SetupArguments: ["-f", "--noExtras", "--terminateProcesses", "-s"],
+        AfterSetup: @"Resources\Extras\IntelGraphicsSoftware_*.exe",
+        AfterSetupArguments: ["/s"]);
 
     /// <summary>A file name each vendor's own installer has, as the rows describe it.</summary>
     public static string InstallerNameFor(GpuVendor vendor) => vendor switch
