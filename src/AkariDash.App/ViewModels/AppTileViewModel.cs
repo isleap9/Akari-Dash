@@ -66,22 +66,25 @@ public sealed partial class AppTileViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(StateText))]
     [NotifyPropertyChangedFor(nameof(IsInstallable))]
     [NotifyPropertyChangedFor(nameof(IsInstalling))]
-    [NotifyCanExecuteChangedFor(nameof(ToggleSelectionCommand))]
+    [NotifyPropertyChangedFor(nameof(PickHint))]
     public partial AppTileState State { get; set; } = AppTileState.Checking;
 
     /// <summary>Picked in the grid, waiting for the page's one Install button.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HighlightThickness))]
     [NotifyPropertyChangedFor(nameof(AutomationName))]
+    [NotifyPropertyChangedFor(nameof(PickHint))]
     public partial bool IsSelected { get; set; }
 
     partial void OnIsSelectedChanged(bool value) => _selectionChanged();
 
     /// <summary>
-    /// The whole-card button's own name. The card's text sits under it rather than in it, so the button
-    /// would otherwise be an unnamed control to a screen reader.
+    /// The card button's own name. The card's text sits inside the button, so a screen reader reads it
+    /// anyway; this adds what a click would do, which the text alone does not say.
     /// </summary>
-    public string AutomationName => IsSelected ? $"{Name}, picked" : $"Pick {Name}";
+    public string AutomationName => IsInstallable
+        ? IsSelected ? $"{Name}, picked" : $"Pick {Name}"
+        : $"{Name}, {StateText}";
 
     /// <summary>
     /// The accent outline a picked tile wears, drawn over the card the way a tweak row draws one over
@@ -91,11 +94,24 @@ public sealed partial class AppTileViewModel : ObservableObject
 
     /// <summary>
     /// Clicking anywhere on the card is the picking - the whole tile is the control, not a tick box
-    /// inside it. A tile that cannot be installed does nothing, and does not light up under the
-    /// pointer either.
+    /// inside it. A tile with nothing to install has nothing to pick, so a click there does nothing.
+    /// The card stays a live button either way: disabling it would grey its own text out, and a card
+    /// that reads "Installed" in grey looks broken rather than done.
     /// </summary>
-    [RelayCommand(CanExecute = nameof(IsInstallable))]
-    private void ToggleSelection() => IsSelected = !IsSelected;
+    [RelayCommand]
+    private void ToggleSelection()
+    {
+        if (IsInstallable)
+        {
+            IsSelected = !IsSelected;
+        }
+    }
+
+    /// <summary>The tooltip, on the tiles where clicking does something - and nowhere else, so the
+    /// card never invites a click it will not honour.</summary>
+    public string? PickHint => IsInstallable
+        ? IsSelected ? "Click again to unpick it" : "Click to pick this app"
+        : null;
 
     /// <summary>What the caption beside the button says.</summary>
     public string StateText => State switch

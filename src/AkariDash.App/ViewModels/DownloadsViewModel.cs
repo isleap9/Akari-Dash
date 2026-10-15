@@ -130,9 +130,16 @@ public sealed partial class DownloadsViewModel : ViewModelBase, INavigationAware
     public string InstallSelectedLabel =>
         SelectedCount == 0 ? "Install selected" : $"Install selected ({SelectedCount})";
 
+    /// <summary>
+    /// Shown while nothing is picked. A card that is itself a button does not look like one, so the bar
+    /// says what to do rather than leaving a new user to find out.
+    /// </summary>
+    public bool NothingPicked => SelectedCount == 0;
+
     partial void OnSelectedCountChanged(int value)
     {
         OnPropertyChanged(nameof(InstallSelectedLabel));
+        OnPropertyChanged(nameof(NothingPicked));
         InstallSelectedCommand.NotifyCanExecuteChanged();
     }
 

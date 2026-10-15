@@ -50,7 +50,8 @@
 
         <!-- Picking is clicking the card, and one button installs what was picked: the count is in the
              button, so the bar carries no separate label. Select all takes what the filter and search
-             show. -->
+             show. The hint is there while nothing is picked, because a card that is a button does not
+             say so by itself. -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
             <Button
                 Style="{StaticResource AccentButtonStyle}"
@@ -58,6 +59,12 @@
                 Command="{x:Bind ViewModel.InstallSelectedCommand}" />
             <Button VerticalAlignment="Center" Content="Select all" Command="{x:Bind ViewModel.SelectAllCommand}" />
             <Button VerticalAlignment="Center" Content="Clear" Command="{x:Bind ViewModel.ClearSelectionCommand}" />
+            <TextBlock
+                VerticalAlignment="Center"
+                Opacity="0.6"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="Click a card to pick the app."
+                Visibility="{x:Bind ViewModel.NothingPicked, Mode=OneWay}" />
         </StackPanel>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="12">
@@ -65,7 +72,8 @@
             <ProgressRing Width="16" Height="16" IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
         </StackPanel>
 
-        <!-- Three across, one card per app: an avatar square, the app, and where its install is. -->
+        <!-- Three across, one card per app: the card itself is the button, so a click anywhere on it
+             picks the app. -->
         <ScrollViewer Grid.Row="3" Padding="0,0,16,0">
             <ItemsRepeater ItemsSource="{x:Bind ViewModel.Filtered, Mode=OneWay}">
                 <ItemsRepeater.Layout>
@@ -80,98 +88,107 @@
                 <ItemsRepeater.ItemTemplate>
                     <DataTemplate x:DataType="vm:AppTileViewModel">
                         <Grid>
-                            <Grid
+                            <!-- The card is the button: the click, the hover tint, the focus ring and
+                                 the keyboard all come from one real control, and the card is drawn by
+                                 it rather than under it. -->
+                            <Button
                                 Height="186"
                                 Padding="18,16"
-                                RowSpacing="10"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch"
                                 CornerRadius="8"
                                 BorderThickness="1"
                                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="*" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                AutomationProperties.Name="{x:Bind AutomationName, Mode=OneWay}"
+                                ToolTipService.ToolTip="{x:Bind PickHint, Mode=OneWay}"
+                                Command="{x:Bind ToggleSelectionCommand}">
+                                <Grid RowSpacing="10">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
 
-                                <Grid ColumnSpacing="8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
 
-                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                        <StackPanel Orientation="Horizontal" Spacing="12">
+                                            <Border
+                                                Width="40"
+                                                Height="40"
+                                                CornerRadius="8"
+                                                Background="{x:Bind AccentColor}">
+                                                <TextBlock
+                                                    HorizontalAlignment="Center"
+                                                    VerticalAlignment="Center"
+                                                    FontSize="18"
+                                                    FontWeight="SemiBold"
+                                                    Foreground="White"
+                                                    Text="{x:Bind Initial}" />
+                                            </Border>
+                                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                                <TextBlock
+                                                    FontWeight="SemiBold"
+                                                    Text="{x:Bind Name}"
+                                                    TextTrimming="CharacterEllipsis" />
+                                                <TextBlock
+                                                    Opacity="0.6"
+                                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                                    Text="{x:Bind Publisher}"
+                                                    TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <!-- The tick is the card's own answer to a click: it shows only
+                                             when the tile is picked, so nothing sits greyed out on a
+                                             tile that cannot be picked. -->
                                         <Border
-                                            Width="40"
-                                            Height="40"
-                                            CornerRadius="8"
-                                            Background="{x:Bind AccentColor}">
-                                            <TextBlock
+                                            Grid.Column="1"
+                                            Width="20"
+                                            Height="20"
+                                            VerticalAlignment="Top"
+                                            CornerRadius="4"
+                                            Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                            Visibility="{x:Bind IsSelected, Mode=OneWay}">
+                                            <FontIcon
+                                                FontSize="12"
                                                 HorizontalAlignment="Center"
                                                 VerticalAlignment="Center"
-                                                FontSize="18"
-                                                FontWeight="SemiBold"
                                                 Foreground="White"
-                                                Text="{x:Bind Initial}" />
+                                                Glyph="&#xE73E;" />
                                         </Border>
-                                        <StackPanel VerticalAlignment="Center" Spacing="2">
-                                            <TextBlock
-                                                FontWeight="SemiBold"
-                                                Text="{x:Bind Name}"
-                                                TextTrimming="CharacterEllipsis" />
-                                            <TextBlock
-                                                Opacity="0.6"
-                                                Style="{StaticResource CaptionTextBlockStyle}"
-                                                Text="{x:Bind Publisher}"
-                                                TextTrimming="CharacterEllipsis" />
-                                        </StackPanel>
-                                    </StackPanel>
+                                    </Grid>
 
-                                    <!-- The tick is the card's own answer to a click: it shows only when
-                                         the tile is picked, so there is no dead control sitting greyed
-                                         out on a tile that cannot be picked. -->
-                                    <Border
-                                        Grid.Column="1"
-                                        Width="20"
-                                        Height="20"
-                                        VerticalAlignment="Top"
-                                        CornerRadius="4"
-                                        Background="{ThemeResource AccentFillColorDefaultBrush}"
-                                        Visibility="{x:Bind IsSelected, Mode=OneWay}">
-                                        <FontIcon
-                                            FontSize="12"
-                                            HorizontalAlignment="Center"
-                                            VerticalAlignment="Center"
-                                            Foreground="White"
-                                            Glyph="&#xE73E;" />
-                                    </Border>
-                                </Grid>
-
-                                <TextBlock
-                                    Grid.Row="1"
-                                    Opacity="0.8"
-                                    Style="{StaticResource CaptionTextBlockStyle}"
-                                    MaxLines="2"
-                                    TextWrapping="Wrap"
-                                    TextTrimming="CharacterEllipsis"
-                                    Text="{x:Bind Description}" />
-
-                                <StackPanel
-                                    Grid.Row="2"
-                                    VerticalAlignment="Bottom"
-                                    Orientation="Horizontal"
-                                    Spacing="8">
-                                    <ProgressRing
-                                        Width="16"
-                                        Height="16"
-                                        IsActive="{x:Bind IsInstalling, Mode=OneWay}" />
                                     <TextBlock
-                                        VerticalAlignment="Center"
-                                        Opacity="0.6"
+                                        Grid.Row="1"
+                                        Opacity="0.8"
                                         Style="{StaticResource CaptionTextBlockStyle}"
-                                        Text="{x:Bind StateText, Mode=OneWay}" />
-                                </StackPanel>
-                            </Grid>
+                                        MaxLines="2"
+                                        TextWrapping="Wrap"
+                                        TextTrimming="CharacterEllipsis"
+                                        Text="{x:Bind Description}" />
+
+                                    <StackPanel
+                                        Grid.Row="2"
+                                        VerticalAlignment="Bottom"
+                                        Orientation="Horizontal"
+                                        Spacing="8">
+                                        <ProgressRing
+                                            Width="16"
+                                            Height="16"
+                                            IsActive="{x:Bind IsInstalling, Mode=OneWay}" />
+                                        <TextBlock
+                                            VerticalAlignment="Center"
+                                            Opacity="0.6"
+                                            Style="{StaticResource CaptionTextBlockStyle}"
+                                            Text="{x:Bind StateText, Mode=OneWay}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Button>
 
                             <!-- The accent outline a picked card wears, over the card's own 1px border,
                                  so the two never have to share one BorderBrush. -->
@@ -180,21 +197,6 @@
                                 IsHitTestVisible="False"
                                 BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
                                 BorderThickness="{x:Bind HighlightThickness, Mode=OneWay}" />
-
-                            <!-- The card is the control: one transparent button over the whole tile gives
-                                 the click, the hover tint, the focus ring and the keyboard, and changes
-                                 nothing about how the card itself is drawn. A card that cannot be picked
-                                 takes no part in pointer input at all, so it never lights up under the
-                                 pointer on its way to doing nothing. -->
-                            <Button
-                                Padding="0"
-                                CornerRadius="8"
-                                BorderThickness="0"
-                                Background="Transparent"
-                                IsHitTestVisible="{x:Bind IsInstallable, Mode=OneWay}"
-                                AutomationProperties.Name="{x:Bind AutomationName, Mode=OneWay}"
-                                ToolTipService.ToolTip="Click the card to pick it"
-                                Command="{x:Bind ToggleSelectionCommand}" />
                         </Grid>
                     </DataTemplate>
                 </ItemsRepeater.ItemTemplate>

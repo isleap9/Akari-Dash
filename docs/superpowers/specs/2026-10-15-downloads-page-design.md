@@ -223,13 +223,19 @@ revision — only how a tile is picked, and how a run is started.
 The user's follow-up, minutes later: *"instead to click the checkbox let makes it just by clicking
 the card will select the app"*. So:
 
-- **The whole card is the control.** One transparent `Button` fills the tile, over the card's own
-  drawing, so a click anywhere on it picks or unpicks the app. The button gives the hover tint, the
-  focus ring and the keyboard (Tab to a card, Space or Enter to pick) that a bare tick box would
-  have to be taught; the card keeps its own background, border and text untouched underneath.
+- **The whole card is the control, and the card is a button.** The tile is a real `Button` — its own
+  background, border, padding and content — so a click anywhere on it picks or unpicks the app, and
+  hover, the focus ring and the keyboard (Tab to a card, Space or Enter to pick) come from a real
+  control rather than being emulated. First attempt at this put one transparent `Button` over the
+  card as a sibling; it did not take a click in the VM, and was replaced by the card being the
+  button, with the accent ring drawn over it by a non-hit-testable `Border`.
 - **The pick shows as an accent outline**, the same 2px accent ring a tweak row wears for a search
   hit (`HighlightThickness`, the pattern already in `TweakViewModel`), plus a small accent tick badge
   in the corner the box used to sit in. The badge is the only tick left, and it is not a control.
-- **Greyed-out boxes are gone with the boxes.** A tile that cannot be installed is a disabled
-  button: nothing to fill in, nothing greyed beside it, and its text stays readable.
+- **Greyed-out boxes are gone with the boxes.** A tile with nothing to install stays a live button
+  that does nothing when clicked: disabling it would grey its own text, and a card reading
+  "Installed" in grey looks broken rather than done. Its tooltip goes too, so the card never invites
+  a click it will not honour.
+- **The bar says what to do.** While nothing is picked it carries "Click a card to pick the app." —
+  a card that is itself a button does not look like one to someone who has not used it.
 
