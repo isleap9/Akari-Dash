@@ -8,7 +8,6 @@
   <Folder Name="/src/">
     <Project Path="src/AkariDash.App/AkariDash.App.csproj" />
     <Project Path="src/AkariDash.Core/AkariDash.Core.csproj" />
-    <Project Path="src/AkariDash.DriverReset/AkariDash.DriverReset.csproj" />
     <Project Path="src/AkariDash.Framework/AkariDash.Framework.csproj" />
     <Project Path="src/AkariDash.Tests/AkariDash.Tests.csproj" />
   </Folder>

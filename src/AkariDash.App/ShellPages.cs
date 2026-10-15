@@ -12,7 +12,7 @@ public static class ShellPages
 
         NavigationItem.Header("Performance"),
         new("Gaming", "\uE7FC", typeof(GamingPage), Subtitle: "Latency, GPU scheduling and the visual effects games pay for"),
-        new("Drivers", "\uE7F8", typeof(DriversPage), Subtitle: "AkariOS-Ultimate's Graphics: DDU, driver installs, settings, DirectX and C++"),
+        new("Drivers", "\uE7F8", typeof(DriversPage), Subtitle: "Work in progress"),
         new("Network", "\uE968", typeof(NetworkPage), Subtitle: "Work in progress"),
         new("Services", "\uE9F5", typeof(ServicesPage), Subtitle: "Background services and scheduled tasks"),
 
