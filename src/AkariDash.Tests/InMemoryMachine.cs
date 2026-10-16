@@ -13,11 +13,18 @@ public sealed class InMemoryMachine : IMachine
     private readonly HashSet<MachineLocation> _unreadable = [];
     private readonly HashSet<GpuVendor> _gpuVendors = [];
     private readonly List<string> _restorePoints = [];
+    private readonly List<SafeModePass> _safeModePasses = [];
     private bool _restorePointsFail;
     private PcFacts _pc = PcFacts.Unknown;
 
     /// <summary>The description of every restore point asked for, in order (including ones that failed).</summary>
     public IReadOnlyList<string> RestorePointsRequested => _restorePoints;
+
+    /// <summary>Every safe-mode pass staged, in order.</summary>
+    public IReadOnlyList<SafeModePass> SafeModePasses => _safeModePasses;
+
+    /// <summary>Records a safe-mode pass instead of restarting the PC, as the real machine would.</summary>
+    public void StageSafeModePass(SafeModePass pass) => _safeModePasses.Add(pass);
 
     public InMemoryMachine With(MachineLocation location, MachineValue value)
     {

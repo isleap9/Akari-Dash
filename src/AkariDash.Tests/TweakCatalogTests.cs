@@ -210,20 +210,22 @@ public class TweakCatalogTests
     }
 
     [Fact]
-    public void Services_live_only_on_the_services_page_and_tasks_only_in_gamings_scheduled_tasks()
+    public void Services_live_only_on_the_services_page_and_tasks_only_in_the_scheduled_tasks_groups()
     {
         foreach (var tweak in TweakCatalog.All)
         {
             var isServices = tweak.Category == Category.Services;
             // Defender's own tasks sit with the rest of Defender Optimize on the Security page.
-            var isTasks = tweak is { Category: Category.Gaming, Group: "Scheduled tasks" } or { Category: Category.Security, Group: "Microsoft Defender" };
+            var ownsTasks = tweak is { Category: Category.Gaming, Group: "Scheduled tasks" } or { Category: Category.Security, Group: "Microsoft Defender" };
 
             Assert.All(tweak.Targets, target => Assert.True(
                 target.Location switch
                 {
                     ServiceLocation => isServices,
-                    ScheduledTaskLocation => isTasks,
-                    _ => !isServices && !isTasks,
+                    ScheduledTaskLocation => ownsTasks,
+                    // The Services page is services and nothing else; a group that holds a task may
+                    // hold plain values too, as the Microsoft Defender group does.
+                    _ => !isServices,
                 },
                 $"{tweak.Id} ({tweak.Category} / {tweak.Group}) targets {target.Location}"));
         }

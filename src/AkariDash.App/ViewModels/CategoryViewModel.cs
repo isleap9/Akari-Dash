@@ -146,7 +146,9 @@ public sealed class CategoryViewModel(
         PendingTitle = pending.NeedsRestart ? "Restart to finish" : "Sign out to finish";
 
         var lines = new List<string>();
-        AddWaiting(lines, "a restart", pending.AfterRestart);
+        var safeMode = pending.AfterRestart.Where(tweak => tweak.Activation == Activation.InSafeMode).ToList();
+        AddWaiting(lines, "a restart", [.. pending.AfterRestart.Except(safeMode)]);
+        AddWaiting(lines, "a restart into safe mode", safeMode);
         AddWaiting(lines, "a sign-out", pending.AfterSignOut);
 
         if (BuildInfo.IsDryRunOnly)
@@ -165,6 +167,15 @@ public sealed class CategoryViewModel(
         }
     }
 
+    /// <summary>
+    /// What a Tweak needs beyond writing its values, said before the user confirms. A safe-mode pass
+    /// restarts the PC twice, which the person has to agree to and should not be surprised by.
+    /// </summary>
+    private static string SafeModeNote(Activation activation) =>
+        activation == Activation.InSafeMode
+            ? $"{Environment.NewLine}{Environment.NewLine}This one is made in safe mode: the PC restarts into it now, makes the change, and restarts again."
+            : string.Empty;
+
     // async void: called from the toggle's binding setter, and never throws (errors go to the info bar).
     private async void ChooseOption(DeclaredTweak tweak, TweakOption option) => await RunAsync(tweak, "Applying", async () =>
     {
@@ -178,6 +189,7 @@ public sealed class CategoryViewModel(
             $"{tweak.Title}: {option.Label}",
             "What will change:" + Environment.NewLine + Environment.NewLine +
                 string.Join(Environment.NewLine, changes) +
+                SafeModeNote(tweak.ActivationOf(option)) +
                 BuildInfo.PreviewNote,
             "Apply",
             "Cancel");
@@ -216,7 +228,9 @@ public sealed class CategoryViewModel(
                     title,
                     BuildInfo.IsDryRunOnly
                         ? $"Dry Run recorded {changes.Count} change(s); nothing was written to this PC, so its Live State is unchanged."
-                        : $"Applied {changes.Count} change(s).");
+                        : tweak.ActivationOf(option) == Activation.InSafeMode
+                            ? $"The PC is restarting into safe mode to make {changes.Count} change(s)."
+                            : $"Applied {changes.Count} change(s).");
             }
         }
     });
@@ -225,7 +239,8 @@ public sealed class CategoryViewModel(
     {
         var confirmed = await dialogs.ConfirmAsync(
             $"Undo {tweak.Title}",
-            "Put back the values this PC had before Akari-Dash first changed this Tweak?",
+            "Put back the values this PC had before Akari-Dash first changed this Tweak?" +
+                SafeModeNote(tweak.Activation),
             "Undo",
             "Cancel");
 
@@ -238,7 +253,9 @@ public sealed class CategoryViewModel(
                 $"Undo {tweak.Title}",
                 BuildInfo.IsDryRunOnly
                     ? "Dry Run recorded the Undo; nothing was written to this PC."
-                    : "Undone: this Tweak's values are back to what this PC had before Akari-Dash changed it.");
+                    : tweak.Activation == Activation.InSafeMode
+                        ? "The PC is restarting into safe mode to put this Tweak's values back."
+                        : "Undone: this Tweak's values are back to what this PC had before Akari-Dash changed it.");
         }
     });
 

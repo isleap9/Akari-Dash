@@ -35,4 +35,12 @@ public interface IMachine
     /// <summary>Turns System Protection (System Restore) on for <paramref name="drive"/>, such as <c>C:\</c>.</summary>
     /// <exception cref="Exception">Windows did not turn it on; the type depends on the machine.</exception>
     void TurnOnSystemProtection(string drive) => throw new NotSupportedException("This machine cannot turn on System Protection.");
+
+    /// <summary>
+    /// Hands a Tweak's writes to the companion beside the app, because Windows only lets them be
+    /// written in safe mode, and restarts the PC into safe mode so it can. Returns once the restart
+    /// is on its way.
+    /// </summary>
+    /// <exception cref="Exception">The pass could not be staged; nothing was changed.</exception>
+    void StageSafeModePass(SafeModePass pass) => throw new NotSupportedException("This machine cannot stage a safe-mode pass.");
 }

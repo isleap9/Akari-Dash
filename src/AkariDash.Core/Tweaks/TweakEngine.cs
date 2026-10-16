@@ -36,12 +36,14 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
         {
             lock (_changed)
             {
+                // A safe-mode pass waits on a restart as well: the change lands while the PC is
+                // restarting into safe mode, and is in place when the user is back.
                 return new(
                     Waiting(Activation.AfterSignOut),
-                    Waiting(Activation.AfterRestart));
+                    Waiting(Activation.AfterRestart, Activation.InSafeMode));
 
-                List<DeclaredTweak> Waiting(Activation activation) => _changed
-                    .Where(change => change.Activation == activation)
+                List<DeclaredTweak> Waiting(params Activation[] activations) => _changed
+                    .Where(change => activations.Contains(change.Activation))
                     .Select(change => change.Tweak)
                     .ToList();
             }
@@ -214,7 +216,7 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
 
         try
         {
-            WriteAll(_writes, tweak.Title, ValuesOf(tweak, option));
+            WriteOrStage(tweak, option, undo: false, option.Id, ValuesOf(tweak, option));
         }
         catch (TweakApplyException error) when (isFirstApply && error.RolledBack)
         {
@@ -245,6 +247,38 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
             return;
         }
 
+        // Putting back what the applied Option wrote waits on whatever that Option waited on.
+        var undone = tweak.Options.FirstOrDefault(option => option.Id == applied.LastAppliedOptionId);
+        var activation = ActivationFor(tweak, undone);
+
+        if (activation == Activation.InSafeMode)
+        {
+            // The companion puts the Original Values back in safe mode, and forgets them only once it
+            // has: the record has to survive the restart for it to read them. A pass that never runs
+            // therefore leaves the Tweak applied and Undo available, which is the honest reading.
+            //
+            // What Akari-Dash writes in the session that asked is put back here instead, from the same
+            // record, because the pass does not write it and safe mode may be another profile's.
+            var writtenNow = tweak.Targets
+                .Where(target => target.WrittenInOwnSession)
+                .Join(
+                    applied.OriginalValues,
+                    target => target.Location,
+                    original => original.Location,
+                    (target, original) => (target.Location, original.Value))
+                .ToList();
+
+            _writes.StageSafeModePass(new SafeModePass(tweak.Id, applied.LastAppliedOptionId, Undo: true));
+
+            if (writtenNow.Count > 0)
+            {
+                WriteAll(_writes, tweak.Title, writtenNow);
+            }
+
+            MarkChanged(tweak, activation);
+            return;
+        }
+
         List<(MachineLocation Location, MachineValue? Value)> writes =
             [.. applied.OriginalValues.Select(original => (original.Location, original.Value))];
         writes.AddRange(LeftBehind(tweak, applied));
@@ -252,10 +286,53 @@ public sealed class TweakEngine(IMachine machine, IOriginalValuesStore? store = 
         WriteAll(_writes, tweak.Title, writes);
         _store.Clear(tweak.Id);
 
-        // Putting back what the applied Option wrote waits on whatever that Option waited on.
-        var undone = tweak.Options.FirstOrDefault(option => option.Id == applied.LastAppliedOptionId);
-        MarkChanged(tweak, undone is null ? tweak.Activation : tweak.ActivationOf(undone));
+        MarkChanged(tweak, activation);
     }
+
+    /// <summary>
+    /// Writes a Tweak's values, or, when Windows only lets them be written in safe mode, hands them to
+    /// the companion beside the app and restarts the PC. Either way it is one unit: a failure leaves
+    /// the Tweak as it was.
+    /// </summary>
+    private void WriteOrStage(
+        DeclaredTweak tweak,
+        TweakOption? option,
+        bool undo,
+        string optionId,
+        IReadOnlyList<(MachineLocation Location, MachineValue? Value)> values)
+    {
+        if (ActivationFor(tweak, option) == Activation.InSafeMode)
+        {
+            var writtenNow = tweak.Targets
+                .Where(target => target.WrittenInOwnSession)
+                .Join(
+                    values,
+                    target => target.Location,
+                    written => written.Location,
+                    (target, written) => written)
+                .ToList();
+
+            // The pass is staged first: a PC that cannot be put in safe mode is no reason to leave half of
+            // this Tweak's change behind. What does not need safe mode is written now, in the session
+            // that asked for it, and what does waits for the pass. A current-user value is in this
+            // session's own hive: safe mode may sign in as a different account, which would write it to
+            // the wrong profile.
+            _writes.StageSafeModePass(new SafeModePass(tweak.Id, optionId, undo));
+
+            if (writtenNow.Count > 0)
+            {
+                WriteAll(_writes, tweak.Title, writtenNow);
+            }
+
+            return;
+        }
+
+        WriteAll(_writes, tweak.Title, values);
+    }
+
+    /// <summary>When a change takes effect: the Option's own Activation where it has one, the Tweak's otherwise.</summary>
+    private static Activation ActivationFor(DeclaredTweak tweak, TweakOption? option) =>
+        option is null ? tweak.Activation : tweak.ActivationOf(option);
 
     /// <summary>
     /// Targets this Tweak writes that its record has no Original Value for, and that still hold

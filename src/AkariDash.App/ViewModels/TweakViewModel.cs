@@ -78,6 +78,7 @@ public sealed partial class TweakViewModel : ViewModelBase
             Activation.Immediately => "Immediately",
             Activation.AfterSignOut => "After sign-out",
             Activation.AfterRestart => "After restart",
+            Activation.InSafeMode => "In safe mode, next restart",
             _ => throw new UnreachableException($"Unknown Activation: {activation}"),
         };
         IsDelayed = activation != Activation.Immediately;

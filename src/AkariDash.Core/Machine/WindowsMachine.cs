@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using AkariDash.Core.Tweaks;
 using Microsoft.Win32;
 
 namespace AkariDash.Core.Machine;
@@ -18,6 +19,7 @@ public sealed class WindowsMachine : IMachine
     private const string CurrentVersionKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
     private const string ProcessorKey = @"HARDWARE\DESCRIPTION\System\CentralProcessor\0";
     private const string BiosKey = @"HARDWARE\DESCRIPTION\System\BIOS";
+    private const string RunOnceKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce";
 
     public MachineValue? Read(MachineLocation location) => location switch
     {
@@ -386,6 +388,77 @@ public sealed class WindowsMachine : IMachine
                     Marshal.FinalReleaseComObject(comObject);
                 }
             }
+        }
+    }
+
+    // The safe-mode half of a Tweak Windows only lets be written in safe boot. Every piece the
+    // companion needs is written to disk and registered before the PC is told to restart, and each
+    // step that can fail takes the earlier ones back, so a failure leaves the PC as it was — never
+    // restarting into safe mode with nothing there to do.
+    public void StageSafeModePass(SafeModePass pass)
+    {
+        var companion = Path.Combine(AppContext.BaseDirectory, DefenderOptimize.CompanionExecutable);
+        if (!File.Exists(companion))
+        {
+            throw new FileNotFoundException(
+                $"{DefenderOptimize.CompanionExecutable} is not next to Akari-Dash, so nothing was staged.", companion);
+        }
+
+        pass.Write(SafeModePass.DefaultPath);
+
+        try
+        {
+            using var runOnce = RegistryKey
+                .OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64)
+                .CreateSubKey(RunOnceKey, writable: true)
+                ?? throw new InvalidOperationException("Windows' RunOnce key could not be opened.");
+            runOnce.SetValue(
+                DefenderOptimize.RunOnceValueName,
+                DefenderOptimize.RunOnceCommand(companion, SafeModePass.DefaultPath),
+                RegistryValueKind.String);
+        }
+        catch (Exception)
+        {
+            SafeModePass.Remove(SafeModePass.DefaultPath);
+            throw;
+        }
+
+        try
+        {
+            // The flag decides only how the NEXT start goes, so this session carries on untouched.
+            // Set before the restart is asked for: if this fails, the pass and its RunOnce entry are
+            // taken back, so the PC is never left set to boot into safe mode for nothing.
+            RunBcdedit("/set", "{current}", "safeboot", "minimal");
+        }
+        catch (Exception)
+        {
+            RemoveRunOnceValue();
+            SafeModePass.Remove(SafeModePass.DefaultPath);
+            throw;
+        }
+
+        // The restart is left a short delay so the change is on screen before the PC goes down. A
+        // restart the user starts themselves does just as well: RunOnce runs at the next sign-in.
+        using var restart = Process.Start(new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "shutdown.exe"))
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            ArgumentList = { "/r", "/t", "20", "/c", "Akari-Dash is restarting to apply a change in safe mode" },
+        });
+    }
+
+    private static void RemoveRunOnceValue()
+    {
+        try
+        {
+            using var runOnce = RegistryKey
+                .OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64)
+                .OpenSubKey(RunOnceKey, writable: true);
+            runOnce?.DeleteValue(DefenderOptimize.RunOnceValueName, throwOnMissingValue: false);
+        }
+        catch (Exception)
+        {
+            // Harmless on its own: without the pass file it points at, the companion does nothing.
         }
     }
 

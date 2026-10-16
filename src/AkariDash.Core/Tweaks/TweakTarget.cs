@@ -7,8 +7,10 @@ namespace AkariDash.Core.Tweaks;
 /// scheduled task's enabled state.
 /// <paramref name="AbsentMeans"/> is what Windows behaves as when it does not exist
 /// (e.g. Game Mode is on by default), so a missing value can still resolve to an Option.
+/// <paramref name="WrittenInOwnSession"/> says Akari-Dash writes this one itself, in the session that
+/// asked for the Tweak, rather than leaving it to the safe-mode pass.
 /// </summary>
-public sealed record TweakTarget(MachineLocation Location, MachineValue? AbsentMeans = null)
+public sealed record TweakTarget(MachineLocation Location, MachineValue? AbsentMeans = null, bool WrittenInOwnSession = false)
 {
     /// <summary>
     /// What Windows behaves as when this target holds <paramref name="value"/>: the value itself,

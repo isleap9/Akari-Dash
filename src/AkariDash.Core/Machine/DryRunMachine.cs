@@ -35,6 +35,11 @@ public sealed class DryRunMachine(IMachine inner) : IMachine
     {
     }
 
+    // Nor does it restart the PC into safe mode; a Dry Run shows the change and stops there.
+    public void StageSafeModePass(SafeModePass pass)
+    {
+    }
+
     private void Record(MachineLocation location, MachineValue? value)
     {
         var index = _changes.FindIndex(change => change.Location == location);

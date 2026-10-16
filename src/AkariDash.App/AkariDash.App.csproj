@@ -44,6 +44,9 @@
   <ItemGroup>
     <ProjectReference Include="..\AkariDash.Core\AkariDash.Core.csproj" />
     <ProjectReference Include="..\AkariDash.Framework\AkariDash.Framework.csproj" />
+    <!-- Referenced so the build puts the companion beside the app, which is where the app looks for
+         it when it stages a safe-mode pass. Nothing in the app calls into it. -->
+    <ProjectReference Include="..\AkariDash.DefenderReset\AkariDash.DefenderReset.csproj" />
   </ItemGroup>
 
   <ItemGroup>

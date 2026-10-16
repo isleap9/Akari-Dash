@@ -252,7 +252,9 @@ public partial class HomeViewModel : ViewModelBase
             if (waiting.Count > 0)
             {
                 report.Append(Paragraph(
-                    waiting.Any(result => result.Tweak.Activation == Activation.AfterRestart) ? "Restart to finish:" : "Sign out to finish:",
+                    waiting.Any(result => result.Tweak.Activation is Activation.AfterRestart or Activation.InSafeMode)
+                        ? "Restart to finish:"
+                        : "Sign out to finish:",
                     waiting.Select(result => result.Tweak.Title)));
             }
 
