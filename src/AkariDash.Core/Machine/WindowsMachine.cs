@@ -391,10 +391,11 @@ public sealed class WindowsMachine : IMachine
         }
     }
 
-    // The safe-mode half of a Tweak Windows only lets be written in safe boot. Every piece the
-    // companion needs is written to disk and registered before the PC is told to restart, and each
-    // step that can fail takes the earlier ones back, so a failure leaves the PC as it was — never
-    // restarting into safe mode with nothing there to do.
+    // The safe-mode half of a Tweak Windows only lets be written in safe boot. The pass joins the
+    // queue waiting for the next restart rather than replacing it, so two safe-mode Tweaks staged
+    // before one restart both run. Every piece the companion needs is written to disk and registered
+    // before the PC is told to restart, and each step that can fail takes the earlier ones back, so a
+    // failure leaves the PC as it was — never restarting into safe mode with nothing there to do.
     public void StageSafeModePass(SafeModePass pass)
     {
         var companion = Path.Combine(AppContext.BaseDirectory, DefenderOptimize.CompanionExecutable);
@@ -404,7 +405,7 @@ public sealed class WindowsMachine : IMachine
                 $"{DefenderOptimize.CompanionExecutable} is not next to Akari-Dash, so nothing was staged.", companion);
         }
 
-        pass.Write(SafeModePass.DefaultPath);
+        SafeModePass.Append(SafeModePass.DefaultPath, pass);
 
         try
         {
@@ -419,7 +420,7 @@ public sealed class WindowsMachine : IMachine
         }
         catch (Exception)
         {
-            SafeModePass.Remove(SafeModePass.DefaultPath);
+            SafeModePass.RemoveTweak(SafeModePass.DefaultPath, pass.TweakId);
             throw;
         }
 
@@ -433,7 +434,7 @@ public sealed class WindowsMachine : IMachine
         catch (Exception)
         {
             RemoveRunOnceValue();
-            SafeModePass.Remove(SafeModePass.DefaultPath);
+            SafeModePass.RemoveTweak(SafeModePass.DefaultPath, pass.TweakId);
             throw;
         }
 

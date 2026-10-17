@@ -97,7 +97,15 @@ public sealed record SafeModePass(
     {
         if (passes.Count == 0)
         {
-            Remove(path);
+            try
+            {
+                File.Delete(path);
+            }
+            catch (IOException)
+            {
+                // A pass nobody reads is harmless; the next one overwrites it.
+            }
+
             return;
         }
 
@@ -132,18 +140,5 @@ public sealed record SafeModePass(
     public static void RemoveTweak(string path, string tweakId)
     {
         WriteAll(path, ReadList(path).Where(pass => pass.TweakId != tweakId).ToList());
-    }
-
-    /// <summary>Forgets the pass, so nothing is left waiting on it.</summary>
-    public static void Remove(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (IOException)
-        {
-            // A pass nobody reads is harmless; the next one overwrites it.
-        }
     }
 }

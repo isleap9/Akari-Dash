@@ -3,7 +3,8 @@ using AkariDash.Core.Machine;
 using AkariDash.Core.Tweaks;
 
 // The safe-mode half of Defender optimize, the one change Windows lets be made only in safe boot as
-// TrustedInstaller. Windows starts this once, from RunOnce, in safe mode.
+// TrustedInstaller. Windows starts this once, from RunOnce, in safe mode. The pass file holds every
+// Tweak waiting for that restart, so the worker does all of them in the one safe-mode session.
 //
 // It runs in two modes. Run with --elevated it is the worker, started as TrustedInstaller by
 // sc.exe, and all it does is write and record how that went. Run any other way it is the
@@ -61,24 +62,26 @@ void Say(string text)
     return (process.ExitCode, output);
 }
 
-SafeModePass? Read()
+// Every pass waiting at the pass file. Reading is the companion's only look at what to do, so a file
+// it cannot read is reported and treated as nothing waiting rather than crashing the restart.
+IReadOnlyList<SafeModePass> Read()
 {
     try
     {
-        return SafeModePass.Read(passPath);
+        return SafeModePass.ReadList(passPath);
     }
     catch (Exception ex)
     {
         Say($"Could not read {passPath}: {ex.Message}");
-        return null;
+        return [];
     }
 }
 
-void Save(SafeModePass pass)
+void Save(IReadOnlyList<SafeModePass> passes)
 {
     try
     {
-        pass.Write(passPath);
+        SafeModePass.WriteAll(passPath, passes);
     }
     catch (Exception ex)
     {
@@ -86,87 +89,116 @@ void Save(SafeModePass pass)
     }
 }
 
-// Writes every value the pass calls for, and records the outcome in the pass file for the app to
-// read. Each value is written on its own: one Windows refuses is reported and the rest still go on.
+// What the person watching the restart is told each pass is doing: the apply names the Tweak and the
+// Option by the ids the catalog knows, the undo names the Tweak by the title they saw on its page.
+string TweakTitle(string tweakId) =>
+    TweakCatalog.All.SingleOrDefault(tweak => tweak.Id == tweakId)?.Title ?? tweakId;
+
+string Describe(SafeModePass pass) => pass.Undo
+    ? $"Putting {TweakTitle(pass.TweakId)}'s settings back."
+    : $"Applying {pass.TweakId} {pass.OptionId}.";
+
+// Whether anything is still waiting for the worker; the orchestrator watches this to know the worker
+// has finished, since sc.exe's own answer says nothing about it.
+bool AnyWaiting() => Read().Any(pass => pass.Stage == SafeModePassStage.Scheduled);
+
+// Writes every value every pass that is still waiting calls for, and records each outcome in the pass
+// file for the app to read. Each value is written on its own: one Windows refuses is reported and the
+// rest still go on. One pass failing does not stop the others.
 int Work()
 {
-    var pass = Read();
-    if (pass is null)
+    var passes = Read();
+    var waiting = passes
+        .Select((pass, index) => (Pass: pass, Index: index))
+        .Where(entry => entry.Pass.Stage == SafeModePassStage.Scheduled)
+        .ToList();
+
+    if (waiting.Count == 0)
     {
         Say($"There is no pass at {passPath}, so nothing was changed.");
         return 1;
     }
 
-    Say($"{(pass.Undo ? "Putting Defender's settings back" : $"Applying {pass.OptionId}")} for {pass.TweakId}.");
+    var outcomes = passes.ToList();
+    var failed = false;
 
-    try
+    foreach (var (pass, index) in waiting)
     {
-        var machine = new WindowsMachine();
-        var failures = new List<string>();
-        var written = 0;
+        Say(Describe(pass));
 
-        foreach (var (location, value) in Values(pass).Concat(DefenderOptimize.Extra(optimize: !pass.Undo)))
+        try
         {
-            try
+            var machine = new WindowsMachine();
+            var failures = new List<string>();
+            var written = 0;
+
+            foreach (var (location, value) in Values(pass).Concat(DefenderOptimize.Extra(optimize: !pass.Undo)))
             {
-                if (location is not RegistryLocation && machine.Read(location) is null)
+                try
                 {
-                    // A missing boot setting is Windows' own, so silently nothing needs deleting.
-                    if (location is BootSettingLocation)
+                    if (location is not RegistryLocation && machine.Read(location) is null)
                     {
+                        // A missing boot setting is Windows' own, so silently nothing needs deleting.
+                        if (location is BootSettingLocation)
+                        {
+                            continue;
+                        }
+
+                        Say($"Skipping {location}: it is not on this PC.");
                         continue;
                     }
 
-                    Say($"Skipping {location}: it is not on this PC.");
-                    continue;
-                }
+                    if (value is null)
+                    {
+                        machine.Delete(location);
+                    }
+                    else
+                    {
+                        machine.Write(location, value);
+                    }
 
-                if (value is null)
-                {
-                    machine.Delete(location);
+                    written++;
                 }
-                else
+                catch (Exception ex)
                 {
-                    machine.Write(location, value);
+                    failures.Add($"{location}: {ex.Message}");
                 }
-
-                written++;
             }
-            catch (Exception ex)
+
+            foreach (var failure in failures)
             {
-                failures.Add($"{location}: {ex.Message}");
+                Say(failure);
             }
+
+            Say(failures.Count == 0
+                ? $"Wrote {written} value(s)."
+                : $"Wrote {written} value(s); {failures.Count} could not be written.");
+
+            if (pass.Undo && failures.Count == 0)
+            {
+                // Only now is it safe to forget the Original Values the Undo has just put back.
+                new FileOriginalValuesStore(FileOriginalValuesStore.DefaultFolder).Clear(pass.TweakId);
+            }
+
+            outcomes[index] = pass with
+            {
+                Stage = failures.Count == 0 ? SafeModePassStage.Applied : SafeModePassStage.Failed,
+                Message = failures.Count == 0 ? null : string.Join("; ", failures),
+            };
+            failed |= failures.Count > 0;
         }
-
-        foreach (var failure in failures)
+        catch (Exception ex)
         {
-            Say(failure);
+            Say($"The change did not run: {ex.Message}");
+            outcomes[index] = pass with { Stage = SafeModePassStage.Failed, Message = ex.Message };
+            failed = true;
         }
-
-        Say(failures.Count == 0
-            ? $"Wrote {written} value(s)."
-            : $"Wrote {written} value(s); {failures.Count} could not be written.");
-
-        if (pass.Undo && failures.Count == 0)
-        {
-            // Only now is it safe to forget the Original Values the Undo has just put back.
-            new FileOriginalValuesStore(FileOriginalValuesStore.DefaultFolder).Clear(pass.TweakId);
-        }
-
-        Save(pass with
-        {
-            Stage = failures.Count == 0 ? SafeModePassStage.Applied : SafeModePassStage.Failed,
-            Message = failures.Count == 0 ? null : string.Join("; ", failures),
-        });
-
-        return failures.Count == 0 ? 0 : 1;
     }
-    catch (Exception ex)
-    {
-        Say($"The change did not run: {ex.Message}");
-        Save(pass with { Stage = SafeModePassStage.Failed, Message = ex.Message });
-        return 1;
-    }
+
+    // The whole list is written once, after every pass has had its turn: what one pass did is in it
+    // beside what the others waited for, and a reader never sees it half done.
+    Save(outcomes);
+    return failed ? 1 : 0;
 }
 
 // What the pass calls for: the Tweak's own targets for an apply, and the Original Values Akari-Dash
@@ -203,8 +235,8 @@ if (args.Contains("--elevated"))
     return Work();
 }
 
-Console.Title = "Akari Dash - Defender optimize";
-Say("Akari Dash Defender optimize");
+Console.Title = "Akari Dash - safe mode pass";
+Say("Akari Dash safe mode pass");
 
 // First, before anything can fail: the next restart is a normal one.
 var bcd = Run("bcdedit.exe", "/deletevalue", "{current}", "safeboot");
@@ -212,36 +244,37 @@ Say(bcd.ExitCode == 0
     ? "Safe mode is switched off for the next restart."
     : $"Safe mode could not be switched off: {bcd.Output.Trim()}");
 
-var pass = Read();
-if (pass is null)
+var passes = Read();
+var waiting = passes.Where(pass => pass.Stage == SafeModePassStage.Scheduled).ToList();
+if (waiting.Count == 0)
 {
     Say($"There is no pass at {passPath}, so nothing was changed.");
 }
 else
 {
-    Say(pass.Undo ? "Putting Defender's settings back." : "Applying Defender's settings.");
+    foreach (var pass in waiting)
+    {
+        Say(Describe(pass));
+    }
+
     RunTrusted();
 
     var result = Read();
-    if (result is null || result.Stage == SafeModePassStage.Scheduled)
+    if (result.Any(pass => pass.Stage == SafeModePassStage.Scheduled))
     {
-        Say("The change could not be made as TrustedInstaller; nothing was changed.");
-        if (result is not null)
-        {
-            Save(result with
-            {
-                Stage = SafeModePassStage.Failed,
-                Message = "The change could not be made as TrustedInstaller; nothing was changed.",
-            });
-        }
+        const string nothingChanged = "The change could not be made as TrustedInstaller; nothing was changed.";
+        Say(nothingChanged);
+        Save([.. result.Select(pass => pass.Stage == SafeModePassStage.Scheduled
+            ? pass with { Stage = SafeModePassStage.Failed, Message = nothingChanged }
+            : pass)]);
     }
-    else if (result.Stage == SafeModePassStage.Applied)
+    else if (result.All(pass => pass.Stage == SafeModePassStage.Applied))
     {
         Say("Done.");
     }
     else
     {
-        Say($"Not everything could be written: {result.Message}");
+        Say($"Not everything could be written: {string.Join("; ", result.Select(pass => pass.Message).Where(message => message is not null))}");
     }
 
     Say($"The details are in {log}.");
@@ -293,12 +326,12 @@ void RunTrusted()
         // TrustedInstaller at all: the service starts it, it does the writing, and the Service
         // Control Manager gives up on hearing from it a few seconds later. So its answer is only
         // worth showing when nothing was recorded, and the pass file decides that, not sc.exe.
-        for (var waited = 0; waited < 60 && Read() is { Stage: SafeModePassStage.Scheduled }; waited++)
+        for (var waited = 0; waited < 60 && AnyWaiting(); waited++)
         {
             Thread.Sleep(TimeSpan.FromSeconds(1));
         }
 
-        if (Read() is { Stage: SafeModePassStage.Scheduled })
+        if (AnyWaiting())
         {
             Say($"TrustedInstaller was started but did not finish: {start.Output.Trim()}");
         }
