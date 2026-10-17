@@ -58,6 +58,25 @@ public sealed record SafeModePass(
         return JsonSerializer.Deserialize<SafeModePass>(File.ReadAllText(path), SerializerOptions);
     }
 
+    /// <summary>
+    /// Every pass waiting at <paramref name="path"/>, in the order they were staged; nothing when
+    /// there is none. A file left by the single-pass app reads as a one-item list.
+    /// </summary>
+    public static IReadOnlyList<SafeModePass> ReadList(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return [];
+        }
+
+        var text = File.ReadAllText(path);
+
+        // The file used to hold one record and now holds a list; a '[' is what tells them apart.
+        return text.TrimStart().StartsWith('[')
+            ? JsonSerializer.Deserialize<List<SafeModePass>>(text, SerializerOptions) ?? []
+            : JsonSerializer.Deserialize<SafeModePass>(text, SerializerOptions) is { } pass ? [pass] : [];
+    }
+
     /// <summary>Writes this pass, making the folder first when it is not there yet.</summary>
     public void Write(string path)
     {
@@ -68,6 +87,51 @@ public sealed record SafeModePass(
         var beside = path + ".writing";
         File.WriteAllText(beside, JsonSerializer.Serialize(this, SerializerOptions));
         File.Move(beside, path, overwrite: true);
+    }
+
+    /// <summary>
+    /// Replaces everything waiting at <paramref name="path"/> with <paramref name="passes"/>. An empty
+    /// list leaves no file behind, so nothing reads as pending.
+    /// </summary>
+    public static void WriteAll(string path, IReadOnlyList<SafeModePass> passes)
+    {
+        if (passes.Count == 0)
+        {
+            Remove(path);
+            return;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+
+        // Written beside and moved into place, so a reader never sees half a file: the app and the
+        // companion read this while the other may be writing it.
+        var beside = path + ".writing";
+        File.WriteAllText(beside, JsonSerializer.Serialize(passes, SerializerOptions));
+        File.Move(beside, path, overwrite: true);
+    }
+
+    /// <summary>
+    /// Adds <paramref name="pass"/> to the queue, dropping whatever the same Tweak already had
+    /// waiting: the user's latest choice wins, lands at the end, and the others keep their order.
+    /// </summary>
+    public static void Append(string path, SafeModePass pass)
+    {
+        var passes = ReadList(path)
+            .Where(existing => existing.TweakId != pass.TweakId)
+            .ToList();
+
+        passes.Add(pass);
+
+        WriteAll(path, passes);
+    }
+
+    /// <summary>
+    /// Forgets everything waiting for <paramref name="tweakId"/>, so nothing is left pending on it.
+    /// The file goes when it was the last thing in it.
+    /// </summary>
+    public static void RemoveTweak(string path, string tweakId)
+    {
+        WriteAll(path, ReadList(path).Where(pass => pass.TweakId != tweakId).ToList());
     }
 
     /// <summary>Forgets the pass, so nothing is left waiting on it.</summary>
