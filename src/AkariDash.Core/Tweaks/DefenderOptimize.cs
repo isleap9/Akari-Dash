@@ -20,6 +20,9 @@ namespace AkariDash.Core.Tweaks;
 /// </summary>
 public static class DefenderOptimize
 {
+    /// <summary>The row's id, <c>security.defender-optimize</c>.</summary>
+    public const string TweakId = "security.defender-optimize";
+
     /// <summary>The companion the app stages, published beside the app's own exe.</summary>
     public const string CompanionExecutable = "AkariDash.DefenderReset.exe";
 

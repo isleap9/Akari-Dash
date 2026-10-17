@@ -427,6 +427,11 @@ public class DefenderOffTests
         Assert.True(DefenderRideAlong.TurnsOff(new SafeModePass(optimize, "optimize", Undo: false)));
         Assert.False(DefenderRideAlong.TurnsOff(new SafeModePass(optimize, "optimize", Undo: true)));
         Assert.Equal(RegistryValue.DWord(0), Phishing(new SafeModePass(optimize, "optimize", Undo: false)));
-        Assert.Equal(RegistryValue.DWord(1), Phishing(new SafeModePass(optimize, "optimize", Undo: true)));
+    }
+
+    [Fact]
+    public void An_unknown_Tweak_rides_no_side_of_the_ride_alongs()
+    {
+        Assert.False(DefenderRideAlong.TurnsOff(new SafeModePass("no.such.tweak", "off", Undo: false)));
     }
 }

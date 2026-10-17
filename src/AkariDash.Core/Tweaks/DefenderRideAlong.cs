@@ -57,10 +57,16 @@ public static class DefenderRideAlong
     /// </summary>
     public static bool TurnsOff(SafeModePass pass)
     {
-        if (pass.TweakId != DisableDefender.TweakId)
+        if (pass.TweakId == DefenderOptimize.TweakId)
         {
             // Defender optimize, unchanged: the Optimize pass is the off side, its Undo the on side.
             return !pass.Undo;
+        }
+
+        if (pass.TweakId != DisableDefender.TweakId)
+        {
+            // Unknown to this branch: do not assume a side.
+            return false;
         }
 
         return !pass.Undo && pass.OptionId == "off";

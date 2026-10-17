@@ -74,8 +74,56 @@ public class SafeModePassTests
     }
 
     [Fact]
-    public void A_missing_file_reads_as_nothing()
+    public void WriteAll_with_no_passes_deletes_the_file()
     {
-        Assert.Empty(SafeModePass.ReadList(SomePath()));
+        var path = SomePath();
+        try
+        {
+            SafeModePass.WriteAll(path, [new SafeModePass("a", "off", Undo: false)]);
+            Assert.True(File.Exists(path));
+
+            SafeModePass.WriteAll(path, []);
+            Assert.False(File.Exists(path));
+            Assert.Empty(SafeModePass.ReadList(path));
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void An_empty_list_file_reads_as_nothing()
+    {
+        var path = SomePath();
+        try
+        {
+            File.WriteAllText(path, "[]");
+            Assert.Empty(SafeModePass.ReadList(path));
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void A_legacy_single_record_survives_an_append_of_a_different_Tweak()
+    {
+        var path = SomePath();
+        try
+        {
+            new SafeModePass("legacy", "off", Undo: false).Write(path);
+            SafeModePass.Append(path, new SafeModePass("other", "off", Undo: false));
+
+            var passes = SafeModePass.ReadList(path);
+            Assert.Equal(2, passes.Count);
+            Assert.Equal("legacy", passes[0].TweakId);
+            Assert.Equal("other", passes[1].TweakId);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
     }
 }

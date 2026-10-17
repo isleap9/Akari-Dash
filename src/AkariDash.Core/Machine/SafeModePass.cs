@@ -47,17 +47,6 @@ public sealed record SafeModePass(
     public static string DefaultPath { get; } =
         Path.Combine(FileOriginalValuesStore.DefaultFolder, "safe-mode-pass.json");
 
-    /// <summary>The pass at <paramref name="path"/>, or <see langword="null"/> when there is none.</summary>
-    public static SafeModePass? Read(string path)
-    {
-        if (!File.Exists(path))
-        {
-            return null;
-        }
-
-        return JsonSerializer.Deserialize<SafeModePass>(File.ReadAllText(path), SerializerOptions);
-    }
-
     /// <summary>
     /// Every pass waiting at <paramref name="path"/>, in the order they were staged; nothing when
     /// there is none. A file left by the single-pass app reads as a one-item list.
@@ -103,7 +92,7 @@ public sealed record SafeModePass(
             }
             catch (IOException)
             {
-                // A pass nobody reads is harmless; the next one overwrites it.
+                // The file may be gone already or held open; the next staging overwrites it anyway.
             }
 
             return;
