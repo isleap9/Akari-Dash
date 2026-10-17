@@ -138,58 +138,64 @@ public class DefenderOffTests
     [Fact]
     public void On_writes_what_akarios_enable_list_writes()
     {
+        // The option helper is a mutable static, so the test puts it back in a finally block: an
+        // assert that throws must not leave every later test in the class reading the On values.
         CurrentOption = "on";
+        try
+        {
+            Assert.Equal(RegistryValue.DWord(0), At(@"SOFTWARE\Microsoft\Windows Defender\Real-Time Protection", "DisableRealtimeMonitoring"));
+            Assert.Equal(RegistryValue.DWord(0), At(@"SOFTWARE\Microsoft\Windows Defender\Real-Time Protection", "DisableAsyncScanOnOpen"));
+            Assert.Equal(RegistryValue.DWord(2), At(@"SOFTWARE\Microsoft\Windows Defender\Spynet", "SpyNetReporting"));
+            Assert.Equal(RegistryValue.DWord(1), At(@"SOFTWARE\Microsoft\Windows Defender\Spynet", "SubmitSamplesConsent"));
+            Assert.Equal(RegistryValue.DWord(5), At(@"SOFTWARE\Microsoft\Windows Defender\Features", "TamperProtection"));
+            Assert.Equal(RegistryValue.DWord(1), At(@"SOFTWARE\Microsoft\Windows Defender\Windows Defender Exploit Guard\Controlled Folder Access", "EnableControlledFolderAccess"));
 
-        Assert.Equal(RegistryValue.DWord(0), At(@"SOFTWARE\Microsoft\Windows Defender\Real-Time Protection", "DisableRealtimeMonitoring"));
-        Assert.Equal(RegistryValue.DWord(0), At(@"SOFTWARE\Microsoft\Windows Defender\Real-Time Protection", "DisableAsyncScanOnOpen"));
-        Assert.Equal(RegistryValue.DWord(2), At(@"SOFTWARE\Microsoft\Windows Defender\Spynet", "SpyNetReporting"));
-        Assert.Equal(RegistryValue.DWord(1), At(@"SOFTWARE\Microsoft\Windows Defender\Spynet", "SubmitSamplesConsent"));
-        Assert.Equal(RegistryValue.DWord(5), At(@"SOFTWARE\Microsoft\Windows Defender\Features", "TamperProtection"));
-        Assert.Equal(RegistryValue.DWord(1), At(@"SOFTWARE\Microsoft\Windows Defender\Windows Defender Exploit Guard\Controlled Folder Access", "EnableControlledFolderAccess"));
+            // The enable list writes PUAProtection 2 and then 1 again; 1 is the value it settles on.
+            Assert.Equal(RegistryValue.DWord(1), At(@"SOFTWARE\Microsoft\Windows Defender", "PUAProtection"));
+            Assert.Equal(RegistryValue.DWord(1), At(@"SOFTWARE\Microsoft\Windows Defender", "VerifiedAndReputableTrustModeEnabled"));
+            Assert.Equal(RegistryValue.DWord(1), At(@"SOFTWARE\Microsoft\Windows Defender", "SmartLockerMode"));
+            Assert.Equal(RegistryValue.DWord(4), At(@"SYSTEM\CurrentControlSet\Control\AppID\Configuration\SMARTLOCKER", "START_PENDING"));
+            Assert.Equal(Binary("0400000000000000"), At(@"SYSTEM\CurrentControlSet\Control\AppID\Configuration\SMARTLOCKER", "ENABLED"));
+            Assert.Equal(RegistryValue.DWord(1), At(@"SYSTEM\CurrentControlSet\Control\CI\Policy", "VerifiedAndReputablePolicyState"));
 
-        // The enable list writes PUAProtection 2 and then 1 again; 1 is the value it settles on.
-        Assert.Equal(RegistryValue.DWord(1), At(@"SOFTWARE\Microsoft\Windows Defender", "PUAProtection"));
-        Assert.Equal(RegistryValue.DWord(1), At(@"SOFTWARE\Microsoft\Windows Defender", "VerifiedAndReputableTrustModeEnabled"));
-        Assert.Equal(RegistryValue.DWord(1), At(@"SOFTWARE\Microsoft\Windows Defender", "SmartLockerMode"));
-        Assert.Equal(RegistryValue.DWord(4), At(@"SYSTEM\CurrentControlSet\Control\AppID\Configuration\SMARTLOCKER", "START_PENDING"));
-        Assert.Equal(Binary("0400000000000000"), At(@"SYSTEM\CurrentControlSet\Control\AppID\Configuration\SMARTLOCKER", "ENABLED"));
-        Assert.Equal(RegistryValue.DWord(1), At(@"SYSTEM\CurrentControlSet\Control\CI\Policy", "VerifiedAndReputablePolicyState"));
+            Assert.Equal(RegistryValue.DWord(0), At(@"SOFTWARE\Microsoft\Windows Defender Security Center\Notifications", "DisableEnhancedNotifications"));
+            Assert.Equal(RegistryValue.DWord(0), At(@"SOFTWARE\Microsoft\Windows Defender Security Center\Virus and threat protection", "NoActionNotificationDisabled"));
+            Assert.Equal(RegistryValue.DWord(0), At(@"SOFTWARE\Microsoft\Windows Defender Security Center\Virus and threat protection", "SummaryNotificationDisabled"));
+            Assert.Equal(RegistryValue.DWord(0), At(@"SOFTWARE\Microsoft\Windows Defender Security Center\Virus and threat protection", "FilesBlockedNotificationDisabled"));
+            Assert.Equal(RegistryValue.DWord(1228), At(@"SYSTEM\ControlSet001\Services\SharedAccess\Epoch", "Epoch"));
+            Assert.Equal(RegistryValue.DWord(0), At(@"SYSTEM\ControlSet001\Services\SharedAccess\Parameters\FirewallPolicy\DomainProfile", "DisableNotifications"));
+            Assert.Equal(RegistryValue.DWord(0), At(@"SYSTEM\ControlSet001\Services\SharedAccess\Parameters\FirewallPolicy\PublicProfile", "DisableNotifications"));
+            Assert.Equal(RegistryValue.DWord(0), At(@"SYSTEM\ControlSet001\Services\SharedAccess\Parameters\FirewallPolicy\StandardProfile", "DisableNotifications"));
+            Assert.Equal(RegistryValue.String("Warn"), At(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", "SmartScreenEnabled"));
 
-        Assert.Equal(RegistryValue.DWord(0), At(@"SOFTWARE\Microsoft\Windows Defender Security Center\Notifications", "DisableEnhancedNotifications"));
-        Assert.Equal(RegistryValue.DWord(0), At(@"SOFTWARE\Microsoft\Windows Defender Security Center\Virus and threat protection", "NoActionNotificationDisabled"));
-        Assert.Equal(RegistryValue.DWord(0), At(@"SOFTWARE\Microsoft\Windows Defender Security Center\Virus and threat protection", "SummaryNotificationDisabled"));
-        Assert.Equal(RegistryValue.DWord(0), At(@"SOFTWARE\Microsoft\Windows Defender Security Center\Virus and threat protection", "FilesBlockedNotificationDisabled"));
-        Assert.Equal(RegistryValue.DWord(1228), At(@"SYSTEM\ControlSet001\Services\SharedAccess\Epoch", "Epoch"));
-        Assert.Equal(RegistryValue.DWord(0), At(@"SYSTEM\ControlSet001\Services\SharedAccess\Parameters\FirewallPolicy\DomainProfile", "DisableNotifications"));
-        Assert.Equal(RegistryValue.DWord(0), At(@"SYSTEM\ControlSet001\Services\SharedAccess\Parameters\FirewallPolicy\PublicProfile", "DisableNotifications"));
-        Assert.Equal(RegistryValue.DWord(0), At(@"SYSTEM\ControlSet001\Services\SharedAccess\Parameters\FirewallPolicy\StandardProfile", "DisableNotifications"));
-        Assert.Equal(RegistryValue.String("Warn"), At(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", "SmartScreenEnabled"));
+            // Windows' own default, which is the value being absent.
+            Assert.Null(At(@"SYSTEM\ControlSet001\Control\Session Manager\kernel", "MitigationOptions"));
 
-        // Windows' own default, which is the value being absent.
-        Assert.Null(At(@"SYSTEM\ControlSet001\Control\Session Manager\kernel", "MitigationOptions"));
+            Assert.Equal(RegistryValue.DWord(1), At(@"SYSTEM\ControlSet001\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity", "Enabled"));
+            Assert.Equal(RegistryValue.DWord(2), At(@"SYSTEM\ControlSet001\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity", "WasEnabledBy"));
+            Assert.Null(At(@"SYSTEM\ControlSet001\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity", "ChangedInBootCycle"));
+            // AkariOS's enable list leaves VBS off; the spec restores it, its hypervisor boot setting too.
+            Assert.Equal(RegistryValue.DWord(1), At(@"SYSTEM\ControlSet001\Control\DeviceGuard", "EnableVirtualizationBasedSecurity"));
+            Assert.Equal(new BootSettingValue("Auto"), At(new BootSettingLocation("hypervisorlaunchtype")));
+            Assert.Null(At(new BootSettingLocation("isolatedcontext")));
+            Assert.Null(At(new BootSettingLocation("allowedinmemorysettings")));
+            Assert.Equal(RegistryValue.DWord(2), At(@"SYSTEM\CurrentControlSet\Control\Lsa", "RunAsPPL"));
+            Assert.Equal(RegistryValue.DWord(1), At(@"SYSTEM\ControlSet001\Control\CI\Config", "VulnerableDriverBlocklistEnable"));
 
-        Assert.Equal(RegistryValue.DWord(1), At(@"SYSTEM\ControlSet001\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity", "Enabled"));
-        Assert.Equal(RegistryValue.DWord(2), At(@"SYSTEM\ControlSet001\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity", "WasEnabledBy"));
-        Assert.Null(At(@"SYSTEM\ControlSet001\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity", "ChangedInBootCycle"));
-        // AkariOS's enable list leaves VBS off; the spec restores it, its hypervisor boot setting too.
-        Assert.Equal(RegistryValue.DWord(1), At(@"SYSTEM\ControlSet001\Control\DeviceGuard", "EnableVirtualizationBasedSecurity"));
-        Assert.Equal(new BootSettingValue("Auto"), At(new BootSettingLocation("hypervisorlaunchtype")));
-        Assert.Null(At(new BootSettingLocation("isolatedcontext")));
-        Assert.Null(At(new BootSettingLocation("allowedinmemorysettings")));
-        Assert.Equal(RegistryValue.DWord(2), At(@"SYSTEM\CurrentControlSet\Control\Lsa", "RunAsPPL"));
-        Assert.Equal(RegistryValue.DWord(1), At(@"SYSTEM\ControlSet001\Control\CI\Config", "VulnerableDriverBlocklistEnable"));
+            Assert.Equal(RegistryValue.DWord(0), At(new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Microsoft\Windows Defender Security Center\Account protection", "DisableNotifications")));
+            Assert.Equal(RegistryValue.DWord(0), At(new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Microsoft\Windows Defender Security Center\Account protection", "DisableDynamiclockNotifications")));
+            Assert.Equal(RegistryValue.DWord(0), At(new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Microsoft\Windows Defender Security Center\Account protection", "DisableWindowsHelloNotifications")));
+            Assert.Equal(RegistryValue.DWord(1), At(new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Microsoft\Edge\SmartScreenEnabled", "")));
+            Assert.Equal(RegistryValue.DWord(1), At(new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Microsoft\Edge\SmartScreenPuaEnabled", "")));
+            Assert.Equal(RegistryValue.DWord(1), At(new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Microsoft\Windows\CurrentVersion\AppHost", "EnableWebContentEvaluation")));
 
-        Assert.Equal(RegistryValue.DWord(0), At(new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Microsoft\Windows Defender Security Center\Account protection", "DisableNotifications")));
-        Assert.Equal(RegistryValue.DWord(0), At(new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Microsoft\Windows Defender Security Center\Account protection", "DisableDynamiclockNotifications")));
-        Assert.Equal(RegistryValue.DWord(0), At(new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Microsoft\Windows Defender Security Center\Account protection", "DisableWindowsHelloNotifications")));
-        Assert.Equal(RegistryValue.DWord(1), At(new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Microsoft\Edge\SmartScreenEnabled", "")));
-        Assert.Equal(RegistryValue.DWord(1), At(new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Microsoft\Edge\SmartScreenPuaEnabled", "")));
-        Assert.Equal(RegistryValue.DWord(1), At(new RegistryLocation(RegistryHive.CurrentUser, @"SOFTWARE\Microsoft\Windows\CurrentVersion\AppHost", "EnableWebContentEvaluation")));
-
-        Assert.All(Tasks, task => Assert.Equal(TaskEnabledValue.On, Option("on").Values[task]));
-        Assert.All(Services, service => Assert.Equal(RegistryValue.DWord(service.On), Option("on").Values[Service(service.Name)]));
-
-        CurrentOption = "off";
+            Assert.All(Tasks, task => Assert.Equal(TaskEnabledValue.On, Option("on").Values[task]));
+            Assert.All(Services, service => Assert.Equal(RegistryValue.DWord(service.On), Option("on").Values[Service(service.Name)]));
+        }
+        finally
+        {
+            CurrentOption = "off";
+        }
     }
 
     // The tray icon, the right-click menu entries, the tasks and the current-user values are written by

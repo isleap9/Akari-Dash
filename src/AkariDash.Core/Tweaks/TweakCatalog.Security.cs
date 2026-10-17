@@ -9,10 +9,10 @@ namespace AkariDash.Core.Tweaks;
 // automatic device encryption, Wi-Fi Sense, error reporting, Remote Assistance) are where Winhance
 // has them, in Privacy's own "Security" Group; see TweakCatalog.Privacy.cs. What Windows only lets
 // be written in safe boot as TrustedInstaller (real-time and cloud protection, tamper protection,
-// Smart App Control, phishing protection, and — in the row DisableDefender builds below — Defender's
-// own services and drivers) is DefenderOptimizeTweak and DisableDefender below, the two Tweaks that
-// stage a safe-mode pass. None of them
-// has a Recommended Option: each trades protection for speed or quiet.
+// Smart App Control, and phishing protection) is DefenderOptimizeTweak below; the row DisableDefender
+// builds covers those settings and Defender's own services and drivers too. The two are the Tweaks
+// that stage a safe-mode pass, and neither has a Recommended Option: each trades protection for
+// speed or quiet.
 public static partial class TweakCatalog
 {
     private const string DeviceGuardKey = @"SYSTEM\CurrentControlSet\Control\DeviceGuard";
