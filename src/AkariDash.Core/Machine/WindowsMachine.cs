@@ -420,7 +420,16 @@ public sealed class WindowsMachine : IMachine
         }
         catch (Exception)
         {
+            // A failed staging takes back this Tweak's own pass, never another Tweak's: one may still
+            // be waiting, and its RunOnce entry has to stay to launch it. Only with nothing still
+            // waiting is there nothing left for RunOnce to start, and the entry goes with it.
             SafeModePass.RemoveTweak(SafeModePass.DefaultPath, pass.TweakId);
+            if (!SafeModePass.ReadList(SafeModePass.DefaultPath)
+                .Any(pending => pending.Stage == SafeModePassStage.Scheduled))
+            {
+                RemoveRunOnceValue();
+            }
+
             throw;
         }
 
@@ -433,8 +442,15 @@ public sealed class WindowsMachine : IMachine
         }
         catch (Exception)
         {
-            RemoveRunOnceValue();
+            // As above: this Tweak's pass goes, but another Tweak's pending pass keeps the RunOnce
+            // entry it would otherwise lose.
             SafeModePass.RemoveTweak(SafeModePass.DefaultPath, pass.TweakId);
+            if (!SafeModePass.ReadList(SafeModePass.DefaultPath)
+                .Any(pending => pending.Stage == SafeModePassStage.Scheduled))
+            {
+                RemoveRunOnceValue();
+            }
+
             throw;
         }
 
@@ -459,7 +475,7 @@ public sealed class WindowsMachine : IMachine
         }
         catch (Exception)
         {
-            // Harmless on its own: without the pass file it points at, the companion does nothing.
+            // Harmless on its own: with nothing waiting in the pass file, the companion does nothing.
         }
     }
 
