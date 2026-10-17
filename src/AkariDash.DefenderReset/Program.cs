@@ -132,7 +132,7 @@ int Work()
             var failures = new List<string>();
             var written = 0;
 
-            foreach (var (location, value) in Values(pass).Concat(DefenderRideAlong.Defender(!pass.Undo)))
+            foreach (var (location, value) in Values(pass).Concat(DefenderRideAlong.For(pass)))
             {
                 try
                 {
@@ -173,6 +173,8 @@ int Work()
             Say(failures.Count == 0
                 ? $"Wrote {written} value(s)."
                 : $"Wrote {written} value(s); {failures.Count} could not be written.");
+
+            BestEffort(pass);
 
             if (pass.Undo && failures.Count == 0)
             {
@@ -226,6 +228,72 @@ IReadOnlyList<(MachineLocation Location, MachineValue? Value)> Values(SafeModePa
         ?? throw new InvalidOperationException($"{pass.TweakId} has no Option {pass.OptionId}.");
 
     return [.. DefenderOptimize.PassTargets(tweak).Select(target => (target.Location, option.Values[target]))];
+}
+
+// The two extra pieces AkariOS's Advanced switch does beside the Tweak's own writes, for this Tweak
+// alone. Both need TrustedInstaller's rights and safe boot, so they run in the worker with the writes.
+// Neither is a Tweak target and neither comes back by itself — Windows cannot re-enable the DISM
+// feature, and the move is only undone by asking for On — so a failure is a line in the log and
+// nothing else: it never fails the pass, never joins the failures, and never holds up an Undo's
+// clearing of the Original Values. Which side runs is the same dispatch the ride-alongs use, so On
+// puts smartscreen.exe back rather than moving it out.
+void BestEffort(SafeModePass pass)
+{
+    if (pass.TweakId != DisableDefender.TweakId)
+    {
+        return;
+    }
+
+    var off = DefenderRideAlong.TurnsOff(pass);
+    var inSystem32 = Path.Combine(Environment.SystemDirectory, "smartscreen.exe");
+    var inWindows = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "smartscreen.exe");
+
+    // Each piece runs on its own: what one Windows refuses is a log line and the other still goes on.
+    try
+    {
+        if (off)
+        {
+            // On Windows 11 the feature does not exist and this fails every time: its exit code and
+            // own answer are the log line, never an error.
+            var dism = Run("Dism.exe", "/Online", "/NoRestart", "/Disable-Feature", "/FeatureName:Windows-Defender-Default-Definitions");
+            Say($"Windows-Defender-Default-Definitions: exit {dism.ExitCode}. {dism.Output.Trim()}");
+        }
+        else
+        {
+            // Windows cannot re-enable the feature, so nothing is attempted: it stays off.
+            Say("Windows-Defender-Default-Definitions stays disabled: Windows cannot re-enable it.");
+        }
+    }
+    catch (Exception ex)
+    {
+        Say($"Windows-Defender-Default-Definitions: {ex.Message}");
+    }
+
+    try
+    {
+        if (off && File.Exists(inSystem32))
+        {
+            File.Move(inSystem32, inWindows, overwrite: true);
+            Say($"Moved {inSystem32} to {inWindows}.");
+        }
+        else if (off)
+        {
+            Say($"{inSystem32} is not there, so smartscreen.exe is already moved.");
+        }
+        else if (File.Exists(inWindows))
+        {
+            File.Move(inWindows, inSystem32, overwrite: true);
+            Say($"Moved {inWindows} back to {inSystem32}.");
+        }
+        else
+        {
+            Say($"{inWindows} is not there, so smartscreen.exe was never moved and is already in place.");
+        }
+    }
+    catch (Exception ex)
+    {
+        Say($"smartscreen.exe could not be moved: {ex.Message}");
+    }
 }
 
 // The worker: Windows starts it inside TrustedInstaller's own process, which is the only account

@@ -25,7 +25,8 @@ public static class DefenderRideAlong
 
     /// <summary>
     /// What the companion writes besides the Tweak's own targets, for <paramref name="disable"/> being
-    /// the Optimize and <see langword="false"/> the Undo.
+    /// the side of the pass that turns Defender and the two ride-alongs off: the values below are the
+    /// off/0 side when it is <see langword="true"/> and the on/1 side when it is <see langword="false"/>.
     /// </summary>
     public static IReadOnlyList<(MachineLocation Location, MachineValue? Value)> Defender(bool disable) =>
     [
@@ -35,4 +36,30 @@ public static class DefenderRideAlong
         (new ScheduledTaskLocation(ExploitGuardTask),
             (MachineValue?)(disable ? TaskEnabledValue.Off : TaskEnabledValue.On)),
     ];
+
+    /// <summary>
+    /// What the companion writes for <paramref name="pass"/> besides the Tweak's own targets. Which
+    /// side of its Tweak a pass rides is the Tweak's own, because the Undo flag alone does not say it:
+    /// Defender optimize's Optimize pass is its off side and its Undo the on side, while Disable
+    /// Defender's Off Option is the off side and its On Option the on side, on an apply and on an undo
+    /// alike — so its Undo of On turns Defender off too.
+    /// </summary>
+    public static IReadOnlyList<(MachineLocation Location, MachineValue? Value)> For(SafeModePass pass) =>
+        Defender(TurnsOff(pass));
+
+    /// <summary>
+    /// Whether <paramref name="pass"/> is the side of its Tweak that turns Defender off, and so rides
+    /// the off/0 values <see cref="Defender"/> takes. A pass's <see cref="SafeModePass.OptionId"/> is
+    /// the Option that was applied, so Disable Defender's Off apply and its On undo are the off side.
+    /// </summary>
+    public static bool TurnsOff(SafeModePass pass)
+    {
+        if (pass.TweakId != DisableDefender.TweakId)
+        {
+            // Defender optimize, unchanged: the Optimize pass is the off side, its Undo the on side.
+            return !pass.Undo;
+        }
+
+        return pass.Undo ? pass.OptionId == "on" : pass.OptionId == "off";
+    }
 }
