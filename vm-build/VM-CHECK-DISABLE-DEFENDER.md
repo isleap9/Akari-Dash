@@ -35,8 +35,9 @@ running at every step.
    `security.disable-defender` / `off` with `"Stage": "Scheduled"`, and RunOnce
    (`HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce`, value **`*defenderoptimize`**) points at
    the companion. That is the "restart requested" half — the values themselves are not on the machine
-   yet. Parts of the row the app writes itself are already down, though: the tray icon, the three
-   file right-click menu entries and the four Defender tasks (see **The roster** below).
+   yet. Parts of the row the app writes itself are already down, though — the tray icon, the
+   right-click entries, the four Defender tasks, the account-protection reminders and the Edge/Store
+   SmartScreen values, **14 in total** (see **The roster** below).
 
 2. **The safe-mode restart, once.** In safe mode Windows runs the companion from RunOnce, as
    TrustedInstaller. Its window is titled **"Akari Dash - safe mode pass"**. It turns safe mode off for
@@ -52,10 +53,11 @@ running at every step.
 
 3. **Off is really off.** Run `Check-Defender.ps1`, then confirm:
 
-   - `sc qc WinDefend` reports **START_TYPE : 4   DISABLED**. All eleven are 4 if you check them
-     (`Check-Defender.ps1` prints every one): `WdNisSvc`, `WinDefend`, `MDCoreSvc`, `wscsvc`,
-     `webthreatdefsvc`, `webthreatdefusersvc`, `Sense`, `SecurityHealthService`, `WdBoot`, `WdFilter`,
-     `WdNisDrv`.
+   - `sc qc WinDefend` reports **START_TYPE : 4   DISABLED**. All eleven should read 4.
+     `Check-Defender.ps1` prints nine of them (`WinDefend`, `MDCoreSvc`, `WdNisSvc`, `Sense`, `wscsvc`,
+     `SecurityHealthService`, `WdFilter`, `WdBoot`, `WdNisDrv`); check the other two by hand —
+     `reg query "HKLM\SYSTEM\CurrentControlSet\Services\webthreatdefsvc" /v Start` and the same for
+     `webthreatdefusersvc` (the per-user template service) — each should read `0x4`.
    - Windows Security shows **no antivirus** and there is **no tray icon** (Defender can no longer
      report on this PC, and the `SecurityHealth` run value is gone).
    - Right-clicking an **.exe** or a **drive** in File Explorer has no **"Scan with Microsoft
@@ -80,10 +82,13 @@ running at every step.
 
 5. **Both safe-mode Tweaks in one restart.** Stage **Security > Microsoft Defender > Defender
    optimize** (press **Optimize**) and then apply **Disable Defender > Off**, so two passes are
-   pending in the one file. Restart (the second apply's own restart does it). After the restart
-   `safe-mode-pass.json` should hold both `security.defender-optimize` and `security.disable-defender`,
-   both **Applied**, and the machine holds **both** Tweak's values at once — optimize's Optimize
-   choices and Defender fully off. This is the queue doing its job: the second apply must not have
+   pending in the one file. Restart (the second apply's own restart does it). **Inspect
+   `C:\ProgramData\Akari-Dash\safe-mode-pass.json` before reopening Akari-Dash** — the file is the
+   companion's own record, and Akari-Dash rewrites the queue (dropping a Tweak's answered entry)
+   whenever it stages that Tweak again, so read it while both `Applied` entries are still there. It
+   should hold both `security.defender-optimize` and `security.disable-defender`, both **Applied**, and
+   the machine holds **both** Tweak's values at once — optimize's Optimize choices and Defender fully
+   off. This is the queue doing its job: the second apply must not have
    replaced the first.
 
 6. **On, and Undo, put Defender back.** Press **On** (or **Undo**), agree to the restart, and let it
