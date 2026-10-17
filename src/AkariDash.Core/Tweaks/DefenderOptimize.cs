@@ -1,5 +1,4 @@
 using AkariDash.Core.Machine;
-using Microsoft.Win32;
 
 namespace AkariDash.Core.Tweaks;
 
@@ -27,15 +26,6 @@ public static class DefenderOptimize
     /// <summary>The RunOnce value the companion is registered under; the leading * runs it once.</summary>
     public const string RunOnceValueName = "*defenderoptimize";
 
-    /// <summary>The Exploit Guard policy refresh task, which AkariOS's Optimize disables.</summary>
-    private const string ExploitGuardTask = @"\Microsoft\Windows\ExploitGuard\ExploitGuard MDM policy Refresh";
-
-    /// <summary>Phishing protection, which only SYSTEM and TrustedInstaller may even read.</summary>
-    private const string PhishingKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\WTDS\Components";
-
-    private static readonly string[] PhishingValues =
-        ["CaptureThreatWindow", "NotifyMalicious", "NotifyPasswordReuse", "NotifyUnsafeApp", "ServiceEnabled"];
-
     /// <summary>The command RunOnce runs: the companion, told which pass to do.</summary>
     public static string RunOnceCommand(string companion, string passPath) =>
         $"\"{companion}\" --pass \"{passPath}\"";
@@ -53,11 +43,5 @@ public static class DefenderOptimize
     /// being the Optimize Option and <see langword="false"/> the Undo.
     /// </summary>
     public static IReadOnlyList<(MachineLocation Location, MachineValue? Value)> Extra(bool optimize) =>
-    [
-        .. PhishingValues.Select(name => (
-            (MachineLocation)new RegistryLocation(RegistryHive.LocalMachine, PhishingKey, name),
-            (MachineValue?)RegistryValue.DWord(optimize ? 0 : 1))),
-        (new ScheduledTaskLocation(ExploitGuardTask),
-            (MachineValue?)(optimize ? TaskEnabledValue.Off : TaskEnabledValue.On)),
-    ];
+        DefenderRideAlong.Defender(optimize);
 }

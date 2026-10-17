@@ -132,7 +132,7 @@ int Work()
             var failures = new List<string>();
             var written = 0;
 
-            foreach (var (location, value) in Values(pass).Concat(DefenderOptimize.Extra(optimize: !pass.Undo)))
+            foreach (var (location, value) in Values(pass).Concat(DefenderRideAlong.Defender(!pass.Undo)))
             {
                 try
                 {
