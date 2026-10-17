@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using AkariDash.Core.Machine;
 using AkariDash.Core.Tweaks;
 
@@ -306,9 +307,16 @@ void BestEffort(SafeModePass pass)
 }
 
 // The worker: Windows starts it inside TrustedInstaller's own process, which is the only account
-// Defender's keys may be written from.
+// Defender's keys may be written from. When started by the Service Control Manager it must answer the
+// service protocol, or SCM gives up after ~30 seconds (error 1053) and kills it mid-work; the answer
+// below is what keeps it alive for the whole pass.
 if (args.Contains("--elevated"))
 {
+    if (RunAsService())
+    {
+        return 0;
+    }
+
     return Work();
 }
 
@@ -451,4 +459,115 @@ void StopTrustedInstaller()
     {
         Say($"TrustedInstaller could not be stopped: {ex.Message}");
     }
+}
+
+// --- TrustedInstaller service protocol (keeps SCM from timing out, error 1053) ---
+
+bool RunAsService()
+{
+    var table = new Native.SERVICE_TABLE_ENTRY[]
+    {
+        new() { lpServiceName = "TrustedInstaller", lpServiceProc = ServiceMain },
+    };
+
+    if (!Native.StartServiceCtrlDispatcher(table))
+    {
+        return false;
+    }
+
+    return true;
+}
+
+void ServiceMain(int argc, string[] argv)
+{
+    Native.serviceStatusHandle = Native.RegisterServiceCtrlHandlerEx("TrustedInstaller", ServiceCtrl, IntPtr.Zero);
+
+    var status = new Native.SERVICE_STATUS
+    {
+        dwServiceType = Native.SERVICE_WIN32_OWN_PROCESS,
+        dwCurrentState = Native.SERVICE_START_PENDING,
+        dwControlsAccepted = Native.SERVICE_ACCEPT_STOP,
+        dwWin32ExitCode = 0,
+        dwServiceSpecificExitCode = 0,
+        dwCheckPoint = 0,
+        dwWaitHint = 30000,
+    };
+    Native.SetServiceStatus(Native.serviceStatusHandle, ref status);
+
+    status.dwCurrentState = Native.SERVICE_RUNNING;
+    status.dwCheckPoint = 0;
+    status.dwWaitHint = 0;
+    Native.SetServiceStatus(Native.serviceStatusHandle, ref status);
+
+    var exit = Work();
+
+    status.dwCurrentState = Native.SERVICE_STOPPED;
+    status.dwWin32ExitCode = (uint)exit;
+    status.dwCheckPoint = 0;
+    status.dwWaitHint = 0;
+    Native.SetServiceStatus(Native.serviceStatusHandle, ref status);
+}
+
+uint ServiceCtrl(uint control, uint eventType, IntPtr eventData, IntPtr context)
+{
+    if (control == Native.SERVICE_CONTROL_STOP)
+    {
+        var status = new Native.SERVICE_STATUS
+        {
+            dwServiceType = Native.SERVICE_WIN32_OWN_PROCESS,
+            dwCurrentState = Native.SERVICE_STOP_PENDING,
+            dwControlsAccepted = Native.SERVICE_ACCEPT_STOP,
+            dwWin32ExitCode = 0,
+            dwServiceSpecificExitCode = 0,
+            dwCheckPoint = 1,
+            dwWaitHint = 30000,
+        };
+        Native.SetServiceStatus(Native.serviceStatusHandle, ref status);
+    }
+
+    return 0;
+}
+
+static class Native
+{
+    public static IntPtr serviceStatusHandle;
+
+    public const uint SERVICE_WIN32_OWN_PROCESS = 0x00000010;
+    public const uint SERVICE_RUNNING = 0x00000004;
+    public const uint SERVICE_STOPPED = 0x00000001;
+    public const uint SERVICE_START_PENDING = 0x00000002;
+    public const uint SERVICE_STOP_PENDING = 0x00000003;
+    public const uint SERVICE_ACCEPT_STOP = 0x00000001;
+    public const uint SERVICE_CONTROL_STOP = 0x00000001;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SERVICE_STATUS
+    {
+        public uint dwServiceType;
+        public uint dwCurrentState;
+        public uint dwControlsAccepted;
+        public uint dwWin32ExitCode;
+        public uint dwServiceSpecificExitCode;
+        public uint dwCheckPoint;
+        public uint dwWaitHint;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct SERVICE_TABLE_ENTRY
+    {
+        public string lpServiceName;
+        public ServiceMainDelegate lpServiceProc;
+    }
+
+    public delegate void ServiceMainDelegate(int argc, string[] argv);
+    public delegate uint ServiceCtrlHandlerExDelegate(uint ctrl, uint eventType, IntPtr eventData, IntPtr context);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern bool StartServiceCtrlDispatcher(SERVICE_TABLE_ENTRY[] lpServiceTable);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr RegisterServiceCtrlHandlerEx(string lpServiceName, ServiceCtrlHandlerExDelegate lpHandlerProc, IntPtr lpContext);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    public static extern bool SetServiceStatus(IntPtr hServiceStatus, ref SERVICE_STATUS lpServiceStatus);
 }
