@@ -95,13 +95,15 @@ public class SecurityCatalogTests
     }
 
     // Defender's own keys and Smart App Control used to be left off this page because Windows only
-    // lets them be written in safe boot as TrustedInstaller. They are one row now, written by the
-    // companion; the rest of the page still must not touch them a second time.
+    // lets them be written in safe boot as TrustedInstaller. They are two rows now — Defender optimize
+    // and Disable Defender — both written by the companion; the rest of the page still must not touch
+    // them a second time.
     [Fact]
-    public void Only_defender_optimize_owns_defenders_own_keys_and_smart_app_control()
+    public void Only_the_safe_mode_rows_own_defenders_own_keys_and_smart_app_control()
     {
+        string[] safeModeRows = ["security.defender-optimize", "security.disable-defender"];
         var others = Security
-            .Where(tweak => tweak.Id != "security.defender-optimize")
+            .Where(tweak => !safeModeRows.Contains(tweak.Id))
             .SelectMany(tweak => tweak.Targets)
             .Select(target => target.Location)
             .OfType<RegistryLocation>()

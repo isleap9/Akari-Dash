@@ -9,8 +9,9 @@ namespace AkariDash.Core.Tweaks;
 // automatic device encryption, Wi-Fi Sense, error reporting, Remote Assistance) are where Winhance
 // has them, in Privacy's own "Security" Group; see TweakCatalog.Privacy.cs. What Windows only lets
 // be written in safe boot as TrustedInstaller (real-time and cloud protection, tamper protection,
-// Smart App Control, phishing protection) is DefenderOptimizeTweak below, the one Tweak that stages
-// a safe-mode pass. None of them
+// Smart App Control, phishing protection, and — in the row DisableDefender builds below — Defender's
+// own services and drivers) is DefenderOptimizeTweak and DisableDefender below, the two Tweaks that
+// stage a safe-mode pass. None of them
 // has a Recommended Option: each trades protection for speed or quiet.
 public static partial class TweakCatalog
 {
@@ -31,6 +32,7 @@ public static partial class TweakCatalog
         SecurityNotifications(),
         FirewallNotifications(),
         DefenderOptimizeTweak(),
+        DisableDefender(),
     ];
 
     private static DeclaredTweak SecurityTweak(
@@ -446,6 +448,337 @@ public static partial class TweakCatalog
             }
 
             return new("windows-default", "Windows default", values);
+        }
+
+        // Smart App Control keeps its flag in the first byte of an eight-byte value.
+        static RegistryValue SmartAppControl(bool enabled) =>
+            new(RegistryValueKind.Binary, new byte[] { enabled ? (byte)4 : (byte)0, 0, 0, 0, 0, 0, 0, 0 });
+    }
+
+    private static DeclaredTweak DisableDefender()
+    {
+        // AkariOS-Ultimate's Advanced 'Defender' (Tweaks/Advanced.ps1:3-435): its disable list as Off
+        // and its enable list as On, one row. It is the second safe-mode Tweak, beside Defender
+        // optimize, and it reuses most of that Tweak's locations and AbsentMeans on purpose: an
+        // Original Value belongs to the location, so the two rows share it and put the same value back.
+        //
+        // Off is the disable list value for value; On is the enable list with three settled calls the
+        // design records: On restores virtualization-based security and its hypervisor boot setting
+        // (AkariOS's enable list leaves VBS off, which would leave Hyper-V, WSL2 and Windows Sandbox
+        // broken after the user chose to enable), On leaves the exploit mitigation mask absent (that is
+        // Windows' own default, the state AkariOS's all-enabled mask stands for), and the eleven
+        // services and drivers are registry Start values rather than ServiceLocation targets, because
+        // that is the only write that reaches all of them.
+        //
+        // Two parts do not come back and the description says so: Smart App Control, which Windows
+        // marks off for good, and the Windows-Defender-Default-Definitions DISM feature the companion
+        // disables best-effort.
+        const string defender = @"SOFTWARE\Microsoft\Windows Defender";
+        const string securityCenter = @"SOFTWARE\Microsoft\Windows Defender Security Center";
+        const string smartLocker = @"SYSTEM\CurrentControlSet\Control\AppID\Configuration\SMARTLOCKER";
+        const string ciPolicy = @"SYSTEM\CurrentControlSet\Control\CI\Policy";
+        const string hypervisorEnforced = @"SYSTEM\ControlSet001\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity";
+        const string deviceGuard = @"SYSTEM\ControlSet001\Control\DeviceGuard";
+        const string kernel = @"SYSTEM\ControlSet001\Control\Session Manager\kernel";
+        const string sharedAccess = @"SYSTEM\ControlSet001\Services\SharedAccess";
+        const string ciConfig = @"SYSTEM\ControlSet001\Control\CI\Config";
+        const string lsa = @"SYSTEM\CurrentControlSet\Control\Lsa";
+        const string services = @"SYSTEM\CurrentControlSet\Services";
+        const string accountProtectionKey = @"SOFTWARE\Microsoft\Windows Defender Security Center\Account protection";
+        const string eppHandler = "{09A47860-11B0-4DA5-AFA5-26D86198A780}";
+
+        // Advanced.ps1:104's mask: every system-wide mitigation off but Control Flow Guard on, which
+        // Vanguard needs. Windows writes that mask's all-enabled twin out as its own default, which is
+        // this target's AbsentMeans.
+        var mitigationsOff = new RegistryValue(RegistryValueKind.Binary, Convert.FromHexString("222222000001000000000000000000000000000000000000"));
+        var mitigationsDefault = new RegistryValue(RegistryValueKind.Binary, Convert.FromHexString("111111000001000000000000000000000000000000000000"));
+        var tray = new RegistryValue(RegistryValueKind.ExpandString, @"%windir%\system32\SecurityHealthSystray.exe");
+
+        // A machine-wide value: a missing one counts as Windows' own, which is what On puts back.
+        TweakTarget Target(string key, string name, RegistryValue windowsDefault) =>
+            new(new RegistryLocation(RegistryHive.LocalMachine, key, name), AbsentMeans: windowsDefault);
+
+        // A current-user value, written in the session that asked: safe mode may sign in as someone else.
+        TweakTarget Owned(RegistryHive hive, string key, string name, RegistryValue windowsDefault) =>
+            new(new RegistryLocation(hive, key, name), AbsentMeans: windowsDefault, WrittenInOwnSession: true);
+
+        // A service or driver as its registry Start value.
+        TweakTarget Start(string service, int windowsDefault) =>
+            new(new RegistryLocation(RegistryHive.LocalMachine, $@"{services}\{service}", "Start"), AbsentMeans: RegistryValue.DWord(windowsDefault));
+
+        // A right-click menu entry: the default value of the EPP key under Directory, Drive and *.
+        TweakTarget Epp(string scope) =>
+            new(new RegistryLocation(RegistryHive.LocalMachine, $@"SOFTWARE\Classes\{scope}\shellex\ContextMenuHandlers\EPP", ""),
+                AbsentMeans: RegistryValue.String(eppHandler), WrittenInOwnSession: true);
+
+        // Defender's own settings: real-time and cloud protection, tamper protection, Controlled Folder
+        // Access, unwanted app blocking, trusted mode and Smart Locker mode.
+        var realtime = Target($@"{defender}\Real-Time Protection", "DisableRealtimeMonitoring", RegistryValue.DWord(0));
+        var asyncScan = Target($@"{defender}\Real-Time Protection", "DisableAsyncScanOnOpen", RegistryValue.DWord(0));
+        var spyNet = Target($@"{defender}\Spynet", "SpyNetReporting", RegistryValue.DWord(2));
+        var samples = Target($@"{defender}\Spynet", "SubmitSamplesConsent", RegistryValue.DWord(1));
+        var tamper = Target($@"{defender}\Features", "TamperProtection", RegistryValue.DWord(5));
+        var folderAccess = Target($@"{defender}\Windows Defender Exploit Guard\Controlled Folder Access", "EnableControlledFolderAccess", RegistryValue.DWord(1));
+        var pua = Target(defender, "PUAProtection", RegistryValue.DWord(1));
+        var trustMode = Target(defender, "VerifiedAndReputableTrustModeEnabled", RegistryValue.DWord(1));
+        var smartLockerMode = Target(defender, "SmartLockerMode", RegistryValue.DWord(1));
+        TweakTarget[] defenderSettings = [realtime, asyncScan, spyNet, samples, tamper, folderAccess, pua, trustMode, smartLockerMode];
+
+        // Smart App Control, which Windows marks off for good.
+        var startPending = Target(smartLocker, "START_PENDING", RegistryValue.DWord(4));
+        var smartLockerEnabled = Target(smartLocker, "ENABLED", SmartAppControl(enabled: true));
+        var policyState = Target(ciPolicy, "VerifiedAndReputablePolicyState", RegistryValue.DWord(1));
+        TweakTarget[] smartAppControl = [startPending, smartLockerEnabled, policyState];
+
+        // Windows Security's notifications, the firewall's Epoch and quiet profiles, and SmartScreen.
+        var enhancedNotifications = Target($@"{securityCenter}\Notifications", "DisableEnhancedNotifications", RegistryValue.DWord(0));
+        var noActionNotification = Target($@"{securityCenter}\Virus and threat protection", "NoActionNotificationDisabled", RegistryValue.DWord(0));
+        var summaryNotification = Target($@"{securityCenter}\Virus and threat protection", "SummaryNotificationDisabled", RegistryValue.DWord(0));
+        var filesBlockedNotification = Target($@"{securityCenter}\Virus and threat protection", "FilesBlockedNotificationDisabled", RegistryValue.DWord(0));
+        var epoch = Target($@"{sharedAccess}\Epoch", "Epoch", RegistryValue.DWord(1228));
+        var domainProfile = Target($@"{sharedAccess}\Parameters\FirewallPolicy\DomainProfile", "DisableNotifications", RegistryValue.DWord(0));
+        var publicProfile = Target($@"{sharedAccess}\Parameters\FirewallPolicy\PublicProfile", "DisableNotifications", RegistryValue.DWord(0));
+        var standardProfile = Target($@"{sharedAccess}\Parameters\FirewallPolicy\StandardProfile", "DisableNotifications", RegistryValue.DWord(0));
+        var smartScreenEnabled = Target(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", "SmartScreenEnabled", RegistryValue.String("Warn"));
+        TweakTarget[] notifications =
+        [
+            enhancedNotifications, noActionNotification, summaryNotification, filesBlockedNotification,
+            epoch, domainProfile, publicProfile, standardProfile, smartScreenEnabled,
+        ];
+
+        // Edge's and Store apps' SmartScreen (current-user), exploit protection, memory integrity, VBS
+        // with its hypervisor boot settings, LSA protection and the vulnerable driver blocklist.
+        var edgeSmartScreen = Owned(RegistryHive.CurrentUser, @"SOFTWARE\Microsoft\Edge\SmartScreenEnabled", "", RegistryValue.DWord(1));
+        var edgePua = Owned(RegistryHive.CurrentUser, @"SOFTWARE\Microsoft\Edge\SmartScreenPuaEnabled", "", RegistryValue.DWord(1));
+        var appHost = Owned(RegistryHive.CurrentUser, @"SOFTWARE\Microsoft\Windows\CurrentVersion\AppHost", "EnableWebContentEvaluation", RegistryValue.DWord(1));
+        var mitigations = new TweakTarget(new RegistryLocation(RegistryHive.LocalMachine, kernel, "MitigationOptions"), AbsentMeans: mitigationsDefault);
+        // Memory integrity's own values keep the AbsentMeans the memory integrity row gives them: a
+        // missing Enabled counts as off, and the two bookkeeping values have none.
+        var hvciEnabled = Target(hypervisorEnforced, "Enabled", RegistryValue.DWord(0));
+        var hvciWasEnabledBy = new TweakTarget(new RegistryLocation(RegistryHive.LocalMachine, hypervisorEnforced, "WasEnabledBy"));
+        var hvciChanged = new TweakTarget(new RegistryLocation(RegistryHive.LocalMachine, hypervisorEnforced, "ChangedInBootCycle"));
+        var vbs = Target(deviceGuard, "EnableVirtualizationBasedSecurity", RegistryValue.DWord(1));
+        var hypervisorLaunch = new TweakTarget(new BootSettingLocation("hypervisorlaunchtype"), AbsentMeans: new BootSettingValue("Auto"));
+        var isolatedContext = new TweakTarget(new BootSettingLocation("isolatedcontext"));
+        var allowedInMemory = new TweakTarget(new BootSettingLocation("allowedinmemorysettings"));
+        var runAsPpl = Target(lsa, "RunAsPPL", RegistryValue.DWord(2));
+        var blocklist = Target(ciConfig, "VulnerableDriverBlocklistEnable", RegistryValue.DWord(1));
+        TweakTarget[] coreIsolation =
+        [
+            edgeSmartScreen, edgePua, appHost, mitigations, hvciEnabled, hvciWasEnabledBy, hvciChanged,
+            vbs, hypervisorLaunch, isolatedContext, allowedInMemory, runAsPpl, blocklist,
+        ];
+
+        // Defender's eight services and three drivers, as registry Start values.
+        var wdNisSvc = Start("WdNisSvc", 3);
+        var winDefend = Start("WinDefend", 2);
+        var mdCoreSvc = Start("MDCoreSvc", 2);
+        var wscsvc = Start("wscsvc", 2);
+        var webthreatDefSvc = Start("webthreatdefsvc", 3);
+        var webthreatDefUserSvc = Start("webthreatdefusersvc", 2);
+        var sense = Start("Sense", 3);
+        var securityHealthService = Start("SecurityHealthService", 2);
+        var wdBoot = Start("WdBoot", 0);
+        var wdFilter = Start("WdFilter", 0);
+        var wdNisDrv = Start("WdNisDrv", 3);
+        TweakTarget[] servicesAndDrivers =
+        [
+            wdNisSvc, winDefend, mdCoreSvc, wscsvc, webthreatDefSvc, webthreatDefUserSvc,
+            sense, securityHealthService, wdBoot, wdFilter, wdNisDrv,
+        ];
+
+        // What Akari-Dash writes in the session that asked: the right-click menu entries, the tray icon,
+        // the four Defender tasks and the account protection reminders. Safe mode may be another login,
+        // so these do not go to the pass.
+        var directoryEpp = Epp("Directory");
+        var driveEpp = Epp("Drive");
+        var starEpp = Epp("*");
+        var securityHealth = Owned(RegistryHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", "SecurityHealth", tray);
+        TweakTarget[] ownSessionStart = [directoryEpp, driveEpp, starEpp, securityHealth];
+        TweakTarget[] defenderTasks =
+        [
+            .. new[] { "Windows Defender Cache Maintenance", "Windows Defender Cleanup", "Windows Defender Scheduled Scan", "Windows Defender Verification" }
+                .Select(task => new TweakTarget(new ScheduledTaskLocation($@"\Microsoft\Windows\Windows Defender\{task}"), WrittenInOwnSession: true))
+        ];
+        TweakTarget[] accountProtection =
+        [
+            .. new[] { "DisableNotifications", "DisableDynamiclockNotifications", "DisableWindowsHelloNotifications" }
+                .Select(name => Owned(RegistryHive.CurrentUser, accountProtectionKey, name, RegistryValue.DWord(0)))
+        ];
+
+        TweakTarget[] targets =
+        [
+            .. defenderSettings,
+            .. smartAppControl,
+            .. notifications,
+            .. coreIsolation,
+            .. servicesAndDrivers,
+            .. ownSessionStart,
+            .. defenderTasks,
+            .. accountProtection,
+        ];
+
+        return new DeclaredTweak("security.disable-defender", "Disable Defender",
+            "AkariOS-Ultimate's Advanced Defender switch, the whole of it: real-time, dev drive and cloud protection off, tamper protection off, Controlled Folder Access off, and Defender's own eight services and three drivers disabled, so Windows Defender and Windows Security's tray and right-click entries are gone from the PC. It also takes with it everything the rows above cover — SmartScreen for apps, Edge and Store apps, the system-wide exploit mitigations, memory integrity, virtualization-based security, LSA protection, the vulnerable driver blocklist, Windows Security's and the firewall's notifications and Defender's own scheduled tasks — and puts all of that back with On. Windows only lets Defender's keys be written in safe boot, so applying or undoing it restarts the PC into safe mode and back. Two pieces do not come back: disabling Windows-Defender-Default-Definitions through DISM cannot be undone by anything, and Smart App Control cannot be turned back on without reinstalling Windows, On's writes included. With Defender's services off, Windows Security can no longer report on this PC and no antivirus is running; undoing brings both back.",
+            Category.Security, "Microsoft Defender", targets,
+            [Off(), On()],
+            Activation: Activation.InSafeMode);
+
+        TweakOption Off()
+        {
+            var values = new Dictionary<TweakTarget, MachineValue?>
+            {
+                // Defender's own settings, all off.
+                [realtime] = RegistryValue.DWord(1),
+                [asyncScan] = RegistryValue.DWord(1),
+                [spyNet] = RegistryValue.DWord(0),
+                [samples] = RegistryValue.DWord(0),
+                [tamper] = RegistryValue.DWord(4),
+                [folderAccess] = RegistryValue.DWord(0),
+                [pua] = RegistryValue.DWord(0),
+                [trustMode] = RegistryValue.DWord(0),
+                [smartLockerMode] = RegistryValue.DWord(0),
+
+                // Smart App Control off.
+                [startPending] = RegistryValue.DWord(0),
+                [smartLockerEnabled] = SmartAppControl(enabled: false),
+                [policyState] = RegistryValue.DWord(0),
+
+                // Windows Security's notifications, the firewall's and SmartScreen, off.
+                [enhancedNotifications] = RegistryValue.DWord(1),
+                [noActionNotification] = RegistryValue.DWord(1),
+                [summaryNotification] = RegistryValue.DWord(1),
+                [filesBlockedNotification] = RegistryValue.DWord(1),
+                [epoch] = RegistryValue.DWord(1231),
+                [domainProfile] = RegistryValue.DWord(1),
+                [publicProfile] = RegistryValue.DWord(1),
+                [standardProfile] = RegistryValue.DWord(1),
+                [smartScreenEnabled] = RegistryValue.String("Off"),
+
+                // The exploit mitigations off but Control Flow Guard on, memory integrity off with its
+                // bookkeeping deleted, VBS and its hypervisor boot settings deleted, LSA protection off
+                // and the driver blocklist off. Edge's and Store apps' SmartScreen off too.
+                [edgeSmartScreen] = RegistryValue.DWord(0),
+                [edgePua] = RegistryValue.DWord(0),
+                [appHost] = RegistryValue.DWord(0),
+                [mitigations] = mitigationsOff,
+                [hvciEnabled] = RegistryValue.DWord(0),
+                [hvciWasEnabledBy] = null,
+                [hvciChanged] = null,
+                [vbs] = null,
+                [hypervisorLaunch] = null,
+                [isolatedContext] = null,
+                [allowedInMemory] = null,
+                [runAsPpl] = RegistryValue.DWord(0),
+                [blocklist] = RegistryValue.DWord(0),
+
+                // Every service and driver Disabled.
+                [wdNisSvc] = RegistryValue.DWord(4),
+                [winDefend] = RegistryValue.DWord(4),
+                [mdCoreSvc] = RegistryValue.DWord(4),
+                [wscsvc] = RegistryValue.DWord(4),
+                [webthreatDefSvc] = RegistryValue.DWord(4),
+                [webthreatDefUserSvc] = RegistryValue.DWord(4),
+                [sense] = RegistryValue.DWord(4),
+                [securityHealthService] = RegistryValue.DWord(4),
+                [wdBoot] = RegistryValue.DWord(4),
+                [wdFilter] = RegistryValue.DWord(4),
+                [wdNisDrv] = RegistryValue.DWord(4),
+
+                // The tray icon and the right-click menu entries deleted, and the account protection
+                // reminders on.
+                [directoryEpp] = null,
+                [driveEpp] = null,
+                [starEpp] = null,
+                [securityHealth] = null,
+                [accountProtection[0]] = RegistryValue.DWord(1),
+                [accountProtection[1]] = RegistryValue.DWord(1),
+                [accountProtection[2]] = RegistryValue.DWord(1),
+            };
+
+            foreach (var task in defenderTasks)
+            {
+                values[task] = TaskEnabledValue.Off;
+            }
+
+            return new("off", "Off", values);
+        }
+
+        TweakOption On()
+        {
+            var values = new Dictionary<TweakTarget, MachineValue?>
+            {
+                // Defender's own settings, all back on.
+                [realtime] = RegistryValue.DWord(0),
+                [asyncScan] = RegistryValue.DWord(0),
+                [spyNet] = RegistryValue.DWord(2),
+                [samples] = RegistryValue.DWord(1),
+                [tamper] = RegistryValue.DWord(5),
+                [folderAccess] = RegistryValue.DWord(1),
+                // The enable list writes PUAProtection 2 and then 1; 1 is what it settles on.
+                [pua] = RegistryValue.DWord(1),
+                [trustMode] = RegistryValue.DWord(1),
+                [smartLockerMode] = RegistryValue.DWord(1),
+
+                // Smart App Control's values back, though Windows will not act on them.
+                [startPending] = RegistryValue.DWord(4),
+                [smartLockerEnabled] = SmartAppControl(enabled: true),
+                [policyState] = RegistryValue.DWord(1),
+
+                [enhancedNotifications] = RegistryValue.DWord(0),
+                [noActionNotification] = RegistryValue.DWord(0),
+                [summaryNotification] = RegistryValue.DWord(0),
+                [filesBlockedNotification] = RegistryValue.DWord(0),
+                [epoch] = RegistryValue.DWord(1228),
+                [domainProfile] = RegistryValue.DWord(0),
+                [publicProfile] = RegistryValue.DWord(0),
+                [standardProfile] = RegistryValue.DWord(0),
+                [smartScreenEnabled] = RegistryValue.String("Warn"),
+
+                [edgeSmartScreen] = RegistryValue.DWord(1),
+                [edgePua] = RegistryValue.DWord(1),
+                [appHost] = RegistryValue.DWord(1),
+                // Windows' own default, which is the value being absent.
+                [mitigations] = null,
+                [hvciEnabled] = RegistryValue.DWord(1),
+                [hvciWasEnabledBy] = RegistryValue.DWord(2),
+                [hvciChanged] = null,
+                [vbs] = RegistryValue.DWord(1),
+                [hypervisorLaunch] = new BootSettingValue("Auto"),
+                [isolatedContext] = null,
+                [allowedInMemory] = null,
+                [runAsPpl] = RegistryValue.DWord(2),
+                [blocklist] = RegistryValue.DWord(1),
+
+                // Each service and driver back at the Start value Windows ships it at.
+                [wdNisSvc] = RegistryValue.DWord(3),
+                [winDefend] = RegistryValue.DWord(2),
+                [mdCoreSvc] = RegistryValue.DWord(2),
+                [wscsvc] = RegistryValue.DWord(2),
+                [webthreatDefSvc] = RegistryValue.DWord(3),
+                [webthreatDefUserSvc] = RegistryValue.DWord(2),
+                [sense] = RegistryValue.DWord(3),
+                [securityHealthService] = RegistryValue.DWord(2),
+                [wdBoot] = RegistryValue.DWord(0),
+                [wdFilter] = RegistryValue.DWord(0),
+                [wdNisDrv] = RegistryValue.DWord(3),
+
+                // The tray icon and the menu entries back, and the reminders off.
+                [directoryEpp] = RegistryValue.String(eppHandler),
+                [driveEpp] = RegistryValue.String(eppHandler),
+                [starEpp] = RegistryValue.String(eppHandler),
+                [securityHealth] = tray,
+                [accountProtection[0]] = RegistryValue.DWord(0),
+                [accountProtection[1]] = RegistryValue.DWord(0),
+                [accountProtection[2]] = RegistryValue.DWord(0),
+            };
+
+            foreach (var task in defenderTasks)
+            {
+                values[task] = TaskEnabledValue.On;
+            }
+
+            return new("on", "On", values);
         }
 
         // Smart App Control keeps its flag in the first byte of an eight-byte value.
