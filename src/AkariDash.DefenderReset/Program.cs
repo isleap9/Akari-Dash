@@ -246,6 +246,11 @@ Say(bcd.ExitCode == 0
 
 var passes = Read();
 var waiting = passes.Where(pass => pass.Stage == SafeModePassStage.Scheduled).ToList();
+
+// The Tweaks this restart is for. What the pass file says afterwards about any other Tweak is a
+// leftover of a session already gone, so the verdict below is taken over these and nothing else.
+var ran = waiting.Select(pass => pass.TweakId).ToHashSet();
+
 if (waiting.Count == 0)
 {
     Say($"There is no pass at {passPath}, so nothing was changed.");
@@ -260,21 +265,28 @@ else
     RunTrusted();
 
     var result = Read();
-    if (result.Any(pass => pass.Stage == SafeModePassStage.Scheduled))
+    var outcome = result.Where(pass => ran.Contains(pass.TweakId)).ToList();
+    if (outcome.Count == 0 || outcome.Any(pass => pass.Stage == SafeModePassStage.Scheduled))
     {
+        // Nothing recorded at all is as much a failure as something left unfinished: either way the
+        // change this restart was for did not happen. Only the entries it was for are marked, so a
+        // leftover of another session is left as it reads.
         const string nothingChanged = "The change could not be made as TrustedInstaller; nothing was changed.";
         Say(nothingChanged);
-        Save([.. result.Select(pass => pass.Stage == SafeModePassStage.Scheduled
-            ? pass with { Stage = SafeModePassStage.Failed, Message = nothingChanged }
-            : pass)]);
+        if (outcome.Any(pass => pass.Stage == SafeModePassStage.Scheduled))
+        {
+            Save([.. result.Select(pass => ran.Contains(pass.TweakId) && pass.Stage == SafeModePassStage.Scheduled
+                ? pass with { Stage = SafeModePassStage.Failed, Message = nothingChanged }
+                : pass)]);
+        }
     }
-    else if (result.All(pass => pass.Stage == SafeModePassStage.Applied))
+    else if (outcome.All(pass => pass.Stage == SafeModePassStage.Applied))
     {
         Say("Done.");
     }
     else
     {
-        Say($"Not everything could be written: {string.Join("; ", result.Select(pass => pass.Message).Where(message => message is not null))}");
+        Say($"Not everything could be written: {string.Join("; ", outcome.Select(pass => pass.Message).Where(message => message is not null))}");
     }
 
     Say($"The details are in {log}.");
