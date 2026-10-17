@@ -40,17 +40,20 @@ public static class DefenderRideAlong
     /// <summary>
     /// What the companion writes for <paramref name="pass"/> besides the Tweak's own targets. Which
     /// side of its Tweak a pass rides is the Tweak's own, because the Undo flag alone does not say it:
-    /// Defender optimize's Optimize pass is its off side and its Undo the on side, while Disable
-    /// Defender's Off Option is the off side and its On Option the on side, on an apply and on an undo
-    /// alike — so its Undo of On turns Defender off too.
+    /// Defender optimize's Optimize pass is its off side and its Undo the on side; Disable Defender's
+    /// Off apply is its off side, and its On apply and every Undo are the on side.
     /// </summary>
     public static IReadOnlyList<(MachineLocation Location, MachineValue? Value)> For(SafeModePass pass) =>
         Defender(TurnsOff(pass));
 
     /// <summary>
     /// Whether <paramref name="pass"/> is the side of its Tweak that turns Defender off, and so rides
-    /// the off/0 values <see cref="Defender"/> takes. A pass's <see cref="SafeModePass.OptionId"/> is
-    /// the Option that was applied, so Disable Defender's Off apply and its On undo are the off side.
+    /// the off/0 values <see cref="Defender"/> takes.
+    ///
+    /// Only an apply of Disable Defender's Off Option is that side. A pass's
+    /// <see cref="SafeModePass.OptionId"/> is the Option that was applied last, but its Undo puts back
+    /// the Original Values the <em>first</em> apply saved — Defender back on — so the Undo rides the
+    /// enable side whichever Option was applied last.
     /// </summary>
     public static bool TurnsOff(SafeModePass pass)
     {
@@ -60,6 +63,6 @@ public static class DefenderRideAlong
             return !pass.Undo;
         }
 
-        return pass.Undo ? pass.OptionId == "on" : pass.OptionId == "off";
+        return !pass.Undo && pass.OptionId == "off";
     }
 }

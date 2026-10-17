@@ -174,7 +174,16 @@ int Work()
                 ? $"Wrote {written} value(s)."
                 : $"Wrote {written} value(s); {failures.Count} could not be written.");
 
-            BestEffort(pass);
+            // Runner-wrapped so a failure the extras' own catches miss — a Say that cannot write its
+            // log, say — can never reach the outer catch, which would flip this pass to Failed.
+            try
+            {
+                BestEffort(pass);
+            }
+            catch (Exception ex)
+            {
+                Say($"The best-effort extras did not run: {ex.Message}");
+            }
 
             if (pass.Undo && failures.Count == 0)
             {
@@ -233,10 +242,10 @@ IReadOnlyList<(MachineLocation Location, MachineValue? Value)> Values(SafeModePa
 // The two extra pieces AkariOS's Advanced switch does beside the Tweak's own writes, for this Tweak
 // alone. Both need TrustedInstaller's rights and safe boot, so they run in the worker with the writes.
 // Neither is a Tweak target and neither comes back by itself — Windows cannot re-enable the DISM
-// feature, and the move is only undone by asking for On — so a failure is a line in the log and
-// nothing else: it never fails the pass, never joins the failures, and never holds up an Undo's
-// clearing of the Original Values. Which side runs is the same dispatch the ride-alongs use, so On
-// puts smartscreen.exe back rather than moving it out.
+// feature, and the move is only put back by a pass on the enable side — so a failure is a line in the
+// log and nothing else: it never fails the pass, never joins the failures, and never holds up an
+// Undo's clearing of the Original Values. Which side runs is the same dispatch the ride-alongs use,
+// so On and every Undo put smartscreen.exe back rather than moving it out.
 void BestEffort(SafeModePass pass)
 {
     if (pass.TweakId != DisableDefender.TweakId)

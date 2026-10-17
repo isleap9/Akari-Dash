@@ -388,4 +388,45 @@ public class DefenderOffTests
 
         Assert.Equal("on", Assert.IsType<LiveState.InOption>(state).Option.Id);
     }
+
+    // The companion asks the ride-alongs for the side the pending pass is on, not for what its Undo
+    // flag alone says: only a Disable Defender Off apply turns Defender off. A Disable Defender Undo
+    // puts the first apply's Original Values back — Defender on — so it rides the enable side
+    // whichever Option was applied last. Defender optimize's Optimize apply and Undo are unchanged.
+    [Fact]
+    public void The_companion_ride_alongs_follow_the_pending_pass_not_just_its_undo_flag()
+    {
+        const string optimize = "security.defender-optimize";
+        const string defender = "security.disable-defender";
+
+        static RegistryValue Phishing(SafeModePass pass) =>
+            Assert.IsType<RegistryValue>(DefenderRideAlong.For(pass).Single(extra =>
+                extra.Location is RegistryLocation { Name: "ServiceEnabled" }).Value);
+
+        static TaskEnabledValue ExploitGuard(SafeModePass pass) =>
+            Assert.IsType<TaskEnabledValue>(DefenderRideAlong.For(pass).Single(extra =>
+                extra.Location is ScheduledTaskLocation).Value);
+
+        // Disable Defender: only the Off apply is the off side; On's apply and both undos ride on.
+        Assert.True(DefenderRideAlong.TurnsOff(new SafeModePass(defender, "off", Undo: false)));
+        Assert.False(DefenderRideAlong.TurnsOff(new SafeModePass(defender, "off", Undo: true)));
+        Assert.False(DefenderRideAlong.TurnsOff(new SafeModePass(defender, "on", Undo: false)));
+        Assert.False(DefenderRideAlong.TurnsOff(new SafeModePass(defender, "on", Undo: true)));
+
+        Assert.Equal(RegistryValue.DWord(0), Phishing(new SafeModePass(defender, "off", Undo: false)));
+        Assert.Equal(RegistryValue.DWord(1), Phishing(new SafeModePass(defender, "off", Undo: true)));
+        Assert.Equal(RegistryValue.DWord(1), Phishing(new SafeModePass(defender, "on", Undo: false)));
+        Assert.Equal(RegistryValue.DWord(1), Phishing(new SafeModePass(defender, "on", Undo: true)));
+
+        Assert.Equal(TaskEnabledValue.Off, ExploitGuard(new SafeModePass(defender, "off", Undo: false)));
+        Assert.Equal(TaskEnabledValue.On, ExploitGuard(new SafeModePass(defender, "off", Undo: true)));
+        Assert.Equal(TaskEnabledValue.On, ExploitGuard(new SafeModePass(defender, "on", Undo: false)));
+        Assert.Equal(TaskEnabledValue.On, ExploitGuard(new SafeModePass(defender, "on", Undo: true)));
+
+        // Defender optimize, unchanged: the Optimize apply is the off side, its Undo the on side.
+        Assert.True(DefenderRideAlong.TurnsOff(new SafeModePass(optimize, "optimize", Undo: false)));
+        Assert.False(DefenderRideAlong.TurnsOff(new SafeModePass(optimize, "optimize", Undo: true)));
+        Assert.Equal(RegistryValue.DWord(0), Phishing(new SafeModePass(optimize, "optimize", Undo: false)));
+        Assert.Equal(RegistryValue.DWord(1), Phishing(new SafeModePass(optimize, "optimize", Undo: true)));
+    }
 }
