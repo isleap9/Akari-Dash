@@ -38,11 +38,12 @@ void Say(string text)
     }
 }
 
-// System32's own tool, never one found on PATH: what is on the PATH is whatever the machine says.
-// The output is answered rather than printed, so the few answers that matter can be shown and the
-// rest — sc.exe's complaints about a service that is not running, taskkill's about a process that
-// never started — left out of a window the person is watching during a restart.
 (int ExitCode, string Output) Run(string fileName, params string[] arguments)
+{
+    return RunWithTimeout(fileName, 0, arguments);
+}
+
+(int ExitCode, string Output) RunWithTimeout(string fileName, int timeoutMs, params string[] arguments)
 {
     var inSystem32 = Path.Combine(Environment.SystemDirectory, fileName);
     var start = new ProcessStartInfo(File.Exists(inSystem32) ? inSystem32 : fileName)
@@ -58,8 +59,14 @@ void Say(string text)
     }
 
     using var process = Process.Start(start) ?? throw new InvalidOperationException($"{fileName} could not be started.");
-    var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+    var outputTask = Task.Run(() => process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd());
+    if (timeoutMs > 0 && !process.WaitForExit(timeoutMs))
+    {
+        try { process.Kill(entireProcessTree: true); } catch { }
+        return (-1, $"timed out after {timeoutMs / 1000} seconds and was killed");
+    }
     process.WaitForExit();
+    var output = outputTask.GetAwaiter().GetResult();
     return (process.ExitCode, output);
 }
 
@@ -198,6 +205,9 @@ int Work()
                 Message = failures.Count == 0 ? null : string.Join("; ", failures),
             };
             failed |= failures.Count > 0;
+
+            // Save as we go: if the process is killed mid-run, the outcome is already on disk.
+            Save(outcomes);
         }
         catch (Exception ex)
         {
@@ -265,7 +275,7 @@ void BestEffort(SafeModePass pass)
         {
             // On Windows 11 the feature does not exist and this fails every time: its exit code and
             // own answer are the log line, never an error.
-            var dism = Run("Dism.exe", "/Online", "/NoRestart", "/Disable-Feature", "/FeatureName:Windows-Defender-Default-Definitions");
+            var dism = RunWithTimeout("Dism.exe", 60000, "/Online", "/NoRestart", "/Disable-Feature", "/FeatureName:Windows-Defender-Default-Definitions");
             Say($"Windows-Defender-Default-Definitions: exit {dism.ExitCode}. {dism.Output.Trim()}");
         }
         else
