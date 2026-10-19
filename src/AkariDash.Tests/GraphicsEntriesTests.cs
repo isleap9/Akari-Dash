@@ -41,6 +41,9 @@ public class GraphicsEntriesTests
                 "msi-mode: Apply",
                 "msi-mode: Revert",
                 "directx: Install",
+                "cpp: Install",
+                "resolution: Open",
+                "hags-windowed: Open",
             ],
             Rows(shown));
     }
@@ -51,7 +54,7 @@ public class GraphicsEntriesTests
         var shown = GraphicsEntries.For(new HashSet<GpuVendor> { GpuVendor.Amd, GpuVendor.Intel });
 
         Assert.Equal(
-            ["driver-clean", "driver-install", "driver-install-settings", "driver-debloat", "amd-settings", "intel-settings", "msi-mode", "directx"],
+            ["driver-clean", "driver-install", "driver-install-settings", "driver-debloat", "amd-settings", "intel-settings", "msi-mode", "directx", "cpp", "resolution", "hags-windowed"],
             shown.Select(entry => entry.Id));
         Assert.Equal(["AMD", "INTEL"], shown.Single(entry => entry.Id == "driver-install").Actions.Select(action => action.Label));
     }
@@ -61,7 +64,7 @@ public class GraphicsEntriesTests
     {
         var shown = GraphicsEntries.For(new HashSet<GpuVendor>());
 
-        Assert.Equal(["driver-clean", "msi-mode", "directx"], shown.Select(entry => entry.Id));
+        Assert.Equal(["driver-clean", "msi-mode", "directx", "cpp", "resolution", "hags-windowed"], shown.Select(entry => entry.Id));
     }
 
     [Fact]

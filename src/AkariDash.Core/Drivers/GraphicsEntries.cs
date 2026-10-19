@@ -25,8 +25,6 @@ public sealed record GraphicsEntry(string Id, string Name, string Description, I
 /// the helpers Akari.ps1 gives it (<see cref="Helpers"/>). These are Actions, not Tweaks (ADR-0001,
 /// amended 2026-10-19): Revert is the script's own, and nothing is read back. DDU's safe-mode half
 /// is the one part not run from its script: see <see cref="DriverClean"/>.
-/// Left out on purpose: C++ redistributables (on the Downloads page), and the two links that open
-/// Settings (HAGS is a Gaming Tweak; resolution belongs to the GPUs page).
 /// </summary>
 public static class GraphicsEntries
 {
@@ -75,6 +73,12 @@ public static class GraphicsEntries
             [Apply("p0-state"), Revert("p0-state")], GpuVendor.Nvidia),
         new("msi-mode", "MSI mode", "Turn MSI mode on for the GPU (Revert turns it off)", [Apply("msi-mode"), Revert("msi-mode")]),
         new("directx", "DirectX", "Download and install DirectX", [new("Install", "Download and install DirectX", "directx-apply.ps1")]),
+        new("cpp", "C++ redistributables", "Download and install all C++ redistributables",
+            [new("Install", "Download and install all C++ redistributables", "cpp-apply.ps1")]),
+        new("resolution", "Resolution and refresh rate", "Open the display settings",
+            [new("Open", "Open the display settings", "resolution-apply.ps1")]),
+        new("hags-windowed", "HAGS and windowed optimizations", "Open the advanced graphics settings",
+            [new("Open", "Open the advanced graphics settings", "hags-windowed-apply.ps1")]),
     ];
 
     /// <summary>

@@ -1,0 +1,2 @@
+Start-Process "ms-settings:display-advancedgraphics"
+    
