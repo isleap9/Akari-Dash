@@ -180,6 +180,7 @@ public partial class App : Application
         builder.Services.AddTransient<DrivesViewModel>();
         builder.Services.AddTransient<UwpAppsViewModel>();
         builder.Services.AddTransient<DownloadsViewModel>();
+        builder.Services.AddTransient<GraphicsViewModel>();
 
         // Uninstaller (an Action backend, ADR-0004): lists and removes Store and Win32 apps.
         builder.Services.AddSingleton<IInstalledAppService, WindowsInstalledAppService>();

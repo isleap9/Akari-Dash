@@ -29,6 +29,8 @@
   <!-- AkariOS-Ultimate's removal and install scripts for the Legacy apps tab, read back by name. -->
   <ItemGroup>
     <EmbeddedResource Include="Scripts\*.ps1" LogicalName="AkariDash.App.Scripts.%(Filename)%(Extension)" />
+    <!-- The Drivers page: AkariOS-Ultimate's Graphics scripts, 1:1, and the helpers they run after. -->
+    <EmbeddedResource Include="Scripts\Graphics\*.ps1" LogicalName="AkariDash.App.Scripts.Graphics.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <!-- Publish leaves out the app's own resources.pri and its compiled XAML pages (.xbf), and

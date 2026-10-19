@@ -1,9 +1,17 @@
 using Microsoft.UI.Xaml.Controls;
+using AkariDash.App.ViewModels;
 
 namespace AkariDash.App.Views;
 
-/// <summary>The Drivers page: a work-in-progress placeholder for now.</summary>
+/// <summary>The Drivers page: AkariOS-Ultimate's Graphics category for the cards in this PC.</summary>
 public sealed partial class DriversPage : Page
 {
-    public DriversPage() => InitializeComponent();
+    public GraphicsViewModel ViewModel { get; }
+
+    public DriversPage(GraphicsViewModel viewModel)
+    {
+        ViewModel = viewModel;
+        InitializeComponent();
+        DataContext = viewModel;
+    }
 }

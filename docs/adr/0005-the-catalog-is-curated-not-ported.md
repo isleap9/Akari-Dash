@@ -27,3 +27,5 @@ A smaller catalog. Customize's Explorer page goes from the 34 rows a port would 
 The `// Left out:` comments at the top of each catalog file, with the reason and a test asserting the id is absent, stay exactly as they are. They are how a decision not to ship stays visible instead of looking like an oversight.
 
 _Decided 2026-10-13, mid-#32, when the Explorer page's 34-row plan made the problem obvious enough to name._
+
+_Amended 2026-10-19 (#33): the Drivers page is ported, not curated — AkariOS-Ultimate's Graphics category entry for entry, at the user's call (see ADR-0001's amendment of the same date). Only three entries are left out, each because it already lives on another page: C++ redistributables (Downloads), HAGS (a Gaming Tweak) and resolution (the GPUs page)._
