@@ -89,6 +89,7 @@ internal static class WindowsGpuCards
                 {
                     DriverKey = driverKey,
                     ProviderName = key?.GetValue("ProviderName") as string,
+                    BusNumber = BusNumber(set, ref info),
                 };
             }
         }
@@ -116,6 +117,15 @@ internal static class WindowsGpuCards
         }
 
         return System.Text.Encoding.Unicode.GetString(buffer, 0, (int)size).TrimEnd('\0');
+    }
+
+    // SPDRP_BUSNUMBER: the PCI bus, a DWORD.
+    private static uint? BusNumber(IntPtr set, ref Native.SpDevinfoData info)
+    {
+        var buffer = new byte[4];
+        return Native.SetupDiGetDeviceRegistryPropertyW(set, ref info, 0x15, out _, buffer, (uint)buffer.Length, out var size) && size >= 4
+            ? BitConverter.ToUInt32(buffer)
+            : null;
     }
 
     private static uint? PciValue(IntPtr set, ref Native.SpDevinfoData info, uint pid)

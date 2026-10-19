@@ -32,6 +32,9 @@ public sealed record GpuAdapterRaw(
 
     /// <summary>The driver's ProviderName, which Vain Toolbox shows as the manufacturer.</summary>
     public string? ProviderName { get; init; }
+
+    /// <summary>SetupAPI's PCI bus number (SPDRP_BUSNUMBER).</summary>
+    public uint? BusNumber { get; init; }
 }
 
 /// <summary>
@@ -56,6 +59,9 @@ public sealed record GpuCard(
 
     /// <summary>Who made the driver (its ProviderName), or the maker of the card when Windows does not say.</summary>
     public string Manufacturer { get; init; } = string.Empty;
+
+    /// <summary>The PCI bus the card sits on, which NvAPI_GPU_GetBusId reports too: how the page finds the card in NVAPI.</summary>
+    public uint? BusNumber { get; init; }
 
     /// <summary>Whether a driver is installed: Windows reports a version only for one.</summary>
     public bool HasDriver => DriverVersion is not null;
@@ -82,6 +88,7 @@ public sealed record GpuCard(
             HardwareId = HardwareIdOf(raw.MatchingDeviceId),
             RegistryKey = raw.DriverKey?.Split('\\').LastOrDefault(),
             Manufacturer = string.IsNullOrWhiteSpace(raw.ProviderName) ? vendor.DisplayName() : raw.ProviderName.Trim(),
+            BusNumber = raw.BusNumber,
         };
     }
 

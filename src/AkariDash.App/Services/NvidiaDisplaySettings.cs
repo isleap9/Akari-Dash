@@ -44,7 +44,160 @@ internal static class NvidiaDisplaySettings
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int SetDisplayConfig(uint count, IntPtr paths, uint flags);
 
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int DvcInfo(IntPtr handle, uint outputId, ref NvDisplayDvcInfoEx info);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int HueInfo(IntPtr handle, uint outputId, ref NvDisplayHueInfo info);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int SetHueAngle(IntPtr handle, uint outputId, int angle);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int SetColorTable(uint displayId, ref NvColorTable table);
+
     private static NvApi Api => NvApi.Instance ?? throw new NvApiException("Initialize", NvApiStatus.NoImplementation);
+
+    /// <summary>Digital Vibrance now and its top, or null when the driver does not give it for this display.</summary>
+    public static (int Level, int Max)? ReadVibrance(IntPtr handle)
+    {
+        var info = new NvDisplayDvcInfoEx { StructVersion = NvDisplayDvcInfoEx.Version };
+        return handle != IntPtr.Zero &&
+               Api.Function<DvcInfo>(NvApiUndocumented.GetDVCInfoEx, "GetDVCInfoEx")(handle, 0, ref info) == NvApiStatus.Ok
+            ? (info.CurrentLevel, info.MaxLevel)
+            : null;
+    }
+
+    public static void WriteVibrance(IntPtr handle, int level)
+    {
+        var info = new NvDisplayDvcInfoEx { StructVersion = NvDisplayDvcInfoEx.Version, CurrentLevel = level };
+        NvApi.Check("SetDVCLevelEx", Api.Function<DvcInfo>(NvApiUndocumented.SetDVCLevelEx, "SetDVCLevelEx")(handle, 0, ref info));
+    }
+
+    /// <summary>The hue angle now, or null when the driver does not give it for this display.</summary>
+    public static int? ReadHue(IntPtr handle)
+    {
+        var info = new NvDisplayHueInfo { StructVersion = NvDisplayHueInfo.Version };
+        return handle != IntPtr.Zero &&
+               Api.Function<HueInfo>(NvApiUndocumented.GetHUEInfo, "GetHUEInfo")(handle, 0, ref info) == NvApiStatus.Ok
+            ? info.CurrentAngle
+            : null;
+    }
+
+    public static void WriteHue(IntPtr handle, int angle) =>
+        NvApi.Check("SetHUEAngle", Api.Function<SetHueAngle>(NvApiUndocumented.SetHUEAngle, "SetHUEAngle")(handle, 0, angle));
+
+    /// <summary>Brightness, Contrast and Gamma per channel, as Vain's 1024-step colour table.</summary>
+    public static void WriteColorTable(uint displayId, ChannelAdjustment red, ChannelAdjustment green, ChannelAdjustment blue)
+    {
+        var table = new NvColorTable { StructVersion = NvColorTable.Version, Enabled = 1 };
+        ColorRamp.Build(red, green, blue).CopyTo((Span<float>)table.Steps);
+        NvApi.Check("SetColorTable", Api.Function<SetColorTable>(NvApiUndocumented.SetColorTable, "SetColorTable")(displayId, ref table));
+    }
+
+    /// <summary>
+    /// Writes the monitor's ScalingConfig the way Vain does (FUN_1401b6570): with the backup and restore
+    /// privileges and REG_OPTION_BACKUP_RESTORE, since the driver's key does not let administrators write.
+    /// </summary>
+    public static void WriteScalingConfig(string key, byte[] blob)
+    {
+        using var privileges = new BackupRestorePrivileges();
+        var status = RegCreateKeyExW(
+            new IntPtr(unchecked((int)0x80000002)), $@"{NvidiaDisplays.DisplayDatabaseKey}\{key}", 0, null,
+            RegOptionBackupRestore, KeySetValue, IntPtr.Zero, out var handle, IntPtr.Zero);
+        if (status != 0)
+        {
+            throw new InvalidOperationException($"The driver's display settings could not be opened (error {status}).");
+        }
+
+        try
+        {
+            status = RegSetValueExW(handle, "ScalingConfig", 0, RegBinary, blob, blob.Length);
+            if (status != 0)
+            {
+                throw new InvalidOperationException($"ScalingConfig could not be written (error {status}).");
+            }
+        }
+        finally
+        {
+            RegCloseKey(handle);
+        }
+    }
+
+    private const uint RegOptionBackupRestore = 4;
+    private const uint KeySetValue = 2;
+    private const uint RegBinary = 3;
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode)]
+    private static extern int RegCreateKeyExW(IntPtr key, string subKey, uint reserved, string? className, uint options, uint access, IntPtr security, out IntPtr result, IntPtr disposition);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode)]
+    private static extern int RegSetValueExW(IntPtr key, string name, uint reserved, uint type, byte[] data, int size);
+
+    [DllImport("advapi32.dll")]
+    private static extern int RegCloseKey(IntPtr key);
+
+    /// <summary>SeBackupPrivilege and SeRestorePrivilege, on while it lives.</summary>
+    private sealed class BackupRestorePrivileges : IDisposable
+    {
+        private const uint TokenAdjustPrivileges = 0x20;
+        private const uint TokenQuery = 0x8;
+        private const uint SePrivilegeEnabled = 2;
+        private readonly IntPtr _token;
+
+        public BackupRestorePrivileges()
+        {
+            if (!OpenProcessToken(GetCurrentProcess(), TokenAdjustPrivileges | TokenQuery, out _token))
+            {
+                throw new InvalidOperationException("The process token could not be opened.");
+            }
+
+            Set("SeBackupPrivilege", SePrivilegeEnabled);
+            Set("SeRestorePrivilege", SePrivilegeEnabled);
+        }
+
+        public void Dispose()
+        {
+            Set("SeBackupPrivilege", 0);
+            Set("SeRestorePrivilege", 0);
+            CloseHandle(_token);
+        }
+
+        private void Set(string name, uint attributes)
+        {
+            if (!LookupPrivilegeValueW(null, name, out var luid))
+            {
+                return;
+            }
+
+            var privileges = new TokenPrivileges { Count = 1, Luid = luid, Attributes = attributes };
+            AdjustTokenPrivileges(_token, false, ref privileges, 0, IntPtr.Zero, IntPtr.Zero);
+        }
+
+        // TOKEN_PRIVILEGES with one LUID_AND_ATTRIBUTES: a LUID is two DWORDs, so it sits at offset 4.
+        [StructLayout(LayoutKind.Sequential, Pack = 4)]
+        private struct TokenPrivileges
+        {
+            public uint Count;
+            public long Luid;
+            public uint Attributes;
+        }
+
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr GetCurrentProcess();
+
+        [DllImport("kernel32.dll")]
+        private static extern bool CloseHandle(IntPtr handle);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        private static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool LookupPrivilegeValueW(string? system, string name, out long luid);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        private static extern bool AdjustTokenPrivileges(IntPtr token, bool disableAll, ref TokenPrivileges state, uint length, IntPtr previous, IntPtr returned);
+    }
 
     /// <summary>The colour output the display runs now, asked with NV_COLOR_DATA V5, or V3 on older drivers.</summary>
     public static NvidiaColorOutput ReadColor(uint displayId)

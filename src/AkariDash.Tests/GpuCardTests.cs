@@ -52,6 +52,14 @@ public class GpuCardTests
     }
 
     [Fact]
+    public void The_card_keeps_its_pci_bus_to_find_it_in_nvapi()
+    {
+        var card = GpuCard.From(Raw("pci\\ven_10de&dev_2786", "NVIDIA GeForce RTX 4070") with { BusNumber = 1 })!;
+
+        Assert.Equal(1u, card.BusNumber);
+    }
+
+    [Fact]
     public void An_adapter_without_a_driver_version_reads_as_no_driver()
     {
         Assert.False(GpuCard.From(Raw("pci\\ven_10de&dev_2786", "NVIDIA GeForce RTX 4070"))!.HasDriver);
