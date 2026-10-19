@@ -20,6 +20,7 @@ public class NvApiStructTests
     [InlineData(typeof(NvGpuDisplayIds), 16, 0x00030010u)]
     [InlineData(typeof(NvDisplayConfigPathInfoV2), 48, 0x00020030u)]
     [InlineData(typeof(NvDisplayConfigPathAdvancedTargetInfoV1), 128, 0x00010080u)]
+    [InlineData(typeof(NvEdidV3), 272, 0x00030110u)]
     public void Versioned_structs_match_the_header(Type type, int size, uint version)
     {
         Assert.Equal(size, Marshal.SizeOf(type));
@@ -48,6 +49,9 @@ public class NvApiStructTests
     [InlineData(typeof(NvDisplayConfigPathAdvancedTargetInfoV1), "Connector", 20)]
     [InlineData(typeof(NvDisplayConfigPathAdvancedTargetInfoV1), "TimingOverride", 28)]
     [InlineData(typeof(NvDisplayConfigPathAdvancedTargetInfoV1), "Timing", 32)]
+    [InlineData(typeof(NvEdidV3), "SizeOfEdid", 260)]
+    [InlineData(typeof(NvEdidV3), "EdidId", 264)]
+    [InlineData(typeof(NvEdidV3), "Offset", 268)]
     public void Fields_sit_where_the_header_puts_them(Type type, string field, int offset)
     {
         Assert.Equal(offset, (int)Marshal.OffsetOf(type, field));

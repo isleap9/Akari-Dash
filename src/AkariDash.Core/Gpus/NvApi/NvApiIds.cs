@@ -12,6 +12,8 @@ public static class NvApiIds
     public const uint EnumPhysicalGPUs = 0xe5ac921f;
     public const uint GPU_GetConnectedDisplayIds = 0x0078dba2;
     public const uint GPU_GetBusId = 0x1be0b8e5;
+    public const uint GPU_GetEDID = 0x37d32e69;
+    public const uint SYS_GetGpuAndOutputIdFromDisplayId = 0x112ba1a5;
     public const uint EnumNvidiaDisplayHandle = 0x9abdd40d;
     public const uint GetAssociatedNvidiaDisplayName = 0x22a78b05;
     public const uint DISP_GetDisplayIdByDisplayName = 0xae457190;

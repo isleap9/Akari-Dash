@@ -182,3 +182,23 @@ public struct NvDisplayConfigSourceModeInfoV1
     public int SpanningOrientation;
     public uint Flags;
 }
+
+/// <summary>NV_EDID_V3, from NvAPI_GPU_GetEDID: up to 256 bytes of the monitor's EDID at a time.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NvEdidV3
+{
+    public static readonly uint Version = NvApiVersion.Of<NvEdidV3>(3);
+
+    public uint StructVersion;
+    public EdidData Data;
+    public uint SizeOfEdid;
+    public uint EdidId;
+    public uint Offset;
+}
+
+/// <summary>EDID_Data: 256 bytes.</summary>
+[InlineArray(256)]
+public struct EdidData
+{
+    private byte _element;
+}
