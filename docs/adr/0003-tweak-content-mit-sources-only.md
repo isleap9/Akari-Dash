@@ -7,3 +7,5 @@ Winhance has the largest list of settings, so it is the main starting point for 
 _Amended 2026-10-12. This ADR first said Winhance could only be read as an index of ideas, before the MIT snapshot was found._
 
 _Amended again 2026-10-12: newer, PolyForm Shield versions of Winhance may be read for one purpose only, to list which settings exist (their names). Nothing else is taken from them: every value comes from Microsoft's documentation, Akari-OS / AkariOS-Ultimate or Windows itself, and a setting without such a source is left out._
+
+_Amended 2026-10-19 (GPUs page): at the user's call, the GPUs page's Registry Settings come from Vain Toolbox, which is closed source, read out of its binary with REA (the table in `FUN_140160c50`, where each value is written in `FUN_140160bc0`). This is the one exception. The values are the NVIDIA driver's own registry names with Vain's recommended DWORDs, each shown with Vain's value beside the card's current one and written only when the user presses its button; nothing from Vain is applied by default, and no Vain code is copied. Everything else still comes from MIT sources._

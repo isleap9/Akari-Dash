@@ -25,13 +25,15 @@ public sealed record GpuFact(string Label, string Value, bool Accent = false)
 /// </summary>
 public sealed partial class GpusViewModel : ViewModelBase
 {
+    private readonly IMachine _machine;
     private readonly IDialogService _dialogs;
     private readonly IInfoBarService _infoBar;
     private readonly IStatusService _status;
     private readonly ILogger<GpusViewModel> _logger;
 
-    public GpusViewModel(IDialogService dialogs, IInfoBarService infoBar, IStatusService status, ILogger<GpusViewModel> logger)
+    public GpusViewModel(IMachine machine, IDialogService dialogs, IInfoBarService infoBar, IStatusService status, ILogger<GpusViewModel> logger)
     {
+        _machine = machine;
         _dialogs = dialogs;
         _infoBar = infoBar;
         _status = status;
@@ -72,6 +74,53 @@ public sealed partial class GpusViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(RestartCommand))]
     public partial bool IsBusy { get; private set; }
 
+    /// <summary>Vain Toolbox's Registry Settings for the picked card: NVIDIA cards only.</summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<NvidiaRegistryGroupViewModel> RegistryGroups { get; private set; } = [];
+
+    [ObservableProperty]
+    public partial bool HasRegistrySettings { get; private set; }
+
+    [ObservableProperty]
+    public partial string RegistrySearch { get; set; } = string.Empty;
+
+    partial void OnRegistrySearchChanged(string value) => FilterRegistry();
+
+    private void FilterRegistry()
+    {
+        var search = RegistrySearch.Trim();
+        foreach (var group in RegistryGroups)
+        {
+            foreach (var row in group.Rows)
+            {
+                row.IsVisible = search.Length == 0 || row.Name.Contains(search, StringComparison.OrdinalIgnoreCase);
+            }
+
+            group.IsVisible = group.Rows.Any(row => row.IsVisible);
+        }
+    }
+
+    private void LoadRegistry(GpuCard card)
+    {
+        if (card.Vendor != GpuVendor.Nvidia || card.RegistryKey is not { } key)
+        {
+            RegistryGroups = [];
+            HasRegistrySettings = false;
+            return;
+        }
+
+        void Failed(string message) => _infoBar.ShowError("Registry Settings", message);
+
+        RegistryGroups = NvidiaRegistrySettings.All
+            .GroupBy(setting => setting.Group)
+            .Select(group => new NvidiaRegistryGroupViewModel(
+                group.Key,
+                group.Select(setting => new NvidiaRegistryRowViewModel(setting, key, _machine, Failed)).ToList()))
+            .ToList();
+        HasRegistrySettings = true;
+        FilterRegistry();
+    }
+
     partial void OnSelectedCardChanged(GpuCard? value)
     {
         if (value is not { } card)
@@ -94,6 +143,7 @@ public sealed partial class GpusViewModel : ViewModelBase
             new("PCIe Link", card.PcieLink ?? unknown),
             new("Registry Key", card.RegistryKey ?? unknown),
         ];
+        LoadRegistry(card);
     }
 
     private bool CanRestart() => SelectedCard is not null && !IsBusy;

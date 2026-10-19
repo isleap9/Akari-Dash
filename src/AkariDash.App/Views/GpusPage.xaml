@@ -102,6 +102,90 @@
                             </ItemsControl>
                         </StackPanel>
                     </Border>
+
+                    <!-- Vain Toolbox's Registry Settings: NVIDIA cards only. -->
+                    <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.HasRegistrySettings, Mode=OneWay}">
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="Registry Settings" Style="{StaticResource BodyStrongTextBlockStyle}" FontSize="16" />
+                                <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="The driver reads these when it starts: changes take effect after Restart GPU or a reboot." />
+                            </StackPanel>
+                            <AutoSuggestBox
+                                Grid.Column="1"
+                                Width="240"
+                                VerticalAlignment="Center"
+                                QueryIcon="Find"
+                                PlaceholderText="Search settings..."
+                                Text="{x:Bind ViewModel.RegistrySearch, Mode=TwoWay}" />
+                        </Grid>
+
+                        <ItemsControl ItemsSource="{x:Bind ViewModel.RegistryGroups, Mode=OneWay}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:NvidiaRegistryGroupViewModel">
+                                    <Expander
+                                        Margin="0,0,0,8"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Stretch"
+                                        Visibility="{x:Bind IsVisible, Mode=OneWay}">
+                                        <Expander.Header>
+                                            <Grid ColumnSpacing="8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock VerticalAlignment="Center" Text="{x:Bind Name}" FontWeight="SemiBold" />
+                                                <TextBlock Grid.Column="1" Margin="0,0,16,0" VerticalAlignment="Center" FontSize="12" Text="Recommended" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                                <Button Grid.Column="2" Padding="8,6" ToolTipService.ToolTip="Apply every recommended value in this group" Command="{x:Bind ApplyAllRecommendedCommand}">
+                                                    <FontIcon FontSize="14" Glyph="&#xE945;" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                                </Button>
+                                                <Button Grid.Column="3" Padding="8,6" ToolTipService.ToolTip="Delete every value in this group: the driver uses its own defaults" Command="{x:Bind DeleteAllCommand}">
+                                                    <FontIcon FontSize="14" Glyph="&#xE74D;" />
+                                                </Button>
+                                            </Grid>
+                                        </Expander.Header>
+
+                                        <ItemsControl ItemsSource="{x:Bind Rows}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:NvidiaRegistryRowViewModel">
+                                                    <Grid Padding="0,4" ColumnSpacing="8" Visibility="{x:Bind IsVisible, Mode=OneWay}">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock VerticalAlignment="Center" Text="{x:Bind Name}" IsTextSelectionEnabled="True" />
+                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" ToolTipService.ToolTip="Vain Toolbox's recommended value">
+                                                            <FontIcon FontSize="10" Glyph="&#xE73E;" Opacity="{x:Bind CheckOpacity(IsRecommended), Mode=OneWay}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                                            <TextBlock FontFamily="Consolas" FontSize="11" Text="{x:Bind RecommendedText}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                                        </StackPanel>
+                                                        <TextBox Grid.Column="2" Width="110" FontFamily="Consolas" MaxLength="10" PlaceholderText="not set" Text="{x:Bind Typed, Mode=TwoWay}" />
+                                                        <Button Grid.Column="3" Padding="8,6" ToolTipService.ToolTip="Write the recommended value" Command="{x:Bind ApplyRecommendedCommand}">
+                                                            <FontIcon FontSize="14" Glyph="&#xE945;" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                                        </Button>
+                                                        <Button Grid.Column="4" Padding="8,6" ToolTipService.ToolTip="Write the value in the box" Command="{x:Bind ApplyTypedCommand}">
+                                                            <FontIcon FontSize="14" Glyph="&#xE73E;" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                                        </Button>
+                                                        <Button Grid.Column="5" Padding="8,6" ToolTipService.ToolTip="Delete the value: the driver uses its own default" Command="{x:Bind DeleteCommand}">
+                                                            <FontIcon FontSize="14" Glyph="&#xE74D;" />
+                                                        </Button>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Expander>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>
