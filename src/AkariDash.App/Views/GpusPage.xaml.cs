@@ -1,9 +1,17 @@
 using Microsoft.UI.Xaml.Controls;
+using AkariDash.App.ViewModels;
 
 namespace AkariDash.App.Views;
 
-/// <summary>GPUs when the PC has no NVIDIA, AMD or Intel card: says so. With cards, each has its own page.</summary>
+/// <summary>The GPUs page: tabs like Customize and UWP Apps, the first one the graphics card.</summary>
 public sealed partial class GpusPage : Page
 {
-    public GpusPage() => InitializeComponent();
+    public GpusViewModel ViewModel { get; }
+
+    public GpusPage(GpusViewModel viewModel)
+    {
+        ViewModel = viewModel;
+        InitializeComponent();
+        DataContext = viewModel;
+    }
 }

@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging;
 using AkariDash.App.Services;
 using AkariDash.Core.Gpus;
 using AkariDash.Core.Machine;
-using AkariDash.Framework.Navigation;
 using AkariDash.Framework.Services;
 using AkariDash.Framework.ViewModels;
 
@@ -14,16 +13,41 @@ namespace AkariDash.App.ViewModels;
 public sealed record GpuFact(string Label, string Value);
 
 /// <summary>
-/// One graphics card's page, after Vain Toolbox's GPU page: the card's details and Restart GPU. The
-/// card comes in as the navigation parameter from its GPUs entry.
+/// The GPUs page, after Vain Toolbox's GPU page, in tabs like Customize and UWP Apps. The Graphics card
+/// tab shows the picked card's details and Restart GPU; with several cards a picker chooses which.
 /// </summary>
-public sealed partial class GpuCardViewModel(
-    IDialogService dialogs,
-    IInfoBarService infoBar,
-    IStatusService status,
-    ILogger<GpuCardViewModel> logger) : ViewModelBase, INavigationAware
+public sealed partial class GpusViewModel : ViewModelBase
 {
-    private GpuCard? _card;
+    private readonly IDialogService _dialogs;
+    private readonly IInfoBarService _infoBar;
+    private readonly IStatusService _status;
+    private readonly ILogger<GpusViewModel> _logger;
+
+    public GpusViewModel(IDialogService dialogs, IInfoBarService infoBar, IStatusService status, ILogger<GpusViewModel> logger)
+    {
+        _dialogs = dialogs;
+        _infoBar = infoBar;
+        _status = status;
+        _logger = logger;
+        Title = "GPUs";
+
+        Cards = WindowsGpuCards.Read();
+        SelectedCard = Cards.FirstOrDefault();
+    }
+
+    /// <summary>Every NVIDIA, AMD and Intel card in this PC.</summary>
+    public IReadOnlyList<GpuCard> Cards { get; }
+
+    public bool HasCards => Cards.Count > 0;
+
+    public bool HasNoCards => Cards.Count == 0;
+
+    /// <summary>The picker is shown only when there is more than one card to pick from.</summary>
+    public bool HasSeveralCards => Cards.Count > 1;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RestartCommand))]
+    public partial GpuCard? SelectedCard { get; set; }
 
     [ObservableProperty]
     public partial string Name { get; private set; } = string.Empty;
@@ -41,14 +65,13 @@ public sealed partial class GpuCardViewModel(
     [NotifyCanExecuteChangedFor(nameof(RestartCommand))]
     public partial bool IsBusy { get; private set; }
 
-    public void OnNavigatedTo(object? parameter)
+    partial void OnSelectedCardChanged(GpuCard? value)
     {
-        if (parameter is not GpuCard card)
+        if (value is not { } card)
         {
             return;
         }
 
-        _card = card;
         Name = card.Name;
         Vendor = card.Vendor.DisplayName();
         Kind = card.Kind == GpuKind.Integrated ? "iGPU" : "dGPU";
@@ -63,17 +86,13 @@ public sealed partial class GpuCardViewModel(
         ];
     }
 
-    public void OnNavigatedFrom()
-    {
-    }
-
-    private bool CanRestart() => _card is not null && !IsBusy;
+    private bool CanRestart() => SelectedCard is not null && !IsBusy;
 
     [RelayCommand(CanExecute = nameof(CanRestart))]
     private async Task RestartAsync()
     {
-        if (_card is not { } card ||
-            !await dialogs.ConfirmAsync(
+        if (SelectedCard is not { } card ||
+            !await _dialogs.ConfirmAsync(
                 "Restart GPU?",
                 $"The driver of {card.Name} is stopped and started again. The screen goes black for a few seconds.",
                 "Restart",
@@ -84,7 +103,7 @@ public sealed partial class GpuCardViewModel(
 
         if (BuildInfo.IsDryRunOnly)
         {
-            infoBar.ShowInfo("Restart GPU", $"Dry Run: {card.Name} was not restarted.");
+            _infoBar.ShowInfo("Restart GPU", $"Dry Run: {card.Name} was not restarted.");
             return;
         }
 
@@ -92,24 +111,24 @@ public sealed partial class GpuCardViewModel(
         try
         {
             bool rebootNeeded;
-            using (status.Begin("Restarting GPU..."))
+            using (_status.Begin("Restarting GPU..."))
             {
                 rebootNeeded = await WindowsGpuCards.RestartAsync(card);
             }
 
             if (rebootNeeded)
             {
-                infoBar.ShowWarning("GPU restart", "Windows needs a restart to finish restarting the GPU.");
+                _infoBar.ShowWarning("GPU restart", "Windows needs a restart to finish restarting the GPU.");
             }
             else
             {
-                infoBar.ShowSuccess("GPU restarted", "The GPU driver has been restarted.");
+                _infoBar.ShowSuccess("GPU restarted", "The GPU driver has been restarted.");
             }
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Restarting {Card} failed", card.Name);
-            await dialogs.ShowErrorAsync("Restart GPU", ex.Message);
+            _logger.LogError(ex, "Restarting {Card} failed", card.Name);
+            await _dialogs.ShowErrorAsync("Restart GPU", ex.Message);
         }
         finally
         {

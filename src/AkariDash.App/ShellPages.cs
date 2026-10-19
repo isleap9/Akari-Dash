@@ -1,7 +1,4 @@
-using AkariDash.App.Services;
 using AkariDash.App.Views;
-using AkariDash.Core.Gpus;
-using AkariDash.Core.Machine;
 
 namespace AkariDash.App;
 
@@ -32,26 +29,8 @@ public static class ShellPages
         new("Downloads", "\uE896", typeof(DownloadsPage), Subtitle: "Install the apps a gaming PC needs — launchers, runtimes and tools"),
 
         NavigationItem.Header("Advanced"),
-        Gpus(WindowsGpuCards.Read()),
+        new("GPUs", "\uE950", typeof(GpusPage), Subtitle: "Your graphics card, display and NVIDIA driver settings"),
     ];
-
-    /// <summary>
-    /// GPUs, as in Vain Toolbox: one entry per NVIDIA, AMD or Intel card, read once at start-up, each
-    /// opening that card's page. With no such card it is a single page saying so.
-    /// </summary>
-    private static NavigationItem Gpus(IReadOnlyList<GpuCard> cards) => cards.Count == 0
-        ? new("GPUs", "", typeof(GpusPage), Subtitle: "No NVIDIA, AMD or Intel graphics card was found")
-        : NavigationItem.Parent("GPUs", "",
-        [
-            .. cards.Select(card => new NavigationItem(
-                card.Name,
-                "",
-                typeof(GpuCardPage),
-                Subtitle: $"{card.Vendor.DisplayName()} · {(card.Kind == GpuKind.Integrated ? "iGPU" : "dGPU")}")
-            {
-                Parameter = card,
-            }),
-        ]);
 
     /// <summary>Navigation items pinned to the bottom of the pane (footer).</summary>
     public static IReadOnlyList<NavigationItem> Footer { get; } =
