@@ -15,6 +15,7 @@ public class NvApiIdsTests
     [InlineData(NvApiIds.GetErrorMessage, 0x6c2d048cu)]
     [InlineData(NvApiIds.EnumPhysicalGPUs, 0xe5ac921fu)]
     [InlineData(NvApiIds.GPU_GetConnectedDisplayIds, 0x0078dba2u)]
+    [InlineData(NvApiIds.GPU_GetBusId, 0x1be0b8e5u)]
     [InlineData(NvApiIds.EnumNvidiaDisplayHandle, 0x9abdd40du)]
     [InlineData(NvApiIds.GetAssociatedNvidiaDisplayName, 0x22a78b05u)]
     [InlineData(NvApiIds.DISP_GetDisplayIdByDisplayName, 0xae457190u)]

@@ -37,6 +37,14 @@ public static class NvidiaScaling
         _ => 8,
     };
 
+    /// <summary>
+    /// Whether going from <paramref name="from"/> to <paramref name="to"/> moves the scaling between the GPU
+    /// and the display (1, 6 and 7 leave it to the display), when Vain lets the driver pick a new timing.
+    /// </summary>
+    public static bool NeedsNewTiming(int from, int to) => ScaledByDisplay(from) != ScaledByDisplay(to);
+
+    private static bool ScaledByDisplay(int value) => value is 1 or 6 or 7;
+
     /// <summary>The pair an NV_SCALING value stands for; null for the driver default and values Vain has no row for.</summary>
     public static (ScalingMode Mode, ScalingPerformer Performer)? FromNvScaling(int value) => value switch
     {

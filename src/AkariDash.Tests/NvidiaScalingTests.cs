@@ -29,6 +29,20 @@ public class NvidiaScalingTests
         Assert.Equal(8, NvidiaScaling.ToNvScaling(ScalingMode.IntegerScaling, ScalingPerformer.Display));
     }
 
+    // FUN_1401b3800: 1, 6 and 7 send a smaller mode for the display to scale; moving across that line
+    // asks the driver for a new timing (NV_TIMING_OVERRIDE_AUTO).
+    [Theory]
+    [InlineData(5, 6, true)]
+    [InlineData(1, 2, true)]
+    [InlineData(7, 3, true)]
+    [InlineData(5, 2, false)]
+    [InlineData(1, 7, false)]
+    [InlineData(8, 8, false)]
+    public void Moving_scaling_between_gpu_and_display_needs_a_new_timing(int from, int to, bool needed)
+    {
+        Assert.Equal(needed, NvidiaScaling.NeedsNewTiming(from, to));
+    }
+
     [Fact]
     public void The_driver_default_is_no_pair()
     {
