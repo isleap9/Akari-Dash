@@ -18,7 +18,11 @@ public class GpuCardTests
         uint? maxLinkSpeed = null,
         uint? maxLinkWidth = null) =>
         new(@"PCI\VEN_10DE&DEV_2786\4&1A2B3C&0&0008", matchingDeviceId, name, driverVersion, driverDate,
-            qwMemorySize, memorySize, linkSpeed, linkWidth, maxLinkSpeed, maxLinkWidth);
+            qwMemorySize, memorySize, linkSpeed, linkWidth, maxLinkSpeed, maxLinkWidth)
+        {
+            DriverKey = @"{4d36e968-e325-11ce-bfc1-08002be10318}\0000",
+            ProviderName = "NVIDIA",
+        };
 
     [Fact]
     public void An_nvidia_card_reads_as_a_discrete_card_with_nvidias_own_driver_number()
@@ -34,6 +38,23 @@ public class GpuCardTests
         Assert.Equal("12 GB", card.VideoMemory);
         Assert.Equal("PCIe 4.0 x16", card.PcieLink);
         Assert.Equal(@"PCI\VEN_10DE&DEV_2786\4&1A2B3C&0&0008", card.InstanceId);
+    }
+
+    [Fact]
+    public void The_header_facts_read_as_vain_toolbox_shows_them()
+    {
+        var card = GpuCard.From(Raw("pci\\ven_10de&dev_2786", "NVIDIA GeForce RTX 4070", "32.0.15.6094"))!;
+
+        Assert.Equal("10DE:2786", card.HardwareId);
+        Assert.Equal("0000", card.RegistryKey);
+        Assert.Equal("NVIDIA", card.Manufacturer);
+        Assert.True(card.HasDriver);
+    }
+
+    [Fact]
+    public void An_adapter_without_a_driver_version_reads_as_no_driver()
+    {
+        Assert.False(GpuCard.From(Raw("pci\\ven_10de&dev_2786", "NVIDIA GeForce RTX 4070"))!.HasDriver);
     }
 
     [Fact]

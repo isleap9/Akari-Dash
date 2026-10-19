@@ -9,12 +9,19 @@ using AkariDash.Framework.ViewModels;
 
 namespace AkariDash.App.ViewModels;
 
-/// <summary>One line of a card's details: what it is, and what Windows says.</summary>
-public sealed record GpuFact(string Label, string Value);
+/// <summary>
+/// One column of the card's header, as Vain Toolbox lays them out: a small label over its value.
+/// <paramref name="Accent"/> shows the value in the accent colour, as Vain does for Driver Installed.
+/// </summary>
+public sealed record GpuFact(string Label, string Value, bool Accent = false)
+{
+    public bool Plain => !Accent;
+}
 
 /// <summary>
-/// The GPUs page, after Vain Toolbox's GPU page, in tabs like Customize and UWP Apps. The Graphics card
-/// tab shows the picked card's details and Restart GPU; with several cards a picker chooses which.
+/// The GPUs page, after Vain Toolbox's GPU page, in tabs like Customize and UWP Apps. The Main tab shows
+/// the picked card's header as Vain lays it out, with Restart GPU top right; with several cards a picker
+/// chooses which.
 /// </summary>
 public sealed partial class GpusViewModel : ViewModelBase
 {
@@ -78,11 +85,14 @@ public sealed partial class GpusViewModel : ViewModelBase
         const string unknown = "Not reported";
         Facts =
         [
-            new("Driver version", card.DriverVersion ?? unknown),
-            new("Driver date", card.DriverDate?.ToString("d MMMM yyyy") ?? unknown),
-            new("Video memory", card.VideoMemory ?? unknown),
-            new("PCIe link", card.PcieLink ?? unknown),
-            new("Device instance", card.InstanceId),
+            new("Manufacturer", card.Manufacturer),
+            new("Status", card.HasDriver ? "Driver Installed" : "No Driver", Accent: card.HasDriver),
+            new("Hardware ID", card.HardwareId ?? unknown),
+            new("Driver Version", card.DriverVersion ?? unknown),
+            new("Driver Date", card.DriverDate?.ToString("d MMM yyyy") ?? unknown),
+            new("Video Memory", card.VideoMemory ?? unknown),
+            new("PCIe Link", card.PcieLink ?? unknown),
+            new("Registry Key", card.RegistryKey ?? unknown),
         ];
     }
 

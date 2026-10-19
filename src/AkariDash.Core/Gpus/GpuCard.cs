@@ -25,7 +25,14 @@ public sealed record GpuAdapterRaw(
     uint? CurrentLinkSpeed,
     uint? CurrentLinkWidth,
     uint? MaxLinkSpeed,
-    uint? MaxLinkWidth);
+    uint? MaxLinkWidth)
+{
+    /// <summary>SetupAPI's driver key, such as <c>{4d36e968-...}\0000</c>: the adapter's key under the display class.</summary>
+    public string? DriverKey { get; init; }
+
+    /// <summary>The driver's ProviderName, which Vain Toolbox shows as the manufacturer.</summary>
+    public string? ProviderName { get; init; }
+}
 
 /// <summary>
 /// One graphics card as the GPUs page shows it, after Vain Toolbox's GPU page: name, maker, integrated
@@ -41,6 +48,18 @@ public sealed record GpuCard(
     string? VideoMemory,
     string? PcieLink)
 {
+    /// <summary>Vendor and device id as Vain Toolbox shows them, e.g. <c>10DE:2786</c>.</summary>
+    public string? HardwareId { get; init; }
+
+    /// <summary>The adapter's key under the display class, e.g. <c>0000</c>.</summary>
+    public string? RegistryKey { get; init; }
+
+    /// <summary>Who made the driver (its ProviderName), or the maker of the card when Windows does not say.</summary>
+    public string Manufacturer { get; init; } = string.Empty;
+
+    /// <summary>Whether a driver is installed: Windows reports a version only for one.</summary>
+    public bool HasDriver => DriverVersion is not null;
+
     /// <summary>The card <paramref name="raw"/> describes, or null for any other adapter.</summary>
     public static GpuCard? From(GpuAdapterRaw raw)
     {
@@ -58,7 +77,19 @@ public sealed record GpuCard(
             Version(vendor, raw.DriverVersion),
             Date(raw.DriverDate),
             Memory(raw.QwMemorySize) ?? Memory(raw.MemorySize),
-            Link(raw.CurrentLinkSpeed, raw.CurrentLinkWidth, raw.MaxLinkSpeed, raw.MaxLinkWidth));
+            Link(raw.CurrentLinkSpeed, raw.CurrentLinkWidth, raw.MaxLinkSpeed, raw.MaxLinkWidth))
+        {
+            HardwareId = HardwareIdOf(raw.MatchingDeviceId),
+            RegistryKey = raw.DriverKey?.Split('\\').LastOrDefault(),
+            Manufacturer = string.IsNullOrWhiteSpace(raw.ProviderName) ? vendor.DisplayName() : raw.ProviderName.Trim(),
+        };
+    }
+
+    private static string? HardwareIdOf(string? matchingDeviceId)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(
+            matchingDeviceId ?? string.Empty, @"ven_([0-9a-f]{4})&dev_([0-9a-f]{4})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return match.Success ? $"{match.Groups[1].Value.ToUpperInvariant()}:{match.Groups[2].Value.ToUpperInvariant()}" : null;
     }
 
     // Intel's are part of the processor except Arc; AMD's processor graphics are named "... Graphics"

@@ -85,7 +85,11 @@ internal static class WindowsGpuCards
                     PciValue(set, ref info, 9),
                     PciValue(set, ref info, 10),
                     PciValue(set, ref info, 11),
-                    PciValue(set, ref info, 12));
+                    PciValue(set, ref info, 12))
+                {
+                    DriverKey = driverKey,
+                    ProviderName = key?.GetValue("ProviderName") as string,
+                };
             }
         }
         finally
