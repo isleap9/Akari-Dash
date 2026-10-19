@@ -39,9 +39,25 @@ public sealed partial class GpusViewModel : ViewModelBase
         _status = status;
         _logger = logger;
         Title = "GPUs";
+        Settings = new GpuSettingsViewModel(machine, dialogs, infoBar, status, logger);
 
         Cards = WindowsGpuCards.Read();
         SelectedCard = Cards.FirstOrDefault();
+    }
+
+    /// <summary>The Settings tab, for the picked card's displays.</summary>
+    public GpuSettingsViewModel Settings { get; }
+
+    private bool _settingsOpened;
+
+    /// <summary>Reads the Settings tab the first time it is opened; NVAPI takes a moment to list the displays.</summary>
+    public void OpenSettings()
+    {
+        if (!_settingsOpened)
+        {
+            _settingsOpened = true;
+            Settings.Load(SelectedCard);
+        }
     }
 
     /// <summary>Every NVIDIA, AMD and Intel card in this PC.</summary>
@@ -144,6 +160,10 @@ public sealed partial class GpusViewModel : ViewModelBase
             new("Registry Key", card.RegistryKey ?? unknown),
         ];
         LoadRegistry(card);
+        if (_settingsOpened)
+        {
+            Settings.Load(card);
+        }
     }
 
     private bool CanRestart() => SelectedCard is not null && !IsBusy;

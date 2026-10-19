@@ -19,15 +19,33 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <SelectorBar x:Name="Tabs">
+            <SelectorBar x:Name="Tabs" SelectionChanged="OnTabChanged">
                 <SelectorBarItem Text="Main" IsSelected="True">
                     <SelectorBarItem.Icon>
                         <FontIcon Glyph="&#xE80F;" />
                     </SelectorBarItem.Icon>
                 </SelectorBarItem>
+                <SelectorBarItem Text="Settings">
+                    <SelectorBarItem.Icon>
+                        <FontIcon Glyph="&#xE713;" />
+                    </SelectorBarItem.Icon>
+                </SelectorBarItem>
             </SelectorBar>
 
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <!-- Vain Toolbox's Settings buttons: reset to defaults, revert unapplied changes, apply. -->
+            <StackPanel x:Name="SettingsButtons" Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Visibility="Collapsed">
+                <Button Padding="8" ToolTipService.ToolTip="Reset display settings to defaults" Command="{x:Bind ViewModel.Settings.ResetCommand}">
+                    <FontIcon FontSize="16" Glyph="&#xE72C;" />
+                </Button>
+                <Button Padding="8" ToolTipService.ToolTip="Revert unapplied changes" Command="{x:Bind ViewModel.Settings.RevertCommand}">
+                    <FontIcon FontSize="16" Glyph="&#xE7A7;" />
+                </Button>
+                <Button Padding="8" ToolTipService.ToolTip="Apply display settings" Command="{x:Bind ViewModel.Settings.ApplyCommand}">
+                    <FontIcon FontSize="16" Glyph="&#xE73E;" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                </Button>
+            </StackPanel>
+
+            <StackPanel x:Name="MainButtons" Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <Button
                     Padding="8"
                     Visibility="{x:Bind ViewModel.HasCards}"
@@ -187,6 +205,167 @@
                         </ItemsControl>
                     </StackPanel>
                 </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Vain Toolbox's Settings tab: one NVIDIA display at a time, its colour output and scaling on the
+             left, HDR10 and the colour adjustments on the right. -->
+        <ScrollViewer x:Name="SettingsTab" Grid.Row="1" Padding="0,0,16,24" Visibility="Collapsed">
+            <StackPanel Spacing="16">
+                <TextBlock Visibility="{x:Bind ViewModel.Settings.HasNoDisplays, Mode=OneWay}" Opacity="0.8" TextWrapping="Wrap"
+                           Text="Settings needs an NVIDIA card with a display connected." />
+
+                <Grid ColumnSpacing="16" Visibility="{x:Bind ViewModel.Settings.HasDisplays, Mode=OneWay}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border VerticalAlignment="Top" Padding="16" CornerRadius="8"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                        <StackPanel Spacing="12">
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="Display Adapter" />
+                                <ComboBox Grid.Column="1" Width="220" ItemsSource="{x:Bind ViewModel.Settings.Displays, Mode=OneWay}"
+                                          SelectedItem="{x:Bind ViewModel.Settings.SelectedDisplay, Mode=TwoWay}" DisplayMemberPath="Name" />
+                            </Grid>
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="Color Format" />
+                                <ComboBox Grid.Column="1" Width="220" ItemsSource="{x:Bind ViewModel.Settings.ColorFormats}"
+                                          SelectedIndex="{x:Bind ViewModel.Settings.ColorFormatIndex, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="Dynamic Range" />
+                                <ComboBox Grid.Column="1" Width="220" ItemsSource="{x:Bind ViewModel.Settings.DynamicRanges}"
+                                          SelectedIndex="{x:Bind ViewModel.Settings.DynamicRangeIndex, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="Color Depth" />
+                                <ComboBox Grid.Column="1" Width="220" ItemsSource="{x:Bind ViewModel.Settings.ColorDepths}"
+                                          SelectedIndex="{x:Bind ViewModel.Settings.ColorDepthIndex, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="Scaling Mode" />
+                                <ComboBox Grid.Column="1" Width="220" ItemsSource="{x:Bind ViewModel.Settings.ScalingModes}"
+                                          SelectedIndex="{x:Bind ViewModel.Settings.ScalingModeIndex, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="Perform Scaling On" />
+                                <ComboBox Grid.Column="1" Width="220" ItemsSource="{x:Bind ViewModel.Settings.ScalingPerformers}"
+                                          SelectedIndex="{x:Bind ViewModel.Settings.ScalingPerformerIndex, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="Override Scaling Mode Set by Games and Programs" />
+                                <ToggleSwitch Grid.Column="1" MinWidth="0" OnContent="" OffContent=""
+                                              IsEnabled="{x:Bind ViewModel.Settings.OverrideScalingAvailable, Mode=OneWay}"
+                                              IsOn="{x:Bind ViewModel.Settings.OverrideScaling, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="GPU Performance Counters for All Users" />
+                                <ToggleSwitch Grid.Column="1" MinWidth="0" OnContent="" OffContent=""
+                                              IsOn="{x:Bind ViewModel.Settings.PerformanceCounters, Mode=TwoWay}" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Column="1" VerticalAlignment="Top" Padding="16" CornerRadius="8"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                        <StackPanel Spacing="12">
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock Text="HDR10" />
+                                    <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{x:Bind ViewModel.Settings.Hdr10Support, Mode=OneWay}" />
+                                </StackPanel>
+                                <ToggleSwitch Grid.Column="1" MinWidth="0" OnContent="" OffContent=""
+                                              IsEnabled="{x:Bind ViewModel.Settings.Hdr10Supported, Mode=OneWay}"
+                                              IsOn="{x:Bind ViewModel.Settings.Hdr10, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="Color channel" />
+                                <ComboBox Grid.Column="1" Width="220" ItemsSource="{x:Bind ViewModel.Settings.ColorChannels}"
+                                          SelectedIndex="{x:Bind ViewModel.Settings.ColorChannelIndex, Mode=TwoWay}" />
+                            </Grid>
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="Brightness" />
+                                <Slider Minimum="0" Maximum="100" StepFrequency="1"
+                                        Value="{x:Bind ViewModel.Settings.Brightness, Mode=TwoWay}" />
+                            </StackPanel>
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="Contrast" />
+                                <Slider Minimum="0" Maximum="100" StepFrequency="1"
+                                        Value="{x:Bind ViewModel.Settings.Contrast, Mode=TwoWay}" />
+                            </StackPanel>
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="Gamma" />
+                                <Slider Minimum="0.3" Maximum="2.8" StepFrequency="0.01"
+                                        Value="{x:Bind ViewModel.Settings.Gamma, Mode=TwoWay}" />
+                            </StackPanel>
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="Digital Vibrance" />
+                                <Slider Minimum="0" Maximum="{x:Bind ViewModel.Settings.VibranceMax, Mode=OneWay}" StepFrequency="1"
+                                        IsEnabled="{x:Bind ViewModel.Settings.VibranceSupported, Mode=OneWay}"
+                                        Value="{x:Bind ViewModel.Settings.Vibrance, Mode=TwoWay}" />
+                            </StackPanel>
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="Hue" />
+                                <Slider Minimum="0" Maximum="360" StepFrequency="1"
+                                        IsEnabled="{x:Bind ViewModel.Settings.HueSupported, Mode=OneWay}"
+                                        Value="{x:Bind ViewModel.Settings.Hue, Mode=TwoWay}" />
+                            </StackPanel>
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="Override to Reference Mode" />
+                                <ToggleSwitch Grid.Column="1" MinWidth="0" OnContent="" OffContent=""
+                                              IsOn="{x:Bind ViewModel.Settings.ReferenceMode, Mode=TwoWay}" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </Grid>
             </StackPanel>
         </ScrollViewer>
     </Grid>

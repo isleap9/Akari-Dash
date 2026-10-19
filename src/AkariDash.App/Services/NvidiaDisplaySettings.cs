@@ -58,13 +58,13 @@ internal static class NvidiaDisplaySettings
 
     private static NvApi Api => NvApi.Instance ?? throw new NvApiException("Initialize", NvApiStatus.NoImplementation);
 
-    /// <summary>Digital Vibrance now and its top, or null when the driver does not give it for this display.</summary>
-    public static (int Level, int Max)? ReadVibrance(IntPtr handle)
+    /// <summary>Digital Vibrance now, its top and the driver's default, or null when the driver does not give it.</summary>
+    public static (int Level, int Max, int Default)? ReadVibrance(IntPtr handle)
     {
         var info = new NvDisplayDvcInfoEx { StructVersion = NvDisplayDvcInfoEx.Version };
         return handle != IntPtr.Zero &&
                Api.Function<DvcInfo>(NvApiUndocumented.GetDVCInfoEx, "GetDVCInfoEx")(handle, 0, ref info) == NvApiStatus.Ok
-            ? (info.CurrentLevel, info.MaxLevel)
+            ? (info.CurrentLevel, info.MaxLevel, info.DefaultLevel)
             : null;
     }
 
@@ -74,13 +74,13 @@ internal static class NvidiaDisplaySettings
         NvApi.Check("SetDVCLevelEx", Api.Function<DvcInfo>(NvApiUndocumented.SetDVCLevelEx, "SetDVCLevelEx")(handle, 0, ref info));
     }
 
-    /// <summary>The hue angle now, or null when the driver does not give it for this display.</summary>
-    public static int? ReadHue(IntPtr handle)
+    /// <summary>The hue angle now and the driver's default, or null when the driver does not give it.</summary>
+    public static (int Angle, int Default)? ReadHue(IntPtr handle)
     {
         var info = new NvDisplayHueInfo { StructVersion = NvDisplayHueInfo.Version };
         return handle != IntPtr.Zero &&
                Api.Function<HueInfo>(NvApiUndocumented.GetHUEInfo, "GetHUEInfo")(handle, 0, ref info) == NvApiStatus.Ok
-            ? info.CurrentAngle
+            ? (info.CurrentAngle, info.DefaultAngle)
             : null;
     }
 
@@ -317,6 +317,41 @@ internal static class NvidiaDisplaySettings
 
             throw new NvApiException("DISP_SetDisplayConfig", status);
         }
+    }
+
+    /// <summary>
+    /// Whether the driver takes <paramref name="scaling"/> for the display, asked the way Vain's
+    /// FUN_1401b3b60 asks: SetDisplayConfig with NV_DISPLAYCONFIG_VALIDATE_ONLY, and the old config saved
+    /// back should the driver have switched anyway.
+    /// </summary>
+    public static bool ScalingSupported(uint displayId, int scaling)
+    {
+        using var original = DisplayConfig.Read();
+        if (original.Details(displayId) is not { } originalDetails)
+        {
+            return false;
+        }
+
+        var before = Marshal.PtrToStructure<NvDisplayConfigPathAdvancedTargetInfoV1>(originalDetails).Scaling;
+        if (before == scaling)
+        {
+            return true;
+        }
+
+        using var config = DisplayConfig.Read();
+        var details = config.Details(displayId)!.Value;
+        var advanced = Marshal.PtrToStructure<NvDisplayConfigPathAdvancedTargetInfoV1>(details);
+        advanced.Scaling = scaling;
+        Marshal.StructureToPtr(advanced, details, fDeleteOld: false);
+
+        var set = Api.Function<SetDisplayConfig>(NvApiIds.DISP_SetDisplayConfig, "DISP_SetDisplayConfig");
+        var supported = set(config.Count, config.Paths, DisplayConfigValidateOnly) == NvApiStatus.Ok;
+        if (ReadScaling(displayId) != before)
+        {
+            set(original.Count, original.Paths, DisplayConfigSaveToPersistence);
+        }
+
+        return supported;
     }
 
     /// <summary>

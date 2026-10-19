@@ -61,6 +61,20 @@ public class ScalingConfigTests
         Assert.Equal(0x40, ScalingConfig.OverrideBitsFor(8, overrideGames: false));
     }
 
+    // FUN_1401c7de0: the switch is on when byte 8 holds the bit of the scaling the display runs now,
+    // except for integer scaling, whose bit is always set.
+    [Theory]
+    [InlineData(0x20, 7, true)]
+    [InlineData(0x20, 5, false)]
+    [InlineData(0x22, 5, true)]
+    [InlineData(0x40, 8, false)]
+    [InlineData(0x00, 2, false)]
+    [InlineData(0x01, 0, false)]
+    public void The_switch_reads_on_when_the_current_mode_s_bit_is_set(int bits, int scaling, bool on)
+    {
+        Assert.Equal(on, ScalingConfig.IsOverriding(ScalingConfig.WithOverrideBits(Plain, (byte)bits), scaling));
+    }
+
     [Fact]
     public void A_blob_of_another_size_or_header_is_not()
     {

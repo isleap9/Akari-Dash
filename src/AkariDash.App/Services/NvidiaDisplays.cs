@@ -11,7 +11,7 @@ namespace AkariDash.App.Services;
 /// the monitor's name from its EDID (or "Display N"), its key under DisplayDatabase, and its display
 /// handle for the vibrance and hue calls.
 /// </summary>
-internal sealed record NvidiaDisplay(uint DisplayId, string Name, string? DisplayDatabaseKey, IntPtr Handle);
+public sealed record NvidiaDisplay(uint DisplayId, string Name, string? DisplayDatabaseKey, IntPtr Handle);
 
 /// <summary>
 /// The displays of an NVIDIA card, found the way Vain Toolbox finds them (REA, FUN_14030d6f0): the card's

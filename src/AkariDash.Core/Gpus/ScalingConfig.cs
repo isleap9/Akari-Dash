@@ -45,6 +45,13 @@ public static class ScalingConfig
             _ => 0,
         });
 
+    /// <summary>
+    /// Whether the switch reads on (FUN_1401c7de0): byte 8 holds the bit of the scaling the display runs
+    /// now, and that is not integer scaling, whose bit is set either way.
+    /// </summary>
+    public static bool IsOverriding(byte[] blob, int scaling) =>
+        scaling != 8 && (OverrideBits(blob) & OverrideBitsFor(scaling, overrideGames: true)) != 0;
+
     private static uint Sum(byte[] blob)
     {
         uint sum = 0;
