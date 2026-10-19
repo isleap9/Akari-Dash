@@ -16,6 +16,14 @@ MIT License
 
 Copyright (c) 2025 Marco du Plessis
 
+## NVIDIA NVAPI headers (github.com/NVIDIA/nvapi)
+
+The GPUs page calls the NVIDIA driver through NVAPI. Its function ids (nvapi_interface.h), struct layouts and versions (nvapi.h) and status descriptions (nvapi_lite_common.h) are taken from these headers; `NvApiStatus.cs` is generated from nvapi_lite_common.h.
+
+MIT License
+
+Copyright (c) 2019-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
 ## License text (applies to each project above)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
