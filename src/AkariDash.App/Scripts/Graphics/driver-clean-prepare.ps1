@@ -65,29 +65,3 @@ Set-ItemProperty -Path "$env:SystemRoot\Temp\ddu\Settings\Settings.xml" -Name Is
 
 # prevent downloads of drivers from windows update
 cmd /c "reg add `"HKLM\Software\Microsoft\Windows\CurrentVersion\DriverSearching`" /v `"SearchOrderConfig`" /t REG_DWORD /d `"0`" /f >nul 2>&1"
-
-# create ddu ps1 file
-$DDU = @'
-
-# remove safe mode boot
-cmd /c "bcdedit /deletevalue {current} safeboot >nul 2>&1"
-
-Write-Host "DDU & RESTARTING`n" -ForegroundColor Red
-
-# uninstall soundblaster realtek intel amd nvidia drivers & restart
-Start-Process "$env:SystemRoot\Temp\ddu\Display Driver Uninstaller.exe" -ArgumentList "-CleanSoundBlaster -CleanRealtek -CleanAllGpus -Restart" -Wait
-'@
-Set-Content -Path "$env:SystemRoot\Temp\ddu.ps1" -Value $DDU -Force
-
-# install runonce ddu ps1 file to run in safe boot
-cmd /c "reg add `"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce`" /v `"*ddu`" /t REG_SZ /d `"powershell.exe -nop -ep bypass -WindowStyle Maximized -f $env:SystemRoot\Temp\ddu.ps1`" /f >nul 2>&1"
-
-# turn on safe boot
-cmd /c "bcdedit /set {current} safeboot minimal >nul 2>&1"
-
-Write-Host "RESTARTING`n" -ForegroundColor Red
-
-# restart
-Start-Sleep -Seconds 5
-shutdown -r -t 00
-        

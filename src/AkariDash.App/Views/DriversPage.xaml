@@ -57,25 +57,6 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <StackPanel Spacing="8">
-                <TextBlock Text="Log" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                <Border
-                    Padding="12"
-                    MinHeight="120"
-                    CornerRadius="8"
-                    BorderThickness="1"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-                    <ItemsControl ItemsSource="{x:Bind ViewModel.Log}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="x:String">
-                                <TextBlock Text="{x:Bind}" FontFamily="Consolas" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </Border>
-            </StackPanel>
-
         </StackPanel>
     </ScrollViewer>
 </Page>

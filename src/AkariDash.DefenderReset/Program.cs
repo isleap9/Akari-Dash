@@ -1,11 +1,14 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using AkariDash.Core.Drivers;
 using AkariDash.Core.Machine;
 using AkariDash.Core.Tweaks;
 
 // The safe-mode half of Defender optimize, the one change Windows lets be made only in safe boot as
 // TrustedInstaller. Windows starts this once, from RunOnce, in safe mode. The pass file holds every
-// Tweak waiting for that restart, so the worker does all of them in the one safe-mode session.
+// Tweak waiting for that restart, so the worker does all of them in the one safe-mode session. A DDU
+// clean from the Drivers page rides the same queue: it needs safe mode but not TrustedInstaller, so
+// the orchestrator runs it itself, before the worker.
 //
 // It runs in two modes. Run with --elevated it is the worker, started as TrustedInstaller by
 // sc.exe, and all it does is write and record how that went. Run any other way it is the
@@ -102,13 +105,17 @@ void Save(IReadOnlyList<SafeModePass> passes)
 string TweakTitle(string tweakId) =>
     TweakCatalog.All.SingleOrDefault(tweak => tweak.Id == tweakId)?.Title ?? tweakId;
 
-string Describe(SafeModePass pass) => pass.Undo
-    ? $"Putting {TweakTitle(pass.TweakId)}'s settings back."
-    : $"Applying {pass.TweakId} {pass.OptionId}.";
+string Describe(SafeModePass pass) => DriverClean.IsFor(pass)
+    ? pass.OptionId == DriverClean.Auto
+        ? "DDU is removing the graphics driver. This takes a minute or two; the screen may flicker."
+        : "Opening DDU. Clean the driver, then close DDU: the PC restarts after it closes."
+    : pass.Undo
+        ? $"Putting {TweakTitle(pass.TweakId)}'s settings back."
+        : $"Applying {pass.TweakId} {pass.OptionId}.";
 
 // Whether anything is still waiting for the worker; the orchestrator watches this to know the worker
 // has finished, since sc.exe's own answer says nothing about it.
-bool AnyWaiting() => Read().Any(pass => pass.Stage == SafeModePassStage.Scheduled);
+bool AnyWaiting() => Read().Any(pass => pass.Stage == SafeModePassStage.Scheduled && !DriverClean.IsFor(pass));
 
 // Writes every value every pass that is still waiting calls for, and records each outcome in the pass
 // file for the app to read. Each value is written on its own: one Windows refuses is reported and the
@@ -118,7 +125,7 @@ int Work()
     var passes = Read();
     var waiting = passes
         .Select((pass, index) => (Pass: pass, Index: index))
-        .Where(entry => entry.Pass.Stage == SafeModePassStage.Scheduled)
+        .Where(entry => entry.Pass.Stage == SafeModePassStage.Scheduled && !DriverClean.IsFor(entry.Pass))
         .ToList();
 
     if (waiting.Count == 0)
@@ -352,12 +359,18 @@ if (waiting.Count == 0)
 }
 else
 {
-    foreach (var pass in waiting)
+    CleanDrivers();
+
+    var trusted = waiting.Where(pass => !DriverClean.IsFor(pass)).ToList();
+    foreach (var pass in trusted)
     {
         Say(Describe(pass));
     }
 
-    RunTrusted();
+    if (trusted.Count > 0)
+    {
+        RunTrusted();
+    }
 
     var result = Read();
     var outcome = result.Where(pass => ran.Contains(pass.TweakId)).ToList();
@@ -404,6 +417,53 @@ Say("Restarting in 15 seconds.");
 Run("shutdown.exe", "/r", "/t", "15");
 Thread.Sleep(TimeSpan.FromSeconds(15));
 return 0;
+
+// Runs DDU for every clean waiting, as an administrator in safe mode, which is all DDU needs, and
+// records each outcome in the pass file as it goes. DDU's own exit code says little, so a clean that
+// ran is Applied; one that could not start is Failed with the reason.
+void CleanDrivers()
+{
+    var list = Read().ToList();
+    for (var i = 0; i < list.Count; i++)
+    {
+        var pass = list[i];
+        if (!DriverClean.IsFor(pass) || pass.Stage != SafeModePassStage.Scheduled)
+        {
+            continue;
+        }
+
+        Say(Describe(pass));
+        try
+        {
+            if (!File.Exists(DriverClean.Executable))
+            {
+                throw new FileNotFoundException($"DDU is not at {DriverClean.Executable}.");
+            }
+
+            var start = new ProcessStartInfo(DriverClean.Executable)
+            {
+                UseShellExecute = false,
+                WorkingDirectory = Path.GetDirectoryName(DriverClean.Executable)!,
+            };
+            foreach (var argument in DriverClean.Arguments(pass.OptionId))
+            {
+                start.ArgumentList.Add(argument);
+            }
+
+            using var ddu = Process.Start(start) ?? throw new InvalidOperationException("DDU could not be started.");
+            ddu.WaitForExit();
+            Say($"DDU finished (exit code {ddu.ExitCode}).");
+            list[i] = pass with { Stage = SafeModePassStage.Applied };
+        }
+        catch (Exception ex)
+        {
+            Say($"The clean did not run: {ex.Message}");
+            list[i] = pass with { Stage = SafeModePassStage.Failed, Message = ex.Message };
+        }
+
+        Save(list);
+    }
+}
 
 // Runs Work() as TrustedInstaller by pointing the TrustedInstaller service's own binary at this exe
 // (AkariOS-Ultimate's Run-Trusted does the same, through cmd.exe and PowerShell). The service's

@@ -5,8 +5,16 @@ namespace AkariDash.Core.Drivers;
 /// <summary>
 /// One button on the Drivers page: an AkariOS-Ultimate script, run as written. <paramref name="Vendor"/>
 /// limits it to PCs with that maker's card; <paramref name="Confirm"/> is the question asked first.
+/// With <paramref name="SafeModeOption"/>, the script only prepares, and a <see cref="DriverClean"/>
+/// pass in that mode is queued for the safe-mode companion afterwards.
 /// </summary>
-public sealed record GraphicsAction(string Label, string Description, string Script, GpuVendor? Vendor = null, string? Confirm = null);
+public sealed record GraphicsAction(
+    string Label,
+    string Description,
+    string Script,
+    GpuVendor? Vendor = null,
+    string? Confirm = null,
+    string? SafeModeOption = null);
 
 /// <summary>One row of the Drivers page, with its buttons. <paramref name="Vendor"/> limits the whole row.</summary>
 public sealed record GraphicsEntry(string Id, string Name, string Description, IReadOnlyList<GraphicsAction> Actions, GpuVendor? Vendor = null);
@@ -15,7 +23,8 @@ public sealed record GraphicsEntry(string Id, string Name, string Description, I
 /// AkariOS-Ultimate's Graphics category (Tweaks/Graphics.ps1, MIT, (c) FR33THY), entry for entry. Each
 /// button runs that entry's own script block, copied 1:1 into the app's Scripts\Graphics folder, with
 /// the helpers Akari.ps1 gives it (<see cref="Helpers"/>). These are Actions, not Tweaks (ADR-0001,
-/// amended 2026-10-19): Revert is the script's own, and nothing is read back.
+/// amended 2026-10-19): Revert is the script's own, and nothing is read back. DDU's safe-mode half
+/// is the one part not run from its script: see <see cref="DriverClean"/>.
 /// Left out on purpose: C++ redistributables (on the Downloads page), and the two links that open
 /// Settings (HAGS is a Gaming Tweak; resolution belongs to the GPUs page).
 /// </summary>
@@ -32,10 +41,10 @@ public static class GraphicsEntries
     [
         new("driver-clean", "Driver clean (DDU)", "Remove the current graphics driver with DDU",
         [
-            new("DDU: Auto", "Run DDU automatically", "driver-clean-ddu-auto.ps1",
-                Confirm: "DDU will remove your graphics driver and restart the PC. Continue?"),
-            new("DDU: Manual", "Open DDU to clean manually", "driver-clean-ddu-manual.ps1",
-                Confirm: "DDU will remove your graphics driver. Continue?"),
+            new("DDU: Auto", "Run DDU automatically", "driver-clean-prepare.ps1",
+                Confirm: "DDU will remove your graphics driver and restart the PC. Continue?", SafeModeOption: DriverClean.Auto),
+            new("DDU: Manual", "Open DDU to clean manually", "driver-clean-prepare.ps1",
+                Confirm: "DDU will remove your graphics driver. Continue?", SafeModeOption: DriverClean.Manual),
         ]),
         new("driver-install", "Driver install (updated)", "Install the latest graphics driver",
         [
