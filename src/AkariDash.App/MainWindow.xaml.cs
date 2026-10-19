@@ -203,20 +203,24 @@ public sealed partial class MainWindow : Window
     private void OnNavSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
         Type? pageType = null;
+        object? parameter = null;
 
         switch (args.SelectedItem)
         {
             case NavigationItem item:
                 pageType = item.PageType;
+                parameter = item.Parameter;
                 break;
             case NavigationViewItem navItem when navItem.Tag is Type type:
                 pageType = type;
                 break;
         }
 
-        if (pageType is not null && pageType != _navigation.CurrentPageType)
+        // A GPU entry shares its page with the other cards, so the card it carries decides too.
+        if (pageType is not null &&
+            (pageType != _navigation.CurrentPageType || (parameter is not null && !Equals(parameter, _navigation.CurrentParameter))))
         {
-            _navigation.NavigateTo(pageType);
+            _navigation.NavigateTo(pageType, parameter);
         }
     }
 
@@ -227,7 +231,7 @@ public sealed partial class MainWindow : Window
         // Every level, so a page under Customize is selected in the pane like any other.
         var item = NavItems.Concat(FooterNavItems)
             .SelectMany(top => top.SelfAndDescendants())
-            .FirstOrDefault(i => i.PageType == current);
+            .FirstOrDefault(i => i.PageType == current && (i.Parameter is null || Equals(i.Parameter, _navigation.CurrentParameter)));
 
         if (item is not null)
         {

@@ -20,6 +20,12 @@ public sealed record NavigationItem(
     /// <summary>A section heading in the pane (Performance, Windows, Apps, Advanced): no page, no icon.</summary>
     public static NavigationItem Header(string label) => new(label, string.Empty, null) { IsHeader = true };
 
+    /// <summary>
+    /// What the page is opened with, for a page that shows one of several things - a GPU entry carries
+    /// its card. Null for every other page.
+    /// </summary>
+    public object? Parameter { get; init; }
+
     /// <summary>Whether this is a section heading rather than an item.</summary>
     public bool IsHeader { get; private init; }
 
