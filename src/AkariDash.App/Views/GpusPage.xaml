@@ -84,7 +84,7 @@
                                 </Border>
                             </StackPanel>
                             <Rectangle Height="1" Fill="{ThemeResource CardStrokeColorDefaultBrush}" />
-                            <ItemsControl Padding="16,14" ItemsSource="{x:Bind ViewModel.Facts, Mode=OneWay}">
+                            <ItemsControl Margin="16,14,16,16" ItemsSource="{x:Bind ViewModel.Facts, Mode=OneWay}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <StackPanel Orientation="Horizontal" Spacing="40" />
